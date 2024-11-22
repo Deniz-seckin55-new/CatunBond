@@ -1,5 +1,31 @@
-datasource db { // connect to cockroachdb
-    provider = "cockroachdb"
-    url = env("DB_URL")
+datasource db {
+  provider = "cockroachdb"
+  url      = env("DB_URL")
 }
 
+generator cleint {
+  provider = "prisma-client-js"
+}
+
+model User {
+  userId    String    @unique
+  username  String    @unique
+  avatarUrl String? 
+  servers   UserServer[]
+  friends   Json?
+}
+
+model Servers {
+  serverId  Int      @unique
+  members   UserServer[]
+  channels  Json
+}
+
+model UserServer {
+  userId   String
+  serverId Int
+  member   Servers @relation(fields: [serverId], references: [serverId])
+  user     User    @relation(fields: [userId], references: [userId])
+
+  @@id([userId, serverId])
+}

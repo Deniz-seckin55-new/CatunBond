@@ -9,6 +9,7 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@prisma/client": "^5.22.0",
     "appwrite": "^16.0.2",
     "better-sqlite3": "^11.5.0",
     "browserify": "^17.0.1",
