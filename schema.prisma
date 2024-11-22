@@ -1,0 +1,5 @@
+datasource db { // connect to cockroachdb
+    provider = "cockroachdb"
+    url = env("DB_URL")
+}
+
