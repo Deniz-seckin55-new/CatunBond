@@ -1,0 +1,37 @@
+html {
+    font-size: 5.9vh;
+    font-family: monospace;
+}
+
+.main-container { 
+    display: flex;
+    justify-content: center;
+
+    border-radius: 8px;
+    width: 100vw;
+    height: 100vh;
+}
+.form-container {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    min-height: 100%;
+}
+
+.tickImg {
+    width: 10vw;
+    height: 20vh;
+}
+
+.tick-container {
+    padding-top: 5vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    place-items: center;
+}
+
+#redirect {
+    transform: translateY(-5vh);
+}

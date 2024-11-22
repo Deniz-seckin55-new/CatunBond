@@ -1,0 +1,53 @@
+<html>
+    <head>
+        <title>App</title>
+        <link rel="stylesheet" href="app.css">
+    </head>
+    <body>
+        <div class="main-container">
+            <div id="bg-blur" class="background-blur">
+
+            </div>
+            <div class="app-box">
+                <div id="explore-box" class="explore-box">
+                    <input type="text" id="explore-input" class="explore-input" placeholder="Search Public Servers">
+                    <div class="explore-servers" id="explore-servers">
+
+                    </div>
+                </div>
+                <div class="top-bar">
+                    <div id="top" class="content-holder">
+
+                    </div>
+                </div>
+                <div class="middle-bar">
+                    <div id="middle" class="content-holder-m overflow-scroll">
+                        
+                    </div>
+                </div>
+                <div class="left-bar">
+                    <div id="left" class="content-holder">
+                        
+                    </div>
+                </div>
+                <div class="leftright-bar">
+                    <div id="leftright" class="content-holder">
+                    
+                    </div>
+                </div>
+            </div>
+            <div class="msg-box">
+                <div class="content-holder2">
+                    <input class="monaco-editor msg-typer" id="msg-typer" type="text"/>
+                    <!--<div class="caret" id="caret"></div>-->
+                    <!--<div class="starti" id="starti"></div>-->
+                </div>
+            </div>
+        </div>
+    </body>
+
+    <script>
+        const userToken = "<%=userToken%>";
+    </script>
+    <script src="app.js"></script>
+</html>

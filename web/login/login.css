@@ -1,0 +1,78 @@
+html {
+    font-size: 5.9vh;
+    font-family: monospace;
+}
+
+.main-container { 
+    display: flex;
+    justify-content: center;
+
+    border-radius: 8px;
+    width: 100vw;
+    height: 100vh;
+}
+.form-container {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    min-height: 100%;
+}
+
+.form-a {
+    padding: 1vh;
+}
+
+.input-t {
+    text-align: center;
+
+    padding: 1vh;
+
+    transition: all 0.25s;
+}
+
+.input-t:hover {
+    font-size: 6.2vh;
+    margin: 10px;
+}
+
+.input-t:focus {
+    font-size: 6.3vh;
+}
+
+input {
+    font-family: monospace;
+    font-size: 5.9vh;
+    border-radius: 8px;
+}
+
+form {
+    width: 50%; /* adjust this value to control the form's width */
+}
+
+#submit-c {
+    margin: 10px;
+}
+
+#submit-b {
+    font-weight: lighter;
+    font-size: 3.9vh;
+    text-decoration: none;
+    background: linear-gradient(125deg, cyan, blue);
+    border-radius: 10px;
+    border: solid 0px white;
+    padding: 5px;
+
+    transition: all 0.25s;
+}
+
+#submit-b:hover {
+    font-weight: bolder;
+    padding: 8px;
+    cursor: pointer;
+    border: solid 6px antiquewhite;
+}
+
+#submit-b:focus {
+    border: solid 20px white;
+}
