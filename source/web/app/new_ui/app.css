@@ -130,14 +130,156 @@ body, html {
     height: 50%;
 }
 
-.main-box {
+.main-box-wraper {
     width: 100%;
     height: 100%;
 
     grid-row: 1 / 33;
     grid-column: 1 / 2;
 
+    display: grid;
+
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr 12vh;
+}
+
+.main-box {
+    width: 100%;
+    height: 100%;
+
     background-color: darkslategray;
+
+    grid-column: 1;
+    grid-row: 1;
+}
+
+.user-box-wraper {
+    z-index: 5;
+
+    width: 100%;
+    height: 100%;
+
+    grid-column: 1 / 11;
+    grid-row: 29 / 33;
+
+    display: grid;
+
+    align-items: end; 
+}
+
+.user-box {
+    width: 100%;
+    height: 12vh;
+
+    background-color: black;
+}
+
+.friends-box {
+    width: 100%;
+    height: 100%;
+
+    grid-row: 2;
+    grid-column: 1;
+    
+    display: grid;
+
+    grid-template-rows: 12vh 1fr;
+    grid-template-columns: 1fr 1fr 1fr;
+
+    /*visibility: hidden;*/
+}
+
+.hr-one {
+    width: 3em;
+    height: 5%;
+    background: linear-gradient(90deg, transparent, black, transparent);
+    border: 0;
+
+    padding: 0;
+    margin: 0;
+}
+
+.friends-box-top-left-wraper {
+    grid-row: 1;
+    grid-column: 1;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    flex-direction: column;
+}
+.friends-box-top-middle-wraper {
+    grid-row: 1;
+    grid-column: 2;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    flex-direction: column;
+}
+.friends-box-top-right-wraper {
+    grid-row: 1;
+    grid-column: 3;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    
+    flex-direction: column;
+}
+
+.friends-box-top-right {
+    width: 80%;
+    height: 80%;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    
+    flex-direction: column;
+}
+.friends-box-top-middle {
+    width: 80%;
+    height: 80%;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    
+    flex-direction: column;
+}
+
+.friends-box-top-left {
+    width: 80%;
+    height: 80%;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    
+    flex-direction: column;
+}
+
+.friends-box-button {
+    text-decoration: none;
+    background: rgba(0, 0, 0, 0);
+    border: none;
+    padding: 0.2em;
+    font-size: 0.5em;
+}
+
+.friends-box-button:hover {
+    cursor: pointer;
+}
+
+.friends-box-bottom {
+    grid-row: 2;
+    grid-column: 1 / 4;
+
+    display: flex;
+    flex-direction: column;
 }
 
 .app-icon {
@@ -157,7 +299,7 @@ body, html {
 
     display: grid;
 
-    grid-template-rows: 12vh 24vh 1fr;
+    grid-template-rows: 12vh 24vh 1fr 12vh;
     grid-template-columns: 1fr;
 }
 
@@ -237,7 +379,7 @@ body, html {
     display: grid;
     place-items: center;
 
-    grid-template-rows: 5fr 1fr;
+    grid-template-rows: 5fr 12vh;
     grid-template-columns: 1fr;
 }
 

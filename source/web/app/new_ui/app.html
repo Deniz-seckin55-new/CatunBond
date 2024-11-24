@@ -15,8 +15,15 @@
 
                     </div>
                 </div>
-                <div id="main-box" class="main-box">
-                    <div id="app-icon" class="app-icon">
+                <div id="main-box-wraper" class="main-box-wraper">
+                    <div id="main-box" class="main-box">
+                        <div id="app-icon" class="app-icon">
+    
+                        </div>
+                    </div>
+                </div>
+                <div id="user-box-wraper" class="user-box-wraper">
+                    <div id="user-box" class="user-box">
 
                     </div>
                 </div>
@@ -54,6 +61,29 @@
                             </div>
                         </div>
                     </div>
+                    <div id="friends-box" class="friends-box">
+                        <div id="friends-box-top-left-wraper" class="friends-box-top-left-wraper">
+                            <div id="friends-box-top-left" class="friends-box-top-left">
+                                <button id="online-friends-button" class="friends-box-button">Online</button>
+                                <hr class="hr-one">
+                            </div>
+                        </div>
+                        <div id="friends-box-top-middle-wraper" class="friends-box-top-middle-wraper">
+                            <div id="friends-box-top-middle" class="friends-box-top-middle">
+                                <button id="offline-friends-button" class="friends-box-button">Offline</button>
+                                <hr class="hr-one">
+                            </div>
+                        </div>
+                        <div id="friends-box-top-right-wraper" class="friends-box-top-right-wraper">
+                            <div id="friends-box-top-right" class="friends-box-top-right">
+                                <button id="blocked-friends-button" class="friends-box-button">Blocked</button>
+                                <hr class="hr-one">
+                            </div>
+                        </div>
+                        <div id="friends-box-list" class="friends-box-bottom">
+                            
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -62,5 +92,7 @@
     <script>
         const userToken = "<%=userToken%>";
     </script>
+    <script src="apphelper.js"></script>
     <script src="app.js"></script>
+    <script src="stylehelper.js"></script>
 </html>
