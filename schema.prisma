@@ -8,17 +8,28 @@ generator cleint {
 }
 
 model User {
-  userId    String    @unique
-  username  String    @unique
-  avatarUrl String? 
+  userId    String       @id @unique
+  username  String       @unique
+  email     String       @unique
+  avatarUrl String?
   servers   UserServer[]
   friends   Json?
+  auth      Auth?
 }
 
 model Servers {
-  serverId  Int      @unique
-  members   UserServer[]
-  channels  Json
+  serverId Int          @unique
+  members  UserServer[]
+  channels Json
+}
+
+model Auth {
+  userId        String @unique
+  username      String
+  email         String
+  password_hash String
+  hash          String
+  user          User   @relation(fields: [userId], references: [userId])
 }
 
 model UserServer {
