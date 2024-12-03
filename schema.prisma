@@ -9,6 +9,27 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider = "cockroachdb"
+  url      = env("DB_URL")
+}
+
+model User {
+  id         String   @id @unique
+  username   String   @unique
+  avatarUrl  String?
+  auth       Auth?
+  friends    Json?
+  servers    String[]
+  directMsgs Json?
+}
+
+model Server {
+  id String @id @unique
+}
+
+model Auth {
+  id            User   @relation(references: [id], fields: [userId])
+  userId        String @unique
+  password_hash String
+  salt          String
 }
