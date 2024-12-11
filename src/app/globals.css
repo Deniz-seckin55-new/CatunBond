@@ -1,6 +1,14 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+
+  --cb-color-black: #000D1E;
+  --cb-color-black-transparent: rgba(0, 13, 30, 0.5);
+  --cb-color-black-transparent-soft: rgba(0, 13, 30, 0.2);
+  --cb-color-white: #F0F7EE;
+  --cb-color-gray: #3B413C;
+  --cb-color-cyan: #65AFFF;
+  --cb-color-blue: #1E2EDE;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -22,6 +30,10 @@ body {
   font-family: Arial, Helvetica, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+textarea:focus, input:focus{
+  outline: none;
 }
 
 * {
