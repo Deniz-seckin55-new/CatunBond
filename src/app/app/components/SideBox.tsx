@@ -3,9 +3,10 @@ import styles from '../page.module.css';
 interface Props {
     onClickSearch: () => void;
     onClickFriendsButton: () => void;
+    SideBoxChannelsV: boolean;
 }
 
-const SideBox: React.FC<Props> = ({ onClickSearch, onClickFriendsButton }) => {
+const SideBox: React.FC<Props> = ({ onClickSearch, onClickFriendsButton, SideBoxChannelsV }) => {
     return (
         <>
             <div id="side-box" className={styles.side_box}>
@@ -14,7 +15,7 @@ const SideBox: React.FC<Props> = ({ onClickSearch, onClickFriendsButton }) => {
                         <input id="side-box-search-input" className={styles.side_box_search_input} type="text" placeholder="Search anything" readOnly onClick={onClickSearch} />
                     </div>
                 </div>
-                <div id="side-box-main" className={styles.side_box_main}>
+                {!SideBoxChannelsV && (<div id="side-box-main" className={styles.side_box_main}>
                     <div id="side-box-top" className={styles.side_box_top}>
                         <div id="friends-button-wraper" className={styles.friends_button_wraper}>
                             <img id="friends-button-image" className={styles.friends_button_image} />
@@ -24,10 +25,10 @@ const SideBox: React.FC<Props> = ({ onClickSearch, onClickFriendsButton }) => {
                     <div id="side-box-bottom" className={styles.side_box_bottom}>
 
                     </div>
-                </div>
-                <div id="side-box-channels" className={styles.side_box_channels}>
+                </div>)}
+                {SideBoxChannelsV && (<div id="side-box-channels" className={styles.side_box_channels}>
 
-                </div>
+                </div>)}
             </div>
         </>
     );

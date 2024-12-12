@@ -10,6 +10,7 @@ import UserBox from "./UserBox";
 import SideBox from "./SideBox";
 import FriendsDiv from "./FriendsDiv";
 import ChannelBox from "./ChatBox";
+import { Server } from "../utils/utils";
 
 const MainLayout: React.FC = () => {
 
@@ -19,6 +20,7 @@ const MainLayout: React.FC = () => {
     const [FDOnlineV, setFDOnlineV] = useState(false);
     const [FDOfflineV, setFDOfflineV] = useState(false);
     const [FDBlockedV, setFDBlockedV] = useState(false);
+    const [SideBoxChannelsV, setSideBoxChannelsV] = useState(false);
 
     const toggleFriendsDivVisibility = () => {
         setFriendsDivV(!FriendsDivV);
@@ -64,14 +66,30 @@ const MainLayout: React.FC = () => {
         setFriendsDivV(true);
     }
 
+    const onClickServer = (server: any) => {
+        setFriendsDivV(false);
+        setSideBoxChannelsV(true);
+    }
+
+    const onClickAppIcon = () => {
+        setSideBoxChannelsV(false);
+    }
+
+    const closeExploreBox = () => {
+        setExploreBoxV(false);
+        setBgBlurV(false);
+    }
+
     const SideBoxProps = {
         onClickSearch: onClickSearch,
         onClickFriendsButton: onClickFriendsButton,
+        SideBoxChannelsV: SideBoxChannelsV,
     }
 
     const ExploreBoxProps = {
         ExploreBoxV: ExploreBoxV,
-        setExploreBoxV: setExploreBoxV
+        setExploreBoxV: setExploreBoxV,
+        closeExploreBox: closeExploreBox,
     }
 
     const FriendsDivProps = {
@@ -87,6 +105,29 @@ const MainLayout: React.FC = () => {
 
     }
 
+    const MainBoxProps = {
+        onClickServer: (server: Server) => onClickServer(server),
+        onClickAppIcon: onClickAppIcon,
+    }
+
+    useEffect(() => {
+        const onKeyDown = (event: KeyboardEvent) => {
+            if(event.ctrlKey && event.key == 'f') {
+                event.preventDefault();
+                if(!ExploreBoxV)
+                    onClickSearch();
+                else
+                    closeExploreBox();
+            }
+        }
+
+        window.addEventListener('keydown', onKeyDown);
+
+        return () => {
+            window.removeEventListener('keydown', onKeyDown);
+        }
+    }, [ExploreBoxV])
+
     return (
         <>
             <div className={styles.body}>
@@ -95,7 +136,7 @@ const MainLayout: React.FC = () => {
                     <div className={styles.app_box}>
                         <ExploreBox {...ExploreBoxProps} />
                         <div id="main-box-wraper" className={styles.main_box_wraper}>
-                            <MainBox />
+                            <MainBox {...MainBoxProps}/>
                         </div>
                         <div id="user-box-wraper" className={styles.user_box_wraper}>
                             <UserBox />

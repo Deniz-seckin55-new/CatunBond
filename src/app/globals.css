@@ -9,6 +9,7 @@
   --cb-color-gray: #3B413C;
   --cb-color-cyan: #65AFFF;
   --cb-color-blue: #1E2EDE;
+  --cb-color-red: #FF3A20;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -40,6 +41,10 @@ textarea:focus, input:focus{
   box-sizing: border-box;
   padding: 0;
   margin: 0;
+}
+
+*:not(p, h1, h2, h3, h4, h5, h6) {
+  user-select: none;
 }
 
 a {
