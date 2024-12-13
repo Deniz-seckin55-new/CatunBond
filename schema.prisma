@@ -1,0 +1,53 @@
+generator client {
+    provider = "prisma-client-js"
+}
+
+datasource db {
+    provider = "cockroachdb"
+    url      = env("DB_URL")
+}
+
+model User {
+    id         String     @id @unique
+    username   String     @unique
+    avatarUrl  String?
+    auth       Auth?
+    friends    Json?
+    servers    String[]
+    messages   Messages[]
+    directMsgs Json?
+}
+
+model Server {
+    id       String    @id @unique
+    ownerId  String
+    name     String
+    iconUrl  String
+    channels Channel[]
+}
+
+model Channel {
+    id       String     @id @unique
+    server   Server     @relation(fields: [serverId], references: [id])
+    serverId String
+    name     String
+    messages Messages[]
+}
+
+model Auth {
+    id            User   @relation(references: [id], fields: [userId])
+    userId        String @unique
+    password_hash String
+    salt          String
+}
+
+model Messages {
+    id          BigInt   @id @default(autoincrement())
+    content     String
+    timestamp   DateTime @default(now())
+    author      User     @relation(fields: [authorId], references: [id])
+    authorId    String
+    channel     Channel? @relation(fields: [channelId], references: [id])
+    channelId   String
+    repliedToId String
+}
