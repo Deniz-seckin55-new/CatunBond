@@ -19,14 +19,17 @@ model User {
 }
 
 model Server {
-    id      String @id @unique
-    ownerId String
-    name    String
-    iconUrl String
+    id       String    @id @unique
+    ownerId  String
+    name     String
+    iconUrl  String
+    channels Channel[]
 }
 
 model Channel {
     id       String     @id @unique
+    server   Server     @relation(fields: [serverId], references: [id])
+    serverId String
     name     String
     messages Messages[]
 }
