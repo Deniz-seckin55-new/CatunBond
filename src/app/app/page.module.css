@@ -219,6 +219,20 @@
     height: 12vh;
 
     background-color: var(--cb-color-black);
+
+    display: inline-flex;
+
+    align-items: center;
+}
+
+.user_box_username {
+    font-size: 1em;
+    background: linear-gradient(135deg, var(--cb-color-white), var(--cb-color-gray));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    padding-left: 1vw;
+
+    user-select: text;
 }
 
 .friends_box {
@@ -587,6 +601,14 @@
     padding: 0.2em;
 
     float: left;
+}
+
+.user_button {
+    height: 100%;
+    width: 10vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .overflow_scroll {
