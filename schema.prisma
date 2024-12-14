@@ -13,7 +13,7 @@ model User {
     avatarUrl  String?
     auth       Auth?
     friends    Json?
-    servers    String[]
+    servers    Server[]   @relation("UserServers")
     messages   Messages[]
     directMsgs Json?
 }
@@ -24,12 +24,13 @@ model Server {
     name     String
     iconUrl  String
     channels Channel[]
+    members  User[]    @relation("UserServers")
 }
 
 model Channel {
     id       String     @id @unique
-    server   Server     @relation(fields: [serverId], references: [id])
-    serverId String
+    server   Server?    @relation(fields: [serverId], references: [id])
+    serverId String?
     name     String
     messages Messages[]
 }
