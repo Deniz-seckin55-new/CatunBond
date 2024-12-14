@@ -8,7 +8,7 @@ export async function DELETE(request: NextRequest) {
     const { serverId, requesterId } = data
 
     try {
-
+        // find the server the user is trying to delete
         const server = await db.server.findFirst({
             where: {
                 id: serverId
