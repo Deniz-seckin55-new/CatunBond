@@ -10,17 +10,26 @@ import UserBox from "./UserBox";
 import SideBox from "./SideBox";
 import FriendsDiv from "./FriendsDiv";
 import ChannelBox from "./ChatBox";
-import { Server } from "../utils/utils";
+import { Channel, Server, SyntaxHighlight, ViewingFriendsDiv, Currents, getLineHeight } from "../utils/utils";
 
 const MainLayout: React.FC = () => {
 
     const [FriendsDivV, setFriendsDivV] = useState(false);
     const [BgBlurV, setBgBlurV] = useState(false);
     const [ExploreBoxV, setExploreBoxV] = useState(false);
-    const [FDOnlineV, setFDOnlineV] = useState(false);
-    const [FDOfflineV, setFDOfflineV] = useState(false);
-    const [FDBlockedV, setFDBlockedV] = useState(false);
+    const [friendStatus, setFriendStatus] = useState<ViewingFriendsDiv>('online');
     const [SideBoxChannelsV, setSideBoxChannelsV] = useState(false);
+    const [currents, setCurrents] = useState<Currents>({channel: null, server: null});
+    const [Channels, setChannels] = useState<Channel[]>([{
+            id: "abc",
+            name: "general"
+        }, {
+            id: "def",
+            name: "general2"
+        }]);
+    const [inputTextRows, setinputTextRows] = useState(1);
+
+    const [TextareaInitalConstNumber, setTextareaInitalConstNumber] = useState(0);
 
     const toggleFriendsDivVisibility = () => {
         setFriendsDivV(!FriendsDivV);
@@ -45,34 +54,46 @@ const MainLayout: React.FC = () => {
     }
 
     const onClickFBOnline = () => {
-        setFDOnlineV(true);
-        setFDOfflineV(false);
-        setFDBlockedV(false);
+        setFriendStatus('online');
     }
 
     const onClickFBOffline = () => {
-        setFDOnlineV(false);
-        setFDOfflineV(true);
-        setFDBlockedV(false);
+        setFriendStatus('offline');
     }
 
     const onClickFBBlocked = () => {
-        setFDOnlineV(false);
-        setFDOfflineV(false);
-        setFDBlockedV(true);
+        setFriendStatus('blocked');
     }
 
     const onClickFriendsButton = () => {
         setFriendsDivV(true);
     }
 
-    const onClickServer = (server: any) => {
+    const onClickServer = (server: Server) => {
         setFriendsDivV(false);
         setSideBoxChannelsV(true);
+
+        setCurrents({
+            server: server,
+            channel: currents.channel
+        })
+
+        // Add class 'server_list_element_image_active' to server jsx element
+    }
+
+    const onClickChannel = (channel : Channel) => {
+        setCurrents({
+            server: currents.server,
+            channel: channel
+        })
     }
 
     const onClickAppIcon = () => {
         setSideBoxChannelsV(false);
+        setCurrents({
+            channel: null,
+            server: null
+        });
     }
 
     const closeExploreBox = () => {
@@ -80,10 +101,28 @@ const MainLayout: React.FC = () => {
         setBgBlurV(false);
     }
 
+    const onInputTextarea = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
+        const textarea = event.target;
+        
+    }
+
+    const onLoadTextarea = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
+        if(TextareaInitalConstNumber)
+            return;
+        const textarea = event.target;
+        const height = textarea.scrollHeight;
+
+        setTextareaInitalConstNumber(height);
+        console.log("Inital constant: "+height);
+    }
+
     const SideBoxProps = {
         onClickSearch: onClickSearch,
         onClickFriendsButton: onClickFriendsButton,
+        onClickChannel: onClickChannel,
         SideBoxChannelsV: SideBoxChannelsV,
+        Channels: Channels,
+        Currents: currents,
     }
 
     const ExploreBoxProps = {
@@ -96,37 +135,47 @@ const MainLayout: React.FC = () => {
         onClickFBOnline: onClickFBOnline,
         onClickFBOffline: onClickFBOffline,
         onClickFBBlocked: onClickFBBlocked,
-        FDOnlineV: FDOnlineV,
-        FDOfflineV: FDOfflineV,
-        FDBlockedV: FDBlockedV,
+        FDOnlineV: friendStatus === 'online',
+        FDOfflineV: friendStatus === 'offline',
+        FDBlockedV: friendStatus === 'blocked',
+        Currents: currents,
     }
 
     const ChannelBoxProps = {
-
+        rows: inputTextRows,
+        onInputTextarea: onInputTextarea,
+        onLoadTextarea: onLoadTextarea,
     }
 
     const MainBoxProps = {
         onClickServer: (server: Server) => onClickServer(server),
         onClickAppIcon: onClickAppIcon,
+        Currents: currents,
+    }
+
+    const onKeyDown = (event: KeyboardEvent) => {
+        if (event.ctrlKey && event.key == 'f') {
+            event.preventDefault();
+            if (!ExploreBoxV)
+                onClickSearch();
+            else
+                closeExploreBox();
+        }
     }
 
     useEffect(() => {
-        const onKeyDown = (event: KeyboardEvent) => {
-            if(event.ctrlKey && event.key == 'f') {
-                event.preventDefault();
-                if(!ExploreBoxV)
-                    onClickSearch();
-                else
-                    closeExploreBox();
-            }
-        }
-
         window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+    }, [ExploreBoxV]);
 
-        return () => {
-            window.removeEventListener('keydown', onKeyDown);
-        }
-    }, [ExploreBoxV])
+    // For debug remove later
+    const Debugging = () => {
+        /*console.log("Highlight: ", await SyntaxHighlight([{
+            className: "highlight_01",
+            pattern: new RegExp("^#", "gmi")
+        }], "# channel_name"));*/
+    }
+    Debugging();
 
     return (
         <>
@@ -136,7 +185,7 @@ const MainLayout: React.FC = () => {
                     <div className={styles.app_box}>
                         <ExploreBox {...ExploreBoxProps} />
                         <div id="main-box-wraper" className={styles.main_box_wraper}>
-                            <MainBox {...MainBoxProps}/>
+                            <MainBox {...MainBoxProps} />
                         </div>
                         <div id="user-box-wraper" className={styles.user_box_wraper}>
                             <UserBox />

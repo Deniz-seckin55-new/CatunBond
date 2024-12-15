@@ -47,6 +47,10 @@ textarea:focus, input:focus{
   user-select: none;
 }
 
+.selectable {
+  user-select: text;
+}
+
 a {
   color: inherit;
   text-decoration: none;

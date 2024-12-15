@@ -1,12 +1,13 @@
 import styles from '../page.module.css';
-import { Server } from '../utils/utils';
+import { Currents, Server } from '../utils/utils';
 
 interface Props {
     onClickServer: (server: Server) => void;
     onClickAppIcon: () => void;
+    Currents: Currents;
 }
 
-const MainBox: React.FC<Props> = ({ onClickServer, onClickAppIcon}) => {
+const MainBox: React.FC<Props> = ({ onClickServer, onClickAppIcon, Currents}) => {
 
     const ServerList = [
         {
@@ -31,8 +32,8 @@ const MainBox: React.FC<Props> = ({ onClickServer, onClickAppIcon}) => {
                     {
                         ServerList.map((server) => {
                             return (
-                                <div id={server.id} className={styles.server_list_element} onClick={() => onClickServer(server)} key={server.id}>
-                                    <img src={server.image} className={styles.server_list_element_image}/>
+                                <div id={server.id} className={`${styles.server_list_element}`} onClick={() => onClickServer(server)} key={server.id}>
+                                    <img src={server.image} className={`${styles.server_list_element_image} ${Currents.server ? (Currents.server.id == server.id ? styles.server_list_element_image_active: "") : ""}`}/>
                                 </div>
                             )
                         })

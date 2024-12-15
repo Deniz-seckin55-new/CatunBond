@@ -1,12 +1,21 @@
 import styles from '../page.module.css';
+import { Channel, Currents, SyntaxHighlight, SyntaxPattern } from '../utils/utils';
 
 interface Props {
     onClickSearch: () => void;
     onClickFriendsButton: () => void;
+    onClickChannel: (Channel: Channel) => void;
     SideBoxChannelsV: boolean;
+    Channels: Channel[];
+    Currents: Currents;
 }
 
-const SideBox: React.FC<Props> = ({ onClickSearch, onClickFriendsButton, SideBoxChannelsV }) => {
+const SideBox: React.FC<Props> = ({ onClickSearch, onClickFriendsButton, onClickChannel, SideBoxChannelsV, Channels, Currents }) => {
+    const ChannelNamePatterns: SyntaxPattern[] = [{
+        pattern: new RegExp("^#", "gmi"),
+        className: "hl_hashtag"
+    }];
+
     return (
         <>
             <div id="side-box" className={styles.side_box}>
@@ -27,7 +36,17 @@ const SideBox: React.FC<Props> = ({ onClickSearch, onClickFriendsButton, SideBox
                     </div>
                 </div>)}
                 {SideBoxChannelsV && (<div id="side-box-channels" className={styles.side_box_channels}>
-
+                    {Channels.map((channel) => {
+                        return (
+                            <div className={styles.channel_element_wraper} key={`wraper-${channel.id}`}>
+                                <div className={`${styles.channel_element} ${Currents.channel ? (Currents.channel.id == channel.id ? styles.channel_element_active: "") : ""}`} onClick={() => onClickChannel(channel)} key={channel.id}>
+                                    <span className={styles.channel_name} id={channel.id} key={`channel-${channel.id}`}>{
+                                        SyntaxHighlight(ChannelNamePatterns, `#${channel.name}`, styles)
+                                    }</span>
+                                </div>
+                            </div>
+                        );
+                    })}
                 </div>)}
             </div>
         </>

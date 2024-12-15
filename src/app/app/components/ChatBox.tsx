@@ -3,22 +3,16 @@ import styles from '../page.module.css';
 import React, { useEffect, useState } from 'react';
 
 interface Props {
-
+    onInputTextarea: (event: React.ChangeEvent<HTMLTextAreaElement>) => void;
+    onLoadTextarea: (event: React.ChangeEvent<HTMLTextAreaElement>) => void;
 }
 
-const ChannelBox: React.FC<Props> = ({ }) => {
+const ChannelBox: React.FC<Props> = ({ onInputTextarea, onLoadTextarea }) => {
     return (
         <>
-            <div id="channel-box" className={styles.channel_box}>
-                <div className={styles.message_box}>
-
-                </div>
+            <div id="channel-box" className={styles.channel_box} style={{ gridTemplateRows: `5fr 12vh` }}>
                 <div className={styles.message_box_wraper}>
-                    <div className={styles.msg_box}>
-                        <div className={styles.content_holder2}>
-                            <input className={`${styles.monaco_editor} ${styles.msg_typer}`} id="msg-typer" type="text" autoComplete="off" />
-                        </div>
-                    </div>
+                    <textarea className={`${styles.contenteditable} ${styles.msg_typer}`}/>
                 </div>
             </div>
         </>
