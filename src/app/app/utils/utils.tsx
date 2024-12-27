@@ -77,3 +77,26 @@ export function getLineHeight(element: HTMLElement): number {
 
     return parseFloat(lineHeight);
 }
+
+export enum SocketInformationType {
+    ClientSendMessage
+}
+
+export enum AllowedTypes {
+    Message
+}
+
+export interface SocketData {
+    infoType: SocketInformationType,
+    dataType: AllowedTypes,
+    data: any
+}
+
+export interface MessageSocketPacket {
+    Message: Message;
+}
+
+export interface ClientResponsePacket {
+    dataType: AllowedTypes,
+    data: any
+}

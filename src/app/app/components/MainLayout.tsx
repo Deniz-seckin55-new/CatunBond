@@ -10,11 +10,14 @@ import UserBox from "./UserBox";
 import SideBox from "./SideBox";
 import FriendsDiv from "./FriendsDiv";
 import ChannelBox from "./ChannelBox";
-import { Channel, Server, SyntaxHighlight, ViewingFriendsDiv, Currents, getLineHeight, Message } from "../utils/utils";
+import { Channel, Server, SyntaxHighlight, ViewingFriendsDiv, Currents, getLineHeight, Message, ClientResponsePacket, AllowedTypes } from "../utils/utils";
 import { PrismaClient } from "@prisma/client";
 import { clerkClient } from "@clerk/nextjs/server";
 import { useUser } from "@clerk/nextjs";
 import uuid4 from "uuid4";
+import { io, Socket } from 'socket.io-client';
+
+let socket: Socket | undefined;
 
 const MainLayout: React.FC = () => {
     const [FriendsDivV, setFriendsDivV] = useState(false);
@@ -34,6 +37,8 @@ const MainLayout: React.FC = () => {
     const [LoadingText, setLoadingText] = useState("Loading...");
     const [messages, setMessages] = useState<Message[]>([]);
     const user = useUser();
+
+    const SocketURL = "http://localhost:3001";
 
     const [TextareaInitalConstNumber, setTextareaInitalConstNumber] = useState(0);
 
@@ -269,6 +274,11 @@ const MainLayout: React.FC = () => {
         }
     }
 
+    const sendMessage = (message: Message, setMessages: (msg: any) => void) => {
+        socket?.emit("message", message);
+        /*setMessages((prevMessages: Message[]) => [...prevMessages, message]);*/
+    }
+
     const SideBoxProps = {
         onClickSearch: onClickSearch,
         onClickFriendsButton: onClickFriendsButton,
@@ -326,6 +336,29 @@ const MainLayout: React.FC = () => {
     }
 
     useEffect(() => {
+        if (currents.channel) {
+            socket = io(SocketURL);
+            socket.on("message", (data: ClientResponsePacket) => {
+                console.log(data);
+                if (data.dataType == AllowedTypes.Message) {
+                    const recievedMessage = data.data as Message;
+                    setMessages([...messages, recievedMessage]);
+                }
+            });
+            socket.emit("joinChannel", currents.channel.id);
+        }
+        return () => {
+            if (currents.channel)
+                socket?.emit("leaveChannel", currents.channel?.id);
+            socket?.disconnect();
+        }
+    }, [currents.channel]);
+
+    useEffect(() => {
+        //fetch("/api/v1/socket"); // Initialize the WebSocket server
+    }, []);
+
+    useEffect(() => {
         window.addEventListener('keydown', onKeyDown);
         return () => window.removeEventListener('keydown', onKeyDown);
     }, [ExploreBoxV]);
@@ -365,6 +398,7 @@ const MainLayout: React.FC = () => {
                     </div>
                 </div>
             </div>
+            {/* Functional Components */}
         </>
     )
 };
