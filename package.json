@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "node": "node server.js"
+    "node": "ts-node server.js"
   },
   "dependencies": {
     "@clerk/nextjs": "^6.9.2",
