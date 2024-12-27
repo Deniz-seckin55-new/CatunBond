@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 const db = new PrismaClient();
 
-async function DELETE(request: NextRequest) {
+export async function DELETE(request: NextRequest) {
     try {
         const data = await request.json();
         const { channel, requesterId } = data;

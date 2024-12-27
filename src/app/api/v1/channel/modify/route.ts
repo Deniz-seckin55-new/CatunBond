@@ -2,7 +2,7 @@ import { PrismaClient } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 
 const db = new PrismaClient();
-async function PATCH(request: NextRequest) {
+export async function PATCH(request: NextRequest) {
     try {
         const data = await request.json();
         const { id, name } = data;

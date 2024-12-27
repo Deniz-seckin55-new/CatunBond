@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 const db = new PrismaClient();
 
-async function POST(request: NextRequest) {
+export async function POST(request: NextRequest) {
     const data = await request.json();
     const { channel } = data;
     try {

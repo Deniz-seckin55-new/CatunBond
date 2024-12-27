@@ -50,5 +50,5 @@ model Messages {
     authorId    String
     channel     Channel? @relation(fields: [channelId], references: [id])
     channelId   String
-    repliedToId String
+    repliedToId String?
 }

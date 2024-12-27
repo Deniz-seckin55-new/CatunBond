@@ -9,25 +9,31 @@ import MainBox from "./MainBox";
 import UserBox from "./UserBox";
 import SideBox from "./SideBox";
 import FriendsDiv from "./FriendsDiv";
-import ChannelBox from "./ChatBox";
-import { Channel, Server, SyntaxHighlight, ViewingFriendsDiv, Currents, getLineHeight } from "../utils/utils";
+import ChannelBox from "./ChannelBox";
+import { Channel, Server, SyntaxHighlight, ViewingFriendsDiv, Currents, getLineHeight, Message } from "../utils/utils";
+import { PrismaClient } from "@prisma/client";
+import { clerkClient } from "@clerk/nextjs/server";
+import { useUser } from "@clerk/nextjs";
+import uuid4 from "uuid4";
 
 const MainLayout: React.FC = () => {
-
     const [FriendsDivV, setFriendsDivV] = useState(false);
     const [BgBlurV, setBgBlurV] = useState(false);
     const [ExploreBoxV, setExploreBoxV] = useState(false);
     const [friendStatus, setFriendStatus] = useState<ViewingFriendsDiv>('online');
     const [SideBoxChannelsV, setSideBoxChannelsV] = useState(false);
-    const [currents, setCurrents] = useState<Currents>({channel: null, server: null});
+    const [currents, setCurrents] = useState<Currents>({ channel: null, server: null, exploreboxmode: null });
     const [Channels, setChannels] = useState<Channel[]>([{
-            id: "abc",
-            name: "general"
-        }, {
-            id: "def",
-            name: "general2"
-        }]);
+        id: "abc",
+        name: "general"
+    }, {
+        id: "def",
+        name: "general2"
+    }]);
     const [inputTextRows, setinputTextRows] = useState(1);
+    const [LoadingText, setLoadingText] = useState("Loading...");
+    const [messages, setMessages] = useState<Message[]>([]);
+    const user = useUser();
 
     const [TextareaInitalConstNumber, setTextareaInitalConstNumber] = useState(0);
 
@@ -44,8 +50,7 @@ const MainLayout: React.FC = () => {
     }
 
     const onClickSearch = () => {
-        setExploreBoxV(true);
-        setBgBlurV(true);
+
     }
 
     const onClickBgBlur = () => {
@@ -70,30 +75,126 @@ const MainLayout: React.FC = () => {
     }
 
     const onClickServer = (server: Server) => {
-        setFriendsDivV(false);
-        setSideBoxChannelsV(true);
+        try {
+            fetch('/api/v1/server/channels', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    server: server.id,
+                })
+            })
+                .then((res) => res.json())
+                .then((data) => {
+                    console.log(data.data);
+                    setChannels(data.data);
 
-        setCurrents({
-            server: server,
-            channel: currents.channel
-        })
+                    setFriendsDivV(false);
+                    setSideBoxChannelsV(true);
+
+                    setCurrents((prevCurrents) => ({
+                        ...prevCurrents,
+                        server: server,
+                    }));
+                });
+        } catch (err) {
+            console.error(err);
+        }
 
         // Add class 'server_list_element_image_active' to server jsx element
     }
 
-    const onClickChannel = (channel : Channel) => {
-        setCurrents({
-            server: currents.server,
-            channel: channel
-        })
+    const onClickChannel = (channel: Channel) => {
+        try {
+            fetch('api/v1/channel/messages', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    channel: channel.id,
+                })
+            }).then((res) => {
+                if (res.status != 200) {
+                    console.log("Error fetching messages for channel " + channel.id);
+                    return;
+                }
+                res.json().then((data) => {
+                    const messageList: Message[] = data.messages;
+                    setMessages(messageList);
+
+                    console.log("Messages: ", messageList);
+
+                    setCurrents((prevCurrents) => ({
+                        ...prevCurrents,
+                        channel: channel,
+                    }));
+                });
+            })
+        } catch (err) {
+            console.error(err);
+        }
     }
 
     const onClickAppIcon = () => {
         setSideBoxChannelsV(false);
-        setCurrents({
+        setCurrents((prevCurrents) => ({
+            ...prevCurrents,
             channel: null,
-            server: null
-        });
+            server: null,
+        }));
+    }
+
+    const onClickExploreButton = () => {
+        setExploreBoxV(true);
+        setBgBlurV(true);
+    }
+
+    const onClickJoinButton = () => {
+        setCurrents((prevCurrents) => ({
+            ...prevCurrents,
+            exploreboxmode: 1,
+        }));
+    }
+
+    const onClickBackButton = () => {
+        setCurrents((prevCurrents) => ({
+            ...prevCurrents,
+            exploreboxmode: 0,
+        }));
+    }
+
+    const onClickServerJoinButton = (server: string) => {
+        setCurrents((prevCurrents) => ({
+            ...prevCurrents,
+            exploreboxmode: 2,
+        }));
+
+        fetch('/api/v1/user/servers/join', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                serverId: server,
+            })
+        })
+            .then((res) => res.json())
+            .then((data) => {
+                if (data.message == "You have successfully joined the server.") {
+                    setLoadingText("Success!");
+                } else {
+                    setLoadingText("Error!: " + data.message);
+                }
+                setTimeout(() => {
+                    setCurrents((prevCurrents) => ({
+                        ...prevCurrents,
+                        exploreboxmode: 0,
+                    }));
+                    setLoadingText("Loading...");
+                }, 1000);
+            })
     }
 
     const closeExploreBox = () => {
@@ -103,17 +204,69 @@ const MainLayout: React.FC = () => {
 
     const onInputTextarea = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
         const textarea = event.target;
-        
+
     }
 
     const onLoadTextarea = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
-        if(TextareaInitalConstNumber)
+        if (TextareaInitalConstNumber)
             return;
         const textarea = event.target;
         const height = textarea.scrollHeight;
 
         setTextareaInitalConstNumber(height);
-        console.log("Inital constant: "+height);
+        console.log("Inital constant: " + height);
+    }
+
+    const onKeyDownInput = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+        if (!currents.channel) {
+            return;
+        }
+
+        if (!user.isLoaded || !user.isSignedIn) {
+            return;
+        }
+
+        const textarea = event.target as HTMLTextAreaElement;
+        const message = textarea.value;
+
+        if (message == "" || !message) {
+            return;
+        }
+
+        const messageObject: Message = {
+            authorId: user.user.id,
+            channelId: currents.channel.id,
+            content: message,
+            timestamp: new Date(Date.now()),
+            repliedTo: null,
+            id: null // Will be auto set
+        }
+
+        if (event.key == "Enter" && !event.shiftKey) {
+            event.preventDefault();
+            console.log("Message: ", message);
+
+            try {
+                fetch('/api/v1/channel/messages/send', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        channel: currents.channel.id,
+                        message: JSON.stringify(messageObject),
+                    })
+                })
+                    .then((res) => res.json())
+                    .then((data) => {
+                        console.log(data);
+                    });
+
+                textarea.value = "";
+            } catch (err) {
+                console.error(err);
+            }
+        }
     }
 
     const SideBoxProps = {
@@ -129,6 +282,12 @@ const MainLayout: React.FC = () => {
         ExploreBoxV: ExploreBoxV,
         setExploreBoxV: setExploreBoxV,
         closeExploreBox: closeExploreBox,
+        onClickJoinButton: onClickJoinButton,
+        onClickBackButton: onClickBackButton,
+        onClickServerJoinButton: onClickServerJoinButton,
+        LoadingText: LoadingText,
+        setCurrents: setCurrents,
+        Currents: currents,
     }
 
     const FriendsDivProps = {
@@ -145,11 +304,14 @@ const MainLayout: React.FC = () => {
         rows: inputTextRows,
         onInputTextarea: onInputTextarea,
         onLoadTextarea: onLoadTextarea,
+        onKeyDownInput: onKeyDownInput,
+        messages: messages,
     }
 
     const MainBoxProps = {
         onClickServer: (server: Server) => onClickServer(server),
         onClickAppIcon: onClickAppIcon,
+        onClickExploreButton: onClickExploreButton,
         Currents: currents,
     }
 

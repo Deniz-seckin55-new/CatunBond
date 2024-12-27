@@ -20,6 +20,16 @@ export interface SyntaxPattern {
 export interface Currents {
     server: Server | null;
     channel: Channel | null;
+    exploreboxmode: Number | null;
+}
+
+export interface Message {
+    id: bigint | null;
+    content: string;
+    timestamp: Date;
+    authorId: string;
+    channelId: string;
+    repliedTo: string | null;
 }
 
 export type ViewingFriendsDiv = 'online' | 'offline' | 'blocked';
