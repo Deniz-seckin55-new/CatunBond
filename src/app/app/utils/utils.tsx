@@ -17,7 +17,14 @@ export interface SyntaxPattern {
     className: string;
 }
 
+export interface UserResource {
+    id: string;
+    username: string | null;
+    avatar: string;
+}
+
 export interface Currents {
+    user: UserResource | null;
     server: Server | null;
     channel: Channel | null;
     exploreboxmode: Number | null;
@@ -30,6 +37,7 @@ export interface Message {
     authorId: string;
     channelId: string;
     repliedTo: string | null;
+    authorUsername: string | null;
 }
 
 export type ViewingFriendsDiv = 'online' | 'offline' | 'blocked';

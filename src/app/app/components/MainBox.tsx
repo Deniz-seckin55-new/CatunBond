@@ -44,12 +44,13 @@ async function getServerList() {
 
 interface Props {
     onClickServer: (server: Server) => void;
+    onRightClickServer: (server: Server, ct: React.MouseEvent<HTMLDivElement, MouseEvent>) => void;
     onClickAppIcon: () => void;
     onClickExploreButton: () => void;
     Currents: Currents;
 }
 
-const MainBox: React.FC<Props> = ({ onClickServer, onClickAppIcon, onClickExploreButton, Currents }) => {
+const MainBox: React.FC<Props> = ({ onClickServer, onRightClickServer, onClickAppIcon, onClickExploreButton, Currents }) => {
 
     const [ServerList, setServerList] = useState<Server[]>([]);
     const [beep, setBeep] = useState(false);
@@ -83,7 +84,7 @@ const MainBox: React.FC<Props> = ({ onClickServer, onClickAppIcon, onClickExplor
                     {
                         (ServerList ? (ServerList.map((server: Server) => {
                             return (
-                                <div id={server.id} className={`${styles.server_list_element}`} onClick={() => onClickServer(server)} key={server.id}>
+                                <div id={server.id} className={`${styles.server_list_element}`} onClick={() => onClickServer(server)} onContextMenu={(ct) => {onRightClickServer(server, ct); ct.preventDefault();}} key={server.id}>
                                     <img src={server.image} className={`${styles.server_list_element_image} ${Currents.server ? (Currents.server.id == server.id ? styles.server_list_element_image_active : "") : ""}`} key={`image-${server.id}`} />
                                 </div>
                             )

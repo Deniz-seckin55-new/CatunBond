@@ -2,16 +2,18 @@
   "name": "catun-bond",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "node": "ts-node server.js"
+    "node": "npx tsx server.ts"
   },
   "dependencies": {
     "@clerk/nextjs": "^6.9.2",
     "@prisma/client": "^6.0.1",
+    "dotenv": "^16.4.7",
     "next": "15.0.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
@@ -28,6 +30,7 @@
     "eslint": "^8",
     "eslint-config-next": "15.0.4",
     "prisma": "^6.0.1",
+    "tsx": "^4.19.2",
     "typescript": "^5"
   }
 }

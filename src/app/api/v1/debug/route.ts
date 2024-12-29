@@ -40,12 +40,23 @@ export async function GET(request: NextRequest) {
         await db.channel.deleteMany({ where: { serverId } });
         await db.server.delete({ where: { id: serverId } });*/
 
+        await db.user.deleteMany({
+            where: {
+                directMsgs: {
+                    not: {
+                        name: " "
+                    }
+                }
+            }
+        });
+
         await db.$disconnect();
         return NextResponse.json({
-            message: (await db.server.findMany())
+            message: "Done."
         }, { status: 200 })
     } catch (err) {
-        console.log(err)
+        if(err instanceof Error)
+            console.log(err.stack)
         await db.$disconnect()
         return NextResponse.json({ message: "an error occured while deleteing the server" }, { status: 500 })
     }

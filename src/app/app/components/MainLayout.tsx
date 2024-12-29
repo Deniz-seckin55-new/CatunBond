@@ -10,7 +10,7 @@ import UserBox from "./UserBox";
 import SideBox from "./SideBox";
 import FriendsDiv from "./FriendsDiv";
 import ChannelBox from "./ChannelBox";
-import { Channel, Server, SyntaxHighlight, ViewingFriendsDiv, Currents, getLineHeight, Message, ClientResponsePacket, AllowedTypes } from "../utils/utils";
+import { Channel, Server, SyntaxHighlight, ViewingFriendsDiv, Currents, getLineHeight, Message, ClientResponsePacket, AllowedTypes, SocketData, SocketInformationType } from "../utils/utils";
 import { PrismaClient } from "@prisma/client";
 import { clerkClient } from "@clerk/nextjs/server";
 import { useUser } from "@clerk/nextjs";
@@ -25,7 +25,7 @@ const MainLayout: React.FC = () => {
     const [ExploreBoxV, setExploreBoxV] = useState(false);
     const [friendStatus, setFriendStatus] = useState<ViewingFriendsDiv>('online');
     const [SideBoxChannelsV, setSideBoxChannelsV] = useState(false);
-    const [currents, setCurrents] = useState<Currents>({ channel: null, server: null, exploreboxmode: null });
+    const [currents, setCurrents] = useState<Currents>({ channel: null, server: null, exploreboxmode: null, user: null });
     const [Channels, setChannels] = useState<Channel[]>([{
         id: "abc",
         name: "general"
@@ -110,6 +110,11 @@ const MainLayout: React.FC = () => {
         // Add class 'server_list_element_image_active' to server jsx element
     }
 
+    const onRightClickServer = (server: Server, ct: React.MouseEvent<HTMLDivElement, MouseEvent>) => {
+        console.log("Right clicked!");
+        return false;
+    }
+
     const onClickChannel = (channel: Channel) => {
         try {
             fetch('api/v1/channel/messages', {
@@ -149,6 +154,7 @@ const MainLayout: React.FC = () => {
             channel: null,
             server: null,
         }));
+        setMessages([]);
     }
 
     const onClickExploreButton = () => {
@@ -231,6 +237,10 @@ const MainLayout: React.FC = () => {
             return;
         }
 
+        if(!user.user.username) {
+            return;
+        }
+
         const textarea = event.target as HTMLTextAreaElement;
         const message = textarea.value;
 
@@ -244,7 +254,8 @@ const MainLayout: React.FC = () => {
             content: message,
             timestamp: new Date(Date.now()),
             repliedTo: null,
-            id: null // Will be auto set
+            id: null, // Will be auto set,
+            authorUsername: user.user.username,
         }
 
         if (event.key == "Enter" && !event.shiftKey) {
@@ -252,7 +263,8 @@ const MainLayout: React.FC = () => {
             console.log("Message: ", message);
 
             try {
-                fetch('/api/v1/channel/messages/send', {
+                sendMessage(messageObject, setMessages);
+                /*fetch('/api/v1/channel/messages/send', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -266,7 +278,7 @@ const MainLayout: React.FC = () => {
                     .then((data) => {
                         console.log(data);
                     });
-
+                */
                 textarea.value = "";
             } catch (err) {
                 console.error(err);
@@ -275,7 +287,13 @@ const MainLayout: React.FC = () => {
     }
 
     const sendMessage = (message: Message, setMessages: (msg: any) => void) => {
-        socket?.emit("message", message);
+        console.log("Sending message: ", message);
+        const socketData: SocketData = {
+            infoType: SocketInformationType.ClientSendMessage,
+            dataType: AllowedTypes.Message,
+            data: message
+        }
+        socket?.emit("message", socketData);
         /*setMessages((prevMessages: Message[]) => [...prevMessages, message]);*/
     }
 
@@ -320,6 +338,7 @@ const MainLayout: React.FC = () => {
 
     const MainBoxProps = {
         onClickServer: (server: Server) => onClickServer(server),
+        onRightClickServer: (server: Server, ct: React.MouseEvent<HTMLDivElement, MouseEvent>) => onRightClickServer(server, ct),
         onClickAppIcon: onClickAppIcon,
         onClickExploreButton: onClickExploreButton,
         Currents: currents,
@@ -342,7 +361,8 @@ const MainLayout: React.FC = () => {
                 console.log(data);
                 if (data.dataType == AllowedTypes.Message) {
                     const recievedMessage = data.data as Message;
-                    setMessages([...messages, recievedMessage]);
+                    console.log("Got message: ", recievedMessage);
+                    setMessages((prevMessages: Message[]) => [...prevMessages, recievedMessage]);
                 }
             });
             socket.emit("joinChannel", currents.channel.id);
@@ -359,6 +379,19 @@ const MainLayout: React.FC = () => {
     }, []);
 
     useEffect(() => {
+        if (user.user) {
+            setCurrents((prevCurrents) => ({
+                ...prevCurrents,
+                user: {
+                    avatar: user.user.imageUrl,
+                    id: user.user.id,
+                    username: user.user.username,
+                }
+            }));
+        }
+    }, []);
+
+    useEffect(() => {
         window.addEventListener('keydown', onKeyDown);
         return () => window.removeEventListener('keydown', onKeyDown);
     }, [ExploreBoxV]);
@@ -369,6 +402,8 @@ const MainLayout: React.FC = () => {
             className: "highlight_01",
             pattern: new RegExp("^#", "gmi")
         }], "# channel_name"));*/
+        console.log("Is loaded: ", user.isLoaded);
+        console.log("Username: ", user.user?.username);
     }
     Debugging();
 

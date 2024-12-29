@@ -55,30 +55,7 @@
 
     opacity: 0;
 
-    transition: opacity 0.2s ease-in-out;
-}
-
-.explore_box_server {
-    position: fixed;
-
-    z-index: 10;
-
-    width: 50%;
-    height: 30%;
-        
-    display: grid;
-    place-items: center;
-
-    grid-template-rows: repeat(3, 1fr);
-    grid-template-columns: repeat(1, 1fr);
-
-    background-color: var(--cb-color-black);
-
-    border-radius: 8px;
-
-    opacity: 0;
-
-    transition: opacity 0.2s ease-in-out;
+    transition: height 0.2s ease-in-out, opacity 0.2s ease-in-out;
 }
 
 .explore_box_active {
@@ -215,7 +192,7 @@
     font-size: 2vw;
     
     padding: 10px;
-    margin: 1em;
+    margin-top: 1em;
 
     background-color: var(--cb-color-black);
 
@@ -962,8 +939,13 @@
     align-items: flex-start;
     font-size: 1.5rem;
     color: var(--cb-color-white);
+    transition: background-color 0.1s;
     padding: 1em;
     user-select: text;
+}
+
+.message:hover {
+    background-color: var(--cb-color-black-transparent-softer);
 }
 
 .message_useravatar_holder {

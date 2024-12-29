@@ -1,6 +1,6 @@
 import styles from '../page.module.css';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Message } from '../utils/utils';
 
 interface Props {
@@ -11,56 +11,45 @@ interface Props {
 }
 
 const ChannelBox: React.FC<Props> = ({ onInputTextarea, onLoadTextarea, onKeyDownInput, messages }) => {
-    /*let date = new Date();
-    date.setDate(Date.now());
-    const testMessages: Message[] = [{
-        id: "i00",
-        authorId: "a10",
-        channelId: "c10",
-        content: "meow",
-        repliadToId: null,
-        timestamp: date,
-    }, {
-        id: "i01",
-        authorId: "a11",
-        channelId: "c11",
-        content: "I love cats!",
-        repliadToId: null,
-        timestamp: date,
-    }, {
-        id: "i02",
-        authorId: "a12",
-        channelId: "c12",
-        content: "veeeeeeeeeeeeeeeeeeeeeerrrrrrrrrrryyyyyyyyy lloooonggg messsaaageeeeeee!\\=(+'!",
-        repliadToId: null,
-        timestamp: date,
-    },{
-        id: "i03",
-        authorId: "a12",
-        channelId: "c12",
-        content: "veeeeeeeeeeeeeeeeeeeeeerrrrrrrrrrryyyyyyyyy lloooonggg messsaaageeeeeee!\\=(+'!",
-        repliadToId: null,
-        timestamp: date,
-    },{
-        id: "i04",
-        authorId: "a12",
-        channelId: "c12",
-        content: "veeeeeeeeeeeeeeeeeeeeeerrrrrrrrrrryyyyyyyyy lloooonggg messsaaageeeeeee!\\=(+'!",
-        repliadToId: null,
-        timestamp: date,
-    },{
-        id: "i05",
-        authorId: "a12",
-        channelId: "c12",
-        content: "veeeeeeeeeeeeeeeeeeeeeerrrrrrrrrrryyyyyyyyy lloooonggg messsaaageeeeeee!\\=(+'!",
-        repliadToId: null,
-        timestamp: date,
-    },]*/
+    const [userScroll, setuserScroll] = useState(0);
+    const scrollPageRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        console.log("userScroll: ", userScroll);
+        if (scrollPageRef.current) {
+            scrollPageRef.current.addEventListener('scroll', (ev: Event) => {
+                if(scrollPageRef.current)
+                    if (Math.abs(scrollPageRef.current.scrollTop - scrollPageRef.current.scrollHeight) >= 1000) {
+                        setuserScroll(1);   
+                    }
+            });
+            if (userScroll == 0) {
+                scrollPageRef.current.scrollBy({
+                    behavior: 'smooth',
+                    left: 0,
+                    top: scrollPageRef.current.scrollHeight,
+                });
+            } else if (userScroll == 1) {
+                if (Math.abs(scrollPageRef.current.scrollTop - scrollPageRef.current.scrollHeight) < 1000) {
+                    setuserScroll(0);
+                } else {
+                    console.log("Was ",Math.abs(scrollPageRef.current.scrollTop - scrollPageRef.current.scrollHeight));
+                }
+            }
+
+            return () => {
+                if (scrollPageRef.current)
+                    scrollPageRef.current.removeEventListener('scroll', (ev: Event) => {
+                        setuserScroll(1);
+                    });
+            }
+        }
+    }, [scrollPageRef, messages]);
 
     return (
         <>
             <div id="channel-box" className={styles.channel_box} style={{ gridTemplateRows: `5fr 12vh` }}>
-                <div className={styles.message_box}>
+                <div className={styles.message_box} ref={scrollPageRef}>
                     {messages.map((message) => {
                         return (
                             <div className={styles.message} key={message.id}>
@@ -68,7 +57,7 @@ const ChannelBox: React.FC<Props> = ({ onInputTextarea, onLoadTextarea, onKeyDow
                                     <img className={styles.message_useravatar} src="https://cat-storage-server.web.app/data/cat1.jpeg" />
                                 </div>
                                 <div className={styles.message_user_holder}>
-                                    <p className={styles.message_username}>{message.authorId}</p>
+                                    <p className={styles.message_username}>{message.authorUsername}</p>
                                     <p className={styles.message_content}>{message.content}</p>
                                 </div>
                             </div>
