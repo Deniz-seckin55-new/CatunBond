@@ -6,7 +6,7 @@ export default function Home() {
     <>
       <div className={styles.main_container}>
         <div className={styles.main_content}>
-          <SignUp routing='path' path='/sign-up' fallbackRedirectUrl={'/app'} />
+          <SignUp routing='path' path='/sign-up' forceRedirectUrl={'/aftersignup'} />
         </div>
       </div>
     </>

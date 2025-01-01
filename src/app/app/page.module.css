@@ -823,6 +823,11 @@
     overflow-y: auto;
 }
 
+.context_menu {
+    background: var(--cb-color-black);
+    position: absolute;
+}
+
 .contenteditable {
     max-height: 12vh;
     overflow: auto;

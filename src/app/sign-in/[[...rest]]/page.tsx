@@ -6,7 +6,7 @@ export default function Page() {
     <>
       <div className={styles.main_container}>
         <div className={styles.main_content}>
-          <SignIn routing='path' path='/sign-in' fallbackRedirectUrl={'/app'} />
+          <SignIn routing='path' path='/sign-in' />
         </div>
       </div>
     </>

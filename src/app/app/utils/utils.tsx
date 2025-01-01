@@ -23,11 +23,18 @@ export interface UserResource {
     avatar: string;
 }
 
+export interface ContextMenu {
+    x: number;
+    y: number;
+    shown: boolean;
+}
+
 export interface Currents {
     user: UserResource | null;
     server: Server | null;
     channel: Channel | null;
     exploreboxmode: Number | null;
+    contextmenu: ContextMenu;
 }
 
 export interface Message {

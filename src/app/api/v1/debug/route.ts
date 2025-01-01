@@ -19,43 +19,47 @@ export async function GET(request: NextRequest) {
                 }
             })
         }*/
-        
-         /*await db.server.create({
-             data: {
-                 name: "Test Server",
-                 ownerId: user.id,
-                 iconUrl: "https://cat-storage-server.web.app/data/cat1.jpeg",
-                 id: uuid4(),
-                 channels: {
-                     create: {
-                         name: "general",
-                         id: uuid4()
-                     }
-                 }
-             }
-         });*/
 
-       /* const serverId = "e0e92617-fa44-4f7e-b056-1c477795ee4a";
-
-        await db.channel.deleteMany({ where: { serverId } });
-        await db.server.delete({ where: { id: serverId } });*/
-
-        await db.user.deleteMany({
-            where: {
-                directMsgs: {
-                    not: {
-                        name: " "
+        /*await db.server.create({
+            data: {
+                name: "Test Server",
+                ownerId: user.id,
+                iconUrl: "https://cat-storage-server.web.app/data/cat1.jpeg",
+                id: uuid4(),
+                channels: {
+                    create: {
+                        name: "general",
+                        id: uuid4()
                     }
                 }
             }
-        });
+        });*/
+
+        /* const serverId = "e0e92617-fa44-4f7e-b056-1c477795ee4a";
+ 
+         await db.channel.deleteMany({ where: { serverId } });
+         await db.server.delete({ where: { id: serverId } });*/
+
+        const cl = await clerkClient();
+        /*const users = await cl.users.getUserList();
+        users.data.forEach(async (user) => {
+            await cl.users.deleteUser(user.id);
+        });*/
+
+        
+        
+        /*await db.messages.deleteMany({ where: { authorId: { not: { contains: ";" } } } });
+        await db.auth.deleteMany({ where: { userId: { not: { contains: ";" } } } });
+        await db.user.deleteMany({ where: { id: { not: { contains: ";" } } } });*/
+
+        const count = await db.user.count();
 
         await db.$disconnect();
         return NextResponse.json({
-            message: "Done."
+            message: "Done. " + count
         }, { status: 200 })
     } catch (err) {
-        if(err instanceof Error)
+        if (err instanceof Error)
             console.log(err.stack)
         await db.$disconnect()
         return NextResponse.json({ message: "an error occured while deleteing the server" }, { status: 500 })

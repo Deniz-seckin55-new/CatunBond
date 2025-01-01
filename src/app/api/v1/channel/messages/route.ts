@@ -21,7 +21,14 @@ export async function POST(request: NextRequest) {
                 channelId: ch.id
             }
         });
-        const jsonMessages = messages.map((msg) => {
+        const jsonMessages = messages.map(async (msg) => {
+            const user = await db.user.findFirst({where: {id: msg.authorId}});
+            let userName;
+            if(user) {
+                userName = user.username;
+            } else {
+                userName = msg.authorId;
+            }
             return {
                 id: msg.id.toString(),
                 content: msg.content,
@@ -29,6 +36,7 @@ export async function POST(request: NextRequest) {
                 authorId: msg.authorId,
                 channelId: msg.channelId,
                 repliedToId: msg.repliedToId,
+                authorUsername: userName,
             };
         });
         await db.$disconnect();

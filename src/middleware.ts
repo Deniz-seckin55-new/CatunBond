@@ -1,6 +1,8 @@
-import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
+import { clerkMiddleware, createRouteMatcher, currentUser } from '@clerk/nextjs/server'
+import { PrismaClient } from '@prisma/client'
 
 const isPublicRoute = createRouteMatcher(['/sign-in(.*)', '/sign-up(.*)', '/'])
+const db = new PrismaClient();
 
 export default clerkMiddleware(async (auth, request) => {
   if (!isPublicRoute(request)) {

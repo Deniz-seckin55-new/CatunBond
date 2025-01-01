@@ -11,11 +11,9 @@ import SideBox from "./SideBox";
 import FriendsDiv from "./FriendsDiv";
 import ChannelBox from "./ChannelBox";
 import { Channel, Server, SyntaxHighlight, ViewingFriendsDiv, Currents, getLineHeight, Message, ClientResponsePacket, AllowedTypes, SocketData, SocketInformationType } from "../utils/utils";
-import { PrismaClient } from "@prisma/client";
-import { clerkClient } from "@clerk/nextjs/server";
 import { useUser } from "@clerk/nextjs";
-import uuid4 from "uuid4";
 import { io, Socket } from 'socket.io-client';
+import UserCheck from "./UserCheck";
 
 let socket: Socket | undefined;
 
@@ -25,16 +23,10 @@ const MainLayout: React.FC = () => {
     const [ExploreBoxV, setExploreBoxV] = useState(false);
     const [friendStatus, setFriendStatus] = useState<ViewingFriendsDiv>('online');
     const [SideBoxChannelsV, setSideBoxChannelsV] = useState(false);
-    const [currents, setCurrents] = useState<Currents>({ channel: null, server: null, exploreboxmode: null, user: null });
-    const [Channels, setChannels] = useState<Channel[]>([{
-        id: "abc",
-        name: "general"
-    }, {
-        id: "def",
-        name: "general2"
-    }]);
+    const [currents, setCurrents] = useState<Currents>({ channel: null, server: null, exploreboxmode: null, user: null, contextmenu: {shown: false, x: 0, y: 0} });
+    const [Channels, setChannels] = useState<Channel[]>([]);
     const [inputTextRows, setinputTextRows] = useState(1);
-    const [LoadingText, setLoadingText] = useState("Loading...");
+    const [LoadingText, setLoadingText] = useState("Loading..."); // Replace with loading gif
     const [messages, setMessages] = useState<Message[]>([]);
     const user = useUser();
 
@@ -111,7 +103,14 @@ const MainLayout: React.FC = () => {
     }
 
     const onRightClickServer = (server: Server, ct: React.MouseEvent<HTMLDivElement, MouseEvent>) => {
-        console.log("Right clicked!");
+        setCurrents((prevCurrents) => ({
+            ...prevCurrents,
+            contextmenu: {
+                shown: true,
+                x: ct.screenX,
+                y: ct.screenY,
+            }
+        }));
         return false;
     }
 
@@ -286,6 +285,23 @@ const MainLayout: React.FC = () => {
         }
     }
 
+    const onMouseDown = (event: MouseEvent) => {
+        const target = event.target as HTMLElement;
+        if(!target) {
+            return;
+        }
+        if(target.id != "context-menu") {
+            setCurrents((prevCurrents) => ({
+                ...prevCurrents,
+                contextmenu: {
+                    shown: false,
+                    x: 0,
+                    y: 0,
+                }
+            }));
+        }
+    }
+
     const sendMessage = (message: Message, setMessages: (msg: any) => void) => {
         console.log("Sending message: ", message);
         const socketData: SocketData = {
@@ -392,6 +408,11 @@ const MainLayout: React.FC = () => {
     }, []);
 
     useEffect(() => {
+        window.addEventListener('mousedown', onMouseDown);
+        return () => window.removeEventListener('mousedown', onMouseDown);
+    }, []);
+
+    useEffect(() => {
         window.addEventListener('keydown', onKeyDown);
         return () => window.removeEventListener('keydown', onKeyDown);
     }, [ExploreBoxV]);
@@ -409,6 +430,7 @@ const MainLayout: React.FC = () => {
 
     return (
         <>
+            <UserCheck />
             <div className={styles.body}>
                 <div className={styles.main_container}>
                     <BackgroundBlur BgBlurV={BgBlurV} onClickBgBlur={onClickBgBlur} />
