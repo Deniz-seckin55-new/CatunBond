@@ -25,9 +25,10 @@ git clone https://github.com/Deniz-seckin55-new/CatunBond.git
 cd CatunBond
 ```
 
-2. Run the local servers
+2. Run the local servers on seperate terminals.
 ```bash
 npm run dev
 npm run node
 ```
 
+That's it! Now you can visit ==localhost:3000/app== to start using CatunBond.
