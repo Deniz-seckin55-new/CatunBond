@@ -1,4 +1,4 @@
-import { JSX } from "react";
+import { JSX, ReactNode } from "react";
 import ustyles from "./util.module.css";
 
 export interface Server {
@@ -35,16 +35,27 @@ export interface Currents {
     channel: Channel | null;
     exploreboxmode: Number | null;
     contextmenu: ContextMenu;
+    contextmenumode: Number | null;
 }
 
 export interface Message {
     id: bigint | null;
     content: string;
     timestamp: Date;
-    authorId: string;
-    channelId: string;
+    channel: Channel;
     repliedTo: string | null;
-    authorUsername: string | null;
+    author: User
+}
+
+export interface Channel {
+    id: string;
+    name: string;
+}
+
+export interface User {
+    id: string;
+    username: string;
+    avatarUrl: string | null;
 }
 
 export type ViewingFriendsDiv = 'online' | 'offline' | 'blocked';
@@ -114,4 +125,75 @@ export interface MessageSocketPacket {
 export interface ClientResponsePacket {
     dataType: AllowedTypes,
     data: any
+}
+
+export function getLocale() {
+    if (navigator.languages !== undefined)
+        return navigator.languages[0];
+    return navigator.language ?? 'en-US';
+}
+
+export function getDayNameLocale(date: Date) {
+    return date.toLocaleDateString(getLocale(), { weekday: 'long' });
+}
+
+const TurkishDayNames = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"];
+const EnglishDayNames = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+const GermanDayNames = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"];
+
+const TurkishTYT = ["Bugün", "Dün", "Yarın"];
+const EnglishTYT = ["Today", "Yesterday", "Tomorrow"];
+const GermanTYT = ["Heute", "Gestern", "Morgen"];
+export function TranslateDayName(day: number) {
+    if(getLocale().startsWith("tr")) {
+        return TurkishDayNames[day];
+    } else if(getLocale().startsWith("de")) {
+        return GermanDayNames[day];
+    } else {
+        return EnglishDayNames[day];
+    }
+}
+
+export function GetTodayNameLocale() {
+    if(getLocale().startsWith("tr")) {
+        return TurkishTYT[0]+' Saat';
+    } else if(getLocale().startsWith("de")) {
+        return GermanTYT[0]+' um';
+    } else {
+        return TurkishTYT[0]+' at';
+    }
+}
+
+export function GetYesterdayNameLocale() {
+    if(getLocale().startsWith("tr")) {
+        return TurkishTYT[1]+' Saat';
+    } else if(getLocale().startsWith("de")) {
+        return GermanTYT[1]+' um';
+    } else {
+        return TurkishTYT[1]+' at';
+    }
+}
+
+export function GetTomorrowNameLocale() {
+    if(getLocale().startsWith("tr")) {
+        return TurkishTYT[2]+' Saat';
+    } else if(getLocale().startsWith("de")) {
+        return GermanTYT[2]+' um';
+    } else {
+        return TurkishTYT[2]+' at';
+    }
+}
+
+export function GetMessageDateString(date: Date): string {
+    console.log(GetTodayNameLocale());
+    const now = new Date();
+    if (date.getDay() == now.getDay() && date.getMonth() == now.getMonth() && date.getFullYear() == now.getFullYear()) {
+        return `${GetTodayNameLocale()} ${date.getHours()}:${date.getMinutes()}`
+    } else if (date.getDay() == (now.getDay() - 1) && date.getMonth() == now.getMonth() && date.getFullYear() == now.getFullYear()) {
+        return `${GetYesterdayNameLocale()} ${date.getHours()}:${date.getMinutes()}`
+    } else if (date.getDay() == (now.getDay() + 1) && date.getMonth() == now.getMonth() && date.getFullYear() == now.getFullYear()) {
+        return `${GetTomorrowNameLocale()} ${date.getHours()}:${date.getMinutes()}`
+    } else {
+        return `${date.getDay()}`
+    }
 }

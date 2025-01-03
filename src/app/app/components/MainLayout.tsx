@@ -14,8 +14,18 @@ import { Channel, Server, SyntaxHighlight, ViewingFriendsDiv, Currents, getLineH
 import { useUser } from "@clerk/nextjs";
 import { io, Socket } from 'socket.io-client';
 import UserCheck from "./UserCheck";
+import ContextMenu from "./ContextMenu";
 
 let socket: Socket | undefined;
+
+const defaultCurrents: Currents = {
+    channel: null,
+    server: null,
+    exploreboxmode: null,
+    user: null,
+    contextmenu: { shown: false, x: 0, y: 0 },
+    contextmenumode: null
+};
 
 const MainLayout: React.FC = () => {
     const [FriendsDivV, setFriendsDivV] = useState(false);
@@ -23,7 +33,7 @@ const MainLayout: React.FC = () => {
     const [ExploreBoxV, setExploreBoxV] = useState(false);
     const [friendStatus, setFriendStatus] = useState<ViewingFriendsDiv>('online');
     const [SideBoxChannelsV, setSideBoxChannelsV] = useState(false);
-    const [currents, setCurrents] = useState<Currents>({ channel: null, server: null, exploreboxmode: null, user: null, contextmenu: {shown: false, x: 0, y: 0} });
+    const [currents, setCurrents] = useState<Currents>({ ...defaultCurrents });
     const [Channels, setChannels] = useState<Channel[]>([]);
     const [inputTextRows, setinputTextRows] = useState(1);
     const [LoadingText, setLoadingText] = useState("Loading..."); // Replace with loading gif
@@ -79,7 +89,7 @@ const MainLayout: React.FC = () => {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    server: server.id,
+                    serverId: server.id,
                 })
             })
                 .then((res) => res.json())
@@ -176,6 +186,8 @@ const MainLayout: React.FC = () => {
     }
 
     const onClickServerJoinButton = (server: string) => {
+        setLoadingText("Loading...");
+
         setCurrents((prevCurrents) => ({
             ...prevCurrents,
             exploreboxmode: 2,
@@ -187,7 +199,7 @@ const MainLayout: React.FC = () => {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                serverId: server,
+                inviteLink: server,
             })
         })
             .then((res) => res.json())
@@ -236,7 +248,7 @@ const MainLayout: React.FC = () => {
             return;
         }
 
-        if(!user.user.username) {
+        if (!user.user.username) {
             return;
         }
 
@@ -248,13 +260,12 @@ const MainLayout: React.FC = () => {
         }
 
         const messageObject: Message = {
-            authorId: user.user.id,
-            channelId: currents.channel.id,
+            author: {id: user.user.id, username: user.user.username, avatarUrl: user.user.imageUrl},
+            channel: {id: currents.channel.id, name: currents.channel.name},
             content: message,
             timestamp: new Date(Date.now()),
             repliedTo: null,
-            id: null, // Will be auto set,
-            authorUsername: user.user.username,
+            id: null, // Will be auto set
         }
 
         if (event.key == "Enter" && !event.shiftKey) {
@@ -287,10 +298,10 @@ const MainLayout: React.FC = () => {
 
     const onMouseDown = (event: MouseEvent) => {
         const target = event.target as HTMLElement;
-        if(!target) {
+        if (!target) {
             return;
         }
-        if(target.id != "context-menu") {
+        if (target.id != "context-menu") {
             setCurrents((prevCurrents) => ({
                 ...prevCurrents,
                 contextmenu: {
@@ -360,6 +371,10 @@ const MainLayout: React.FC = () => {
         Currents: currents,
     }
 
+    const ContextMenuProps = {
+        Currents: currents,
+    }
+
     const onKeyDown = (event: KeyboardEvent) => {
         if (event.ctrlKey && event.key == 'f') {
             event.preventDefault();
@@ -423,14 +438,23 @@ const MainLayout: React.FC = () => {
             className: "highlight_01",
             pattern: new RegExp("^#", "gmi")
         }], "# channel_name"));*/
-        console.log("Is loaded: ", user.isLoaded);
-        console.log("Username: ", user.user?.username);
+        /*fetch('/api/v1/server/invites/create', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                serverId: "ee481f36-7871-4fab-8f56-9881eeb7743b",
+            })
+        }).then((res) => res.json()).then((data) => {
+            console.log(data);
+        });*/
     }
     Debugging();
 
     return (
         <>
-            <UserCheck />
+            <ContextMenu {...ContextMenuProps} />
             <div className={styles.body}>
                 <div className={styles.main_container}>
                     <BackgroundBlur BgBlurV={BgBlurV} onClickBgBlur={onClickBgBlur} />

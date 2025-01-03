@@ -12,6 +12,7 @@ export async function GET(request: NextRequest) {
             db.$disconnect();
             return;
         }
+
         /*if(user) {
             (await clerkClient()).users.updateUserMetadata(user.id, {
                 privateMetadata: {
@@ -20,9 +21,9 @@ export async function GET(request: NextRequest) {
             })
         }*/
 
-        /*await db.server.create({
+        /*const s = await db.server.create({
             data: {
-                name: "Test Server",
+                name: "Test Server 2",
                 ownerId: user.id,
                 iconUrl: "https://cat-storage-server.web.app/data/cat1.jpeg",
                 id: uuid4(),
@@ -40,6 +41,14 @@ export async function GET(request: NextRequest) {
          await db.channel.deleteMany({ where: { serverId } });
          await db.server.delete({ where: { id: serverId } });*/
 
+        const server = await db.server.findFirst({
+            where: {
+                id: "ee481f36-7871-4fab-8f56-9881eeb7743b"
+            }
+        });
+
+        const messages = await db.messages.findMany();
+
         const cl = await clerkClient();
         /*const users = await cl.users.getUserList();
         users.data.forEach(async (user) => {
@@ -52,16 +61,18 @@ export async function GET(request: NextRequest) {
         await db.auth.deleteMany({ where: { userId: { not: { contains: ";" } } } });
         await db.user.deleteMany({ where: { id: { not: { contains: ";" } } } });*/
 
-        const count = await db.user.count();
+        const servers = await db.server.findMany();
+
+        const count = await db.server.count();
 
         await db.$disconnect();
         return NextResponse.json({
-            message: "Done. " + count
+            message: messages[0].content
         }, { status: 200 })
     } catch (err) {
         if (err instanceof Error)
             console.log(err.stack)
         await db.$disconnect()
-        return NextResponse.json({ message: "an error occured while deleteing the server" }, { status: 500 })
+        return NextResponse.json({ message: "an error occured" }, { status: 500 })
     }
 }

@@ -21,26 +21,17 @@ export async function POST(request: NextRequest) {
                 channelId: ch.id
             }
         });
-        const jsonMessages = messages.map(async (msg) => {
-            const user = await db.user.findFirst({where: {id: msg.authorId}});
-            let userName;
-            if(user) {
-                userName = user.username;
-            } else {
-                userName = msg.authorId;
-            }
-            return {
-                id: msg.id.toString(),
-                content: msg.content,
-                timestamp: msg.timestamp,
-                authorId: msg.authorId,
-                channelId: msg.channelId,
-                repliedToId: msg.repliedToId,
-                authorUsername: userName,
-            };
-        });
+
+        const _messagesList = messages.map(async (message) => ({
+            ...message,
+            id: message.id.toString(),
+            authorUsername: (await db.user.findUnique({where: {id: message.authorId}}))?.username ?? "unknown",
+        }));
+
+        const messagesList = await Promise.all(_messagesList);
+
         await db.$disconnect();
-        return NextResponse.json({ success: "true", messages: jsonMessages }, { status: 200 });
+        return NextResponse.json({ success: "true", messages: messagesList }, { status: 200 });
     } catch (err) {
         if (err instanceof Error)
             console.log(err.stack);

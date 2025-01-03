@@ -1,7 +1,7 @@
 import styles from '../page.module.css';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Message } from '../utils/utils';
+import { Message, GetMessageDateString } from '../utils/utils';
 
 interface Props {
     onInputTextarea: (event: React.ChangeEvent<HTMLTextAreaElement>) => void;
@@ -18,9 +18,9 @@ const ChannelBox: React.FC<Props> = ({ onInputTextarea, onLoadTextarea, onKeyDow
         console.log("userScroll: ", userScroll);
         if (scrollPageRef.current) {
             scrollPageRef.current.addEventListener('scroll', (ev: Event) => {
-                if(scrollPageRef.current)
+                if (scrollPageRef.current)
                     if (Math.abs(scrollPageRef.current.scrollTop - scrollPageRef.current.scrollHeight) >= 1000) {
-                        setuserScroll(1);   
+                        setuserScroll(1);
                     }
             });
             if (userScroll == 0) {
@@ -32,8 +32,6 @@ const ChannelBox: React.FC<Props> = ({ onInputTextarea, onLoadTextarea, onKeyDow
             } else if (userScroll == 1) {
                 if (Math.abs(scrollPageRef.current.scrollTop - scrollPageRef.current.scrollHeight) < 1000) {
                     setuserScroll(0);
-                } else {
-                    console.log("Was ",Math.abs(scrollPageRef.current.scrollTop - scrollPageRef.current.scrollHeight));
                 }
             }
 
@@ -57,8 +55,13 @@ const ChannelBox: React.FC<Props> = ({ onInputTextarea, onLoadTextarea, onKeyDow
                                     <img className={styles.message_useravatar} src="https://cat-storage-server.web.app/data/cat1.jpeg" />
                                 </div>
                                 <div className={styles.message_user_holder}>
-                                    <p className={styles.message_username}>{message.authorUsername}</p>
+                                    <div className={styles.message_content_holder}>
+                                        <p className={styles.message_username}>{message.author.username}</p>
+                                        <p className={styles.message_timestamp}>{GetMessageDateString(new Date(message.timestamp))}</p>
+                                        </div>
                                     <p className={styles.message_content}>{message.content}</p>
+                                </div>
+                                <div className={styles.message_timestamp_holder}>
                                 </div>
                             </div>
                         );

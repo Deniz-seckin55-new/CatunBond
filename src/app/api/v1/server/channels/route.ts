@@ -5,7 +5,7 @@ const db = new PrismaClient();
 
 export async function POST(request: NextRequest) {
     const data = await request.json()
-    const serverId = data.serverId
+    const { serverId } = data;  
      // try finding the server
     try {
         const serverData = await db.server.findFirst({

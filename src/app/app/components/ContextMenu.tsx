@@ -1,11 +1,22 @@
 import styles from '../page.module.css';
+import { Currents } from '../utils/utils';
 
-const ContextMenu: React.FC = () => {
+interface Props {
+    Currents: Currents;
+}
+
+const ContextMenu: React.FC<Props> = ({ Currents }) => {
     return (
         <>
-            <div className={styles.context_menu}>
-                {/* Add Buttons Here */}
-            </div>
+            {Currents.contextmenu.shown && (
+                <div className={styles.context_menu}>
+                    {Currents.contextmenumode == 0 && (
+                        <>
+                            <button id="contextmenu-test-button" className={styles.context_menu_button}>Test Button Server</button>
+                        </>
+                    )}
+                </div>
+            )}
         </>
     );
 }

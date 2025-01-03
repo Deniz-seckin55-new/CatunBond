@@ -11,14 +11,24 @@ dotenv.config({ path: '.env.local' }); // Change if its .env for you
 
 const httpServer = http.createServer()
 
-interface Message {
+export interface Message {
     id: bigint | null;
     content: string;
     timestamp: Date;
-    authorId: string;
-    channelId: string;
+    channel: Channel;
     repliedTo: string | null;
-    authorUsername: string | null;
+    author: User
+}
+
+export interface Channel {
+    id: string;
+    name: string;
+}
+
+export interface User {
+    id: string;
+    username: string;
+    avatarUrl: string | null;
 }
 
 enum SocketInformationType {
@@ -63,40 +73,55 @@ io.on("connection", (socket: Socket) => {
         switch (data.infoType) {
             case SocketInformationType.ClientSendMessage:
                 if (data.dataType == AllowedTypes.Message) {
-                    const message = data.data as Message;
-                    const sentMsg = await db.messages.create({
-                        data: {
-                            content: message.content,
-                            timestamp: message.timestamp,
-                            repliedToId: message.repliedTo ?? 'none',
-                            author: {
-                                connectOrCreate: {
-                                    create: {
-                                        id: message.authorId,
-                                        username: message.authorUsername ?? 'Not found',
-                                    },
-                                    where: {
-                                        id: message.authorId
+                    try {
+
+                        const message = data.data as Message;
+                        const sentMsg = await db.messages.create({
+                            data: {
+                                content: message.content,
+                                timestamp: message.timestamp,
+                                repliedToId: message.repliedTo ?? 'none',
+                                author: {
+                                    connectOrCreate: {
+                                        create: {
+                                            id: message.author.id,
+                                            username: message.author.username ?? 'Not found',
+                                        },
+                                        where: {
+                                            id: message.author.id
+                                        }
                                     }
-                                } 
-                            },
-                            channel: {
-                                connect: {
-                                    id: message.channelId
+                                },
+                                channel: {
+                                    connect: {
+                                        id: message.channel.id
+                                    }
                                 }
                             }
-                        }
-                    })
-                    const response: ClientResponsePacket = {
-                        dataType: AllowedTypes.Message,
-                        data: {
-                            ...sentMsg,
+                        });
+
+                        let jsonMessage = {
                             id: sentMsg.id.toString(),
-                            authorUsername: message.authorUsername, 
+                            content: sentMsg.content,
+                            timestamp: sentMsg.timestamp,
+                            authorId: sentMsg.authorId,
+                            channelId: sentMsg.channelId,
+                            repliedTo: sentMsg.repliedToId,
                         }
+                        console.log("Sent DB message: " + JSON.stringify(jsonMessage));
+                        const response: ClientResponsePacket = {
+                            dataType: AllowedTypes.Message,
+                            data: {
+                                ...sentMsg,
+                                id: sentMsg.id.toString(),
+                            }
+                        }
+                        io.to(message.channel.id).emit("message", response);
+                        console.log("Sending message to", message.channel.id, " by ", socket.id);
+                    } catch (err) {
+                        if(err instanceof Error)
+                            console.error(err.stack);
                     }
-                    io.to(message.channelId).emit("message", response);
-                    console.log("Sending message to", message.channelId, " by ", socket.id);
                 }
                 break;
 
