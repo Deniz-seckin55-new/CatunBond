@@ -20,14 +20,14 @@ CatunBond is a voice, video and chat app built with high-quality backend and fro
 To install and run a local fork of CatunBond;
 
 1. Clone the git repository.
-```
-    git clone https://github.com/Deniz-seckin55-new/CatunBond.git
-    cd CatunBond
+```bash
+git clone https://github.com/Deniz-seckin55-new/CatunBond.git
+cd CatunBond
 ```
 
 2. Run the local servers
-```
-    npm run dev
-    npm run node
+```bash
+npm run dev
+npm run node
 ```
 
