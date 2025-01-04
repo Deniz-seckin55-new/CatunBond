@@ -112,14 +112,14 @@ io.on("connection", (socket: Socket) => {
                         const response: ClientResponsePacket = {
                             dataType: AllowedTypes.Message,
                             data: {
-                                ...sentMsg,
+                                ...message,
                                 id: sentMsg.id.toString(),
                             }
                         }
                         io.to(message.channel.id).emit("message", response);
                         console.log("Sending message to", message.channel.id, " by ", socket.id);
                     } catch (err) {
-                        if(err instanceof Error)
+                        if (err instanceof Error)
                             console.error(err.stack);
                     }
                 }

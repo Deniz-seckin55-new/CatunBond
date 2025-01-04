@@ -12,6 +12,7 @@ interface Props {
 
 const ChannelBox: React.FC<Props> = ({ onInputTextarea, onLoadTextarea, onKeyDownInput, messages }) => {
     const [userScroll, setuserScroll] = useState(0);
+    const [hoveredMessageId, setHoveredMessageId] = useState<String | null>(null);
     const scrollPageRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -44,24 +45,46 @@ const ChannelBox: React.FC<Props> = ({ onInputTextarea, onLoadTextarea, onKeyDow
         }
     }, [scrollPageRef, messages]);
 
+    const onMouseHoverOver = (id: (String | undefined)) => {
+        if (id !== undefined)
+            setHoveredMessageId(id);
+    }
+
+    const onMouseHoverOut = () => {
+        setHoveredMessageId(null);
+    }
+
     return (
         <>
             <div id="channel-box" className={styles.channel_box} style={{ gridTemplateRows: `5fr 12vh` }}>
                 <div className={styles.message_box} ref={scrollPageRef}>
                     {messages.map((message) => {
                         return (
-                            <div className={styles.message} key={message.id}>
+                            <div className={styles.message} onMouseOver={() => onMouseHoverOver(message.id?.toString())} onMouseLeave={onMouseHoverOut} key={message.id}>
                                 <div className={styles.message_useravatar_holder}>
-                                    <img className={styles.message_useravatar} src="https://cat-storage-server.web.app/data/cat1.jpeg" />
+                                    <img className={styles.message_useravatar} src={`"${message.author.avatarUrl/*https://cat-storage-server.web.app/data/cat1.jpeg"*/}`} />
                                 </div>
                                 <div className={styles.message_user_holder}>
                                     <div className={styles.message_content_holder}>
                                         <p className={styles.message_username}>{message.author.username}</p>
                                         <p className={styles.message_timestamp}>{GetMessageDateString(new Date(message.timestamp))}</p>
-                                        </div>
+                                    </div>
                                     <p className={styles.message_content}>{message.content}</p>
                                 </div>
-                                <div className={styles.message_timestamp_holder}>
+                                <div id="message-actions-holder" className={`${styles.message_actions_holder} ${(hoveredMessageId == message.id?.toString()) ? styles.message_actions_holder_active : ''}`}>
+                                    <div className={styles.message_actions}>
+                                        <div className={styles.message_action}>
+                                            <p>R</p>
+                                        </div>
+                                        <div className={styles.vl}> </div>
+                                        <div className={styles.message_action}>
+                                            <p>E</p>
+                                        </div>
+                                        <div className={styles.vl}> </div>
+                                        <div className={styles.message_action}>
+                                            <p>D</p>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         );

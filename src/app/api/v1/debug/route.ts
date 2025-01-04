@@ -57,8 +57,8 @@ export async function GET(request: NextRequest) {
 
         
         
-        /*await db.messages.deleteMany({ where: { authorId: { not: { contains: ";" } } } });
-        await db.auth.deleteMany({ where: { userId: { not: { contains: ";" } } } });
+        await db.messages.deleteMany({ where: { authorId: { not: ";" } } });
+        /*await db.auth.deleteMany({ where: { userId: { not: { contains: ";" } } } });
         await db.user.deleteMany({ where: { id: { not: { contains: ";" } } } });*/
 
         const servers = await db.server.findMany();

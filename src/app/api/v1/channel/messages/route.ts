@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
+import { Message } from "@/app/app/utils/utils";
 
 const db = new PrismaClient();
 
@@ -23,9 +24,19 @@ export async function POST(request: NextRequest) {
         });
 
         const _messagesList = messages.map(async (message) => ({
-            ...message,
             id: message.id.toString(),
-            authorUsername: (await db.user.findUnique({where: {id: message.authorId}}))?.username ?? "unknown",
+            content: message.content,
+            timestamp: message.timestamp,
+            repliedTo: message.repliedToId,
+            author: ((user) => { return {
+                id: user?.id,
+                username: user?.username,
+                avatarUrl: user?.avatarUrl
+            }})((await db.user.findUnique({where: {id: message.authorId}}))),
+            channel: {
+                id: ch.id,
+                name: ch.name,
+            }
         }));
 
         const messagesList = await Promise.all(_messagesList);

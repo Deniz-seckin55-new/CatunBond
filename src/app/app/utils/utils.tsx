@@ -188,11 +188,11 @@ export function GetMessageDateString(date: Date): string {
     console.log(GetTodayNameLocale());
     const now = new Date();
     if (date.getDay() == now.getDay() && date.getMonth() == now.getMonth() && date.getFullYear() == now.getFullYear()) {
-        return `${GetTodayNameLocale()} ${date.getHours()}:${date.getMinutes()}`
+        return `${GetTodayNameLocale()} ${date.getHours().toString().padStart(2,'0')}:${date.getMinutes().toString().padStart(2,'0')}`
     } else if (date.getDay() == (now.getDay() - 1) && date.getMonth() == now.getMonth() && date.getFullYear() == now.getFullYear()) {
-        return `${GetYesterdayNameLocale()} ${date.getHours()}:${date.getMinutes()}`
+        return `${GetYesterdayNameLocale()} ${date.getHours().toString().padStart(2,'0')}:${date.getMinutes().toString().padStart(2,'0')}`
     } else if (date.getDay() == (now.getDay() + 1) && date.getMonth() == now.getMonth() && date.getFullYear() == now.getFullYear()) {
-        return `${GetTomorrowNameLocale()} ${date.getHours()}:${date.getMinutes()}`
+        return `${GetTomorrowNameLocale()} ${date.getHours().toString().padStart(2,'0')}:${date.getMinutes().toString().padStart(2,'0')}`
     } else {
         return `${date.getDay()}`
     }
