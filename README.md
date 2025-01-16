@@ -14,6 +14,7 @@ CatunBond is a voice, video and chat app built with high-quality backend and fro
 -  [ ] Stable and fast voice calls
 -  [ ] File sharing using Content Delivery Network (CDN)
 -  [ ] Customisable and user-defined UI
+-  [ ] Server management and invite system
 
 ## Installation
 

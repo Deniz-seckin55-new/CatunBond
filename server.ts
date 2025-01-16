@@ -6,53 +6,12 @@ import cors from 'cors'
 import { PrismaClient } from "@prisma/client";
 import { currentUser } from "@clerk/nextjs/server";
 import * as dotenv from 'dotenv';
+import { useUser } from "@clerk/nextjs";
+import { AllowedTypes, ClientResponsePacket, EditContext, Message, SocketData, SocketInformationType } from "@/app/app/utils/utils";
 
 dotenv.config({ path: '.env.local' }); // Change if its .env for you
 
 const httpServer = http.createServer()
-
-export interface Message {
-    id: bigint | null;
-    content: string;
-    timestamp: Date;
-    channel: Channel;
-    repliedTo: string | null;
-    author: User
-}
-
-export interface Channel {
-    id: string;
-    name: string;
-}
-
-export interface User {
-    id: string;
-    username: string;
-    avatarUrl: string | null;
-}
-
-enum SocketInformationType {
-    ClientSendMessage
-}
-
-enum AllowedTypes {
-    Message
-}
-
-interface SocketData {
-    infoType: SocketInformationType,
-    dataType: AllowedTypes,
-    data: any
-}
-
-interface MessageSocketPacket {
-    Message: Message;
-}
-
-interface ClientResponsePacket {
-    dataType: AllowedTypes,
-    data: any
-}
 
 const io = new Server(httpServer, {
     cors: {
@@ -80,7 +39,7 @@ io.on("connection", (socket: Socket) => {
                             data: {
                                 content: message.content,
                                 timestamp: message.timestamp,
-                                repliedToId: message.repliedTo ?? 'none',
+                                repliedToId: message.repliedTo?.id?.toString(),
                                 author: {
                                     connectOrCreate: {
                                         create: {
@@ -129,6 +88,17 @@ io.on("connection", (socket: Socket) => {
                 break;
         }
     });
+
+    socket.on("delete_message", async (data: SocketData) => {
+        const message = data.data as Message;
+        io.to(message.channel.id).emit("delete_message", message);
+        console.log("Delete message "+data.data.id+" by ", socket.id);
+    });
+
+    socket.on("edit_message", async (data: SocketData) => {
+        const edit = data.data as EditContext;
+        io.to(edit.newMessage.channel.id).emit("edit_message", edit)
+    })
 
     socket.on("disconnect", () => {
         console.log("User disconnected", socket.id);

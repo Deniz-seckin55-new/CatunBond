@@ -1,8 +1,36 @@
 import { PrismaClient } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { Message } from "@/app/app/utils/utils";
+import { clerkClient } from "@clerk/nextjs/server";
 
 const db = new PrismaClient();
+const client = await clerkClient();
+async function CreateMessage(message: any, ch: any): Promise<Message> {
+    return {
+        id: message.id.toString(),
+        content: message.content,
+        timestamp: message.timestamp,
+        repliedTo: await (async (reply) => {
+            if (!reply || reply === 'none')
+                return null;
+            const replyMessage = await db.messages.findUnique({ where: { id: BigInt(reply) } });
+            return CreateMessage(replyMessage, ch);
+        })(message.repliedToId),
+        author: await (async (user) => {
+            if(!user)
+                return {id: "", username: "", avatarUrl: ""};
+            return {
+                id: user.id,
+                username: user.username,
+                avatarUrl: (await client.users.getUser(user.id)).imageUrl,
+            }
+        })((await db.user.findUnique({ where: { id: message.authorId } }))),
+        channel: {
+            id: ch.id,
+            name: ch.name,
+        }
+    }
+}
 
 export async function POST(request: NextRequest) {
     const data = await request.json();
@@ -23,21 +51,9 @@ export async function POST(request: NextRequest) {
             }
         });
 
-        const _messagesList = messages.map(async (message) => ({
-            id: message.id.toString(),
-            content: message.content,
-            timestamp: message.timestamp,
-            repliedTo: message.repliedToId,
-            author: ((user) => { return {
-                id: user?.id,
-                username: user?.username,
-                avatarUrl: user?.avatarUrl
-            }})((await db.user.findUnique({where: {id: message.authorId}}))),
-            channel: {
-                id: ch.id,
-                name: ch.name,
-            }
-        }));
+        const _messagesList = messages.map(async (message) => {
+            return await CreateMessage(message, ch);
+        })
 
         const messagesList = await Promise.all(_messagesList);
 

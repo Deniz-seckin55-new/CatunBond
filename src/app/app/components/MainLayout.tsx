@@ -10,11 +10,14 @@ import UserBox from "./UserBox";
 import SideBox from "./SideBox";
 import FriendsDiv from "./FriendsDiv";
 import ChannelBox from "./ChannelBox";
-import { Channel, Server, SyntaxHighlight, ViewingFriendsDiv, Currents, getLineHeight, Message, ClientResponsePacket, AllowedTypes, SocketData, SocketInformationType } from "../utils/utils";
+import { Channel, Server, SyntaxHighlight, ViewingFriendsDiv, Currents, getLineHeight, Message, ClientResponsePacket, AllowedTypes, SocketData, SocketInformationType, MessageInfo, UpdateMessageInfo, EditContext } from "../utils/utils";
 import { useUser } from "@clerk/nextjs";
 import { io, Socket } from 'socket.io-client';
 import UserCheck from "./UserCheck";
 import ContextMenu from "./ContextMenu";
+import SettingsBox from "./SettingsBox";
+import ChannelBoxInfo from "./ChannelBoxInfo";
+import ServerUsersTab from "./ServerUsersTab";
 
 let socket: Socket | undefined;
 
@@ -24,20 +27,26 @@ const defaultCurrents: Currents = {
     exploreboxmode: null,
     user: null,
     contextmenu: { shown: false, x: 0, y: 0 },
-    contextmenumode: null
+    contextmenumode: null,
+    friendsdiv: { status: "online", visible: false },
 };
 
 const MainLayout: React.FC = () => {
-    const [FriendsDivV, setFriendsDivV] = useState(false);
     const [BgBlurV, setBgBlurV] = useState(false);
     const [ExploreBoxV, setExploreBoxV] = useState(false);
-    const [friendStatus, setFriendStatus] = useState<ViewingFriendsDiv>('online');
     const [SideBoxChannelsV, setSideBoxChannelsV] = useState(false);
     const [currents, setCurrents] = useState<Currents>({ ...defaultCurrents });
     const [Channels, setChannels] = useState<Channel[]>([]);
     const [inputTextRows, setinputTextRows] = useState(1);
     const [LoadingText, setLoadingText] = useState("Loading..."); // Replace with loading gif
     const [messages, setMessages] = useState<Message[]>([]);
+    const [kbState, setkbState] = useState<String[]>([]);
+    const [replyingTo, setreplyingTo] = useState<Message | null>(null);
+    const [MessageInfos, setMessageInfos] = useState<MessageInfo[]>([]);
+    const [settingsDivV, setsettingsDivV] = useState<boolean>(false);
+    const [ServerUsersDivV, setServerUsersDivV] = useState<boolean>(false);
+    const [appGridRows, setappGridRows] = useState<string>(`repeat(32, 1fr)`);
+    const [appGridColumns, setappGridColumns] = useState<string>(`repeat(32, 1fr)`);
     const user = useUser();
 
     const SocketURL = "http://localhost:3001";
@@ -45,7 +54,13 @@ const MainLayout: React.FC = () => {
     const [TextareaInitalConstNumber, setTextareaInitalConstNumber] = useState(0);
 
     const toggleFriendsDivVisibility = () => {
-        setFriendsDivV(!FriendsDivV);
+        setCurrents((prevCurrents) => ({
+            ...prevCurrents,
+            friendsdiv: {
+                ...prevCurrents.friendsdiv,
+                visible: !prevCurrents.friendsdiv.visible,
+            }
+        }));
     }
 
     const toggleBgBlurVisible = () => {
@@ -66,19 +81,43 @@ const MainLayout: React.FC = () => {
     }
 
     const onClickFBOnline = () => {
-        setFriendStatus('online');
+        setCurrents((prevCurrents) => ({
+            ...prevCurrents,
+            friendsdiv: {
+                ...prevCurrents.friendsdiv,
+                status: "online",
+            }
+        }));
     }
 
     const onClickFBOffline = () => {
-        setFriendStatus('offline');
+        setCurrents((prevCurrents) => ({
+            ...prevCurrents,
+            friendsdiv: {
+                ...prevCurrents.friendsdiv,
+                status: "offline",
+            }
+        }));
     }
 
     const onClickFBBlocked = () => {
-        setFriendStatus('blocked');
+        setCurrents((prevCurrents) => ({
+            ...prevCurrents,
+            friendsdiv: {
+                ...prevCurrents.friendsdiv,
+                status: "blocked",
+            }
+        }));
     }
 
     const onClickFriendsButton = () => {
-        setFriendsDivV(true);
+        setCurrents((prevCurrents) => ({
+            ...prevCurrents,
+            friendsdiv: {
+                ...prevCurrents.friendsdiv,
+                visible: true,
+            }
+        }));
     }
 
     const onClickServer = (server: Server) => {
@@ -97,7 +136,13 @@ const MainLayout: React.FC = () => {
                     console.log(data.data);
                     setChannels(data.data);
 
-                    setFriendsDivV(false);
+                    setCurrents((prevCurrents) => ({
+                        ...prevCurrents,
+                        friendsdiv: {
+                            ...prevCurrents.friendsdiv,
+                            visible: false,
+                        }
+                    }));
                     setSideBoxChannelsV(true);
 
                     setCurrents((prevCurrents) => ({
@@ -260,11 +305,11 @@ const MainLayout: React.FC = () => {
         }
 
         const messageObject: Message = {
-            author: {id: user.user.id, username: user.user.username, avatarUrl: user.user.imageUrl},
-            channel: {id: currents.channel.id, name: currents.channel.name},
+            author: { id: user.user.id, username: user.user.username, avatarUrl: user.user.imageUrl },
+            channel: { id: currents.channel.id, name: currents.channel.name },
             content: message,
             timestamp: new Date(Date.now()),
-            repliedTo: null,
+            repliedTo: replyingTo,
             id: null, // Will be auto set
         }
 
@@ -274,6 +319,7 @@ const MainLayout: React.FC = () => {
 
             try {
                 sendMessage(messageObject, setMessages);
+                setreplyingTo(null);
                 /*fetch('/api/v1/channel/messages/send', {
                     method: 'POST',
                     headers: {
@@ -305,12 +351,83 @@ const MainLayout: React.FC = () => {
             setCurrents((prevCurrents) => ({
                 ...prevCurrents,
                 contextmenu: {
+                    ...prevCurrents.contextmenu,
                     shown: false,
-                    x: 0,
-                    y: 0,
                 }
             }));
         }
+    }
+
+    const onMessageReply = (message: Message) => {
+
+    }
+
+    const onMessageEdit = (message: MessageInfo) => {
+        /*if (message.editRef) {
+            message.editRef.style.height = "auto";
+            message.editRef.style.height = message.editRef.scrollHeight + "px";
+        }*/
+
+        if(!user.user) {
+            return;
+        }
+
+        if(message.Message.author.id !== user.user.id) {
+            return;
+        }
+
+        if (message?.editMode === true)
+            UpdateMessageInfo(message.Message, "editMode", false, setMessageInfos);
+        else
+            UpdateMessageInfo(message.Message, "editMode", true, setMessageInfos);
+        console.log(message);
+    }
+
+    const onMessageDelete = (message: Message) => {
+        deleteMessage(message);
+    }
+
+    const onEditInput = (message: Message, event: React.KeyboardEvent) => {
+        const textArea = event.target as HTMLTextAreaElement;
+        textArea.style.height = "auto";
+        textArea.style.height = textArea.scrollHeight + "px";
+
+        if ((!event.shiftKey) && event.key === "Enter") {
+            event.preventDefault();
+            const newmessage: Message = { ...message, content: textArea.value };
+
+            editMessage(newmessage, message);
+
+            UpdateMessageInfo(message, "editMode", false, setMessageInfos);
+        }
+        if (event.key == "Escape") {
+            UpdateMessageInfo(message, "editMode", false, setMessageInfos);
+        }
+    }
+
+    const onClickUserAvatar = (messageId: bigint | null,ev: React.MouseEvent) => {
+        const messageInfo = MessageInfos.find(x => x.Message.id === messageId);
+        if(messageInfo) {
+            console.log("Open user context menu: ");
+            console.log(messageInfo);
+            OpenUserContextMenu(messageInfo.Message.author.id, ev);
+        }
+    }
+    
+    const onClickSettings = () => {
+        setsettingsDivV(!settingsDivV);
+    }
+
+    const OpenUserContextMenu = (userId: string, ev: React.MouseEvent) => {
+        setCurrents((prev) => ({
+            ...prev,
+            contextmenu: {
+                x: ev.pageX,
+                y: ev.pageY,
+                shown: true
+            },
+            contextmenumode: 0,
+        }));
     }
 
     const sendMessage = (message: Message, setMessages: (msg: any) => void) => {
@@ -322,6 +439,55 @@ const MainLayout: React.FC = () => {
         }
         socket?.emit("message", socketData);
         /*setMessages((prevMessages: Message[]) => [...prevMessages, message]);*/
+    }
+
+    const deleteMessage = (message: Message) => {
+        const socketData: SocketData = {
+            infoType: SocketInformationType.ClientDeleteMessage,
+            dataType: AllowedTypes.Message,
+            data: message
+        }
+        fetch('/api/v1/message/delete', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                messageId: message.id,
+            })
+        }).then((res) => res.json()).then((data) => {
+            console.log(data);
+            if (data.success === "true") {
+                socket?.emit("delete_message", socketData);
+            }
+        });
+    }
+
+    const editMessage = (newmessage: Message, message: Message) => {
+        const context: EditContext = {
+            oldMessageid: message.id,
+            newMessage: newmessage
+        }
+        const socketData: SocketData = {
+            infoType: SocketInformationType.ClientEditMessage,
+            dataType: AllowedTypes.EditContext,
+            data: context
+        }
+        fetch('/api/v1/message/edit', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                messageId: message.id,
+                newMessage: { ...newmessage, id: newmessage.id?.toString() },
+            })
+        }).then((res) => res.json()).then((data) => {
+            console.log(data);
+            if (data.success === "true") {
+                socket?.emit("edit_message", socketData);
+            }
+        });
     }
 
     const SideBoxProps = {
@@ -346,12 +512,6 @@ const MainLayout: React.FC = () => {
     }
 
     const FriendsDivProps = {
-        onClickFBOnline: onClickFBOnline,
-        onClickFBOffline: onClickFBOffline,
-        onClickFBBlocked: onClickFBBlocked,
-        FDOnlineV: friendStatus === 'online',
-        FDOfflineV: friendStatus === 'offline',
-        FDBlockedV: friendStatus === 'blocked',
         Currents: currents,
     }
 
@@ -360,6 +520,17 @@ const MainLayout: React.FC = () => {
         onInputTextarea: onInputTextarea,
         onLoadTextarea: onLoadTextarea,
         onKeyDownInput: onKeyDownInput,
+        onMessageReply: onMessageReply,
+        onMessageEdit: onMessageEdit,
+        onMessageDelete: onMessageDelete,
+        onEditInput: onEditInput,
+        onClickUserAvatar: onClickUserAvatar,
+        replyingTo: replyingTo,
+        setreplyingTo: setreplyingTo,
+        MessageInfos: MessageInfos,
+        setMessageInfos: setMessageInfos,
+        Currents: currents,
+        kbState: kbState,
         messages: messages,
     }
 
@@ -375,7 +546,33 @@ const MainLayout: React.FC = () => {
         Currents: currents,
     }
 
+    const SettingsBoxProps = {
+        Currents: currents,
+        setsettingsDivV: setsettingsDivV,
+        settingsDivV: settingsDivV,
+    }
+
+    const UserBoxProps = {
+        onClickSettings: onClickSettings,
+    }
+
+    const ChannelBoxInfoProps = {
+        Currents: currents,
+        setServerUsersDivV: setServerUsersDivV,
+        ServerUsersDivV: ServerUsersDivV
+    }
+
+    const ServerUsersTabProps = {
+        Currents: currents,
+        ServerUsersDivV: ServerUsersDivV,
+    }
+
+    const onKeyUp = (event: KeyboardEvent) => {
+        setkbState((prev) => prev.filter((key) => key !== event.key));
+    }
+
     const onKeyDown = (event: KeyboardEvent) => {
+        setkbState((prev) => [...prev, event.key]);
         if (event.ctrlKey && event.key == 'f') {
             event.preventDefault();
             if (!ExploreBoxV)
@@ -395,6 +592,16 @@ const MainLayout: React.FC = () => {
                     console.log("Got message: ", recievedMessage);
                     setMessages((prevMessages: Message[]) => [...prevMessages, recievedMessage]);
                 }
+            });
+            socket.on("delete_message", (message: Message) => {
+                setMessages(messages.filter((m) => m.id !== message.id));
+            });
+            socket.on("edit_message", (edit: EditContext) => {
+                setMessages((prevMessages: Message[]) =>
+                    prevMessages.map((msg) =>
+                        (msg.id == edit.oldMessageid) ? edit.newMessage : msg
+                    )
+                );
             });
             socket.emit("joinChannel", currents.channel.id);
         }
@@ -432,6 +639,33 @@ const MainLayout: React.FC = () => {
         return () => window.removeEventListener('keydown', onKeyDown);
     }, [ExploreBoxV]);
 
+
+    useEffect(() => {
+        window.addEventListener('keyup', onKeyUp);
+        return () => window.removeEventListener('keyup', onKeyUp);
+    }, [ExploreBoxV]);
+
+    useEffect(() => {
+        if (user.user)
+            setCurrents((prevCurrents) => ({
+                ...prevCurrents,
+                user: {
+                    id: user.user.id,
+                    username: user.user.username,
+                    avatar: user.user.imageUrl
+                }
+            }));
+    }, [user.user])
+
+    useEffect(() => {
+        let newappGridColumns = `repeat(32, 1fr)`;
+        if(ServerUsersDivV) {
+            newappGridColumns += " 6fr"
+        }
+        setappGridColumns(newappGridColumns);
+        console.log(appGridColumns);
+    }, [ServerUsersDivV]);
+
     // For debug remove later
     const Debugging = () => {
         /*console.log("Highlight: ", await SyntaxHighlight([{
@@ -458,24 +692,26 @@ const MainLayout: React.FC = () => {
             <div className={styles.body}>
                 <div className={styles.main_container}>
                     <BackgroundBlur BgBlurV={BgBlurV} onClickBgBlur={onClickBgBlur} />
-                    <div className={styles.app_box}>
+                    <div className={styles.app_box} style={{gridTemplateRows: `${appGridRows}`, gridTemplateColumns: `${appGridColumns}`}}>
                         <ExploreBox {...ExploreBoxProps} />
+                        <SettingsBox {...SettingsBoxProps}/>
                         <div id="main-box-wraper" className={styles.main_box_wraper}>
                             <MainBox {...MainBoxProps} />
                         </div>
                         <div id="user-box-wraper" className={styles.user_box_wraper}>
-                            <UserBox />
+                            <UserBox {...UserBoxProps} />
                         </div>
                         <SideBox {...SideBoxProps} />
                         <div id="chat-box" className={styles.chat_box}>
                             <div id="channel-info-box" className={styles.channel_info_box}>
-
+                                <ChannelBoxInfo {...ChannelBoxInfoProps} />
                             </div>
-                            {!FriendsDivV && (<ChannelBox {...ChannelBoxProps} />)}
-                            {FriendsDivV && (<div id="friends-box" className={styles.friends_box}>
+                            {!currents.friendsdiv.visible && (<ChannelBox {...ChannelBoxProps} />)}
+                            {currents.friendsdiv.visible && (<div id="friends-box" className={styles.friends_box}>
                                 <FriendsDiv {...FriendsDivProps} />
                             </div>)}
                         </div>
+                        <ServerUsersTab {...ServerUsersTabProps} />
                     </div>
                 </div>
             </div>

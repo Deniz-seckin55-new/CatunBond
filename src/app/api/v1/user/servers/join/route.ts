@@ -34,19 +34,15 @@ export async function POST(request: NextRequest) {
             db.$disconnect();
             return NextResponse.json({ message: "Server not found." }, { status: 404 })
         }
-
         
-
-        const client = await clerkClient();
-        const currentUserServers: string[] = Array.isArray(user.privateMetadata.userServers) ? user.privateMetadata.userServers : [];
-        currentUserServers.push(server.id);
-
-        await client.users.updateUserMetadata(user.id, {
-            privateMetadata: {
-                userServers: currentUserServers
+        await db.user.update({where: {id: user.id}, data: {
+            servers: {
+                connect: {
+                    id: server.id
+                }
             }
-        });
-        
+        }})
+
         db.$disconnect();
         return NextResponse.json({ message: "You have successfully joined the server." }, { status: 200 })
     } catch (err) {

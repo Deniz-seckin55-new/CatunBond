@@ -6,7 +6,7 @@ const db = new PrismaClient();
 export async function POST(request: NextRequest) {
     const data = await request.json()
     const serverId = data.serverId
-  //tab // try finding the server
+    //tab // try finding the server
     try {
         const serverData = await db.server.findFirst({
             where: {
@@ -15,17 +15,26 @@ export async function POST(request: NextRequest) {
         })
 
         console.log(serverData)
-        
+
         if (serverData) {
+            const users = await db.user.findMany({ where: { servers: { some: { id: serverId } } } });
+
+            const usersData = users.map(user => ({
+                id: user.id,
+                username: user.username,
+                avatarUrl: user.avatarUrl
+            }));
+
+            console.log(serverId);
+
             await db.$disconnect()
-            return NextResponse.json({data: serverData}, {status: 200})
+            return NextResponse.json({ data: usersData }, { status: 200 })
         } else {
             await db.$disconnect()
-            return NextResponse.json({ message: "Server not found"}, {status: 404})
+            return NextResponse.json({ message: "Server not found" }, { status: 404 })
         }
     } catch (err) {
-        if(err instanceof Error)
-            console.log(err.stack);
+        console.log(err)
         await db.$disconnect()
         return NextResponse.json({
             message: "Something went wrong, check console logs for more information"

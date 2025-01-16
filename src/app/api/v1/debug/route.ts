@@ -55,9 +55,9 @@ export async function GET(request: NextRequest) {
             await cl.users.deleteUser(user.id);
         });*/
 
+        const servercodes = (await db.server.findMany({ where: {id: {not: "h"}}})).map((s) => s.invites);
         
-        
-        await db.messages.deleteMany({ where: { authorId: { not: ";" } } });
+        /*await db.messages.deleteMany({ where: { authorId: { not: ";" } } });*/
         /*await db.auth.deleteMany({ where: { userId: { not: { contains: ";" } } } });
         await db.user.deleteMany({ where: { id: { not: { contains: ";" } } } });*/
 
@@ -67,7 +67,7 @@ export async function GET(request: NextRequest) {
 
         await db.$disconnect();
         return NextResponse.json({
-            message: messages[0].content
+            message: servercodes
         }, { status: 200 })
     } catch (err) {
         if (err instanceof Error)

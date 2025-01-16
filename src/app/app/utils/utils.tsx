@@ -1,5 +1,4 @@
-import { JSX, ReactNode } from "react";
-import ustyles from "./util.module.css";
+import { JSX, ReactNode, RefObject } from "react";
 
 export interface Server {
     id: string;
@@ -36,6 +35,12 @@ export interface Currents {
     exploreboxmode: Number | null;
     contextmenu: ContextMenu;
     contextmenumode: Number | null;
+    friendsdiv: FriendsDivStatus;
+}
+
+export interface FriendsDivStatus {
+    visible: boolean,
+    status: ViewingFriendsDiv,
 }
 
 export interface Message {
@@ -43,7 +48,7 @@ export interface Message {
     content: string;
     timestamp: Date;
     channel: Channel;
-    repliedTo: string | null;
+    repliedTo: Message | null;
     author: User
 }
 
@@ -55,12 +60,14 @@ export interface Channel {
 export interface User {
     id: string;
     username: string;
-    avatarUrl: string | null;
+    avatarUrl: string;
 }
 
 export type ViewingFriendsDiv = 'online' | 'offline' | 'blocked';
 
 export function SyntaxHighlight(patterns: SyntaxPattern[], incoming: string, styles: any): JSX.Element[] {
+    const ustyles = require("./util.module.css");
+    
     const elements: JSX.Element[] = [];
     let cursor = 0;
 
@@ -105,11 +112,19 @@ export function getLineHeight(element: HTMLElement): number {
 }
 
 export enum SocketInformationType {
-    ClientSendMessage
+    ClientSendMessage,
+    ClientDeleteMessage,
+    ClientEditMessage
+}
+
+export interface EditContext {
+    oldMessageid: BigInt | null,
+    newMessage: Message,
 }
 
 export enum AllowedTypes {
-    Message
+    Message,
+    EditContext,
 }
 
 export interface SocketData {
@@ -145,9 +160,9 @@ const TurkishTYT = ["Bugün", "Dün", "Yarın"];
 const EnglishTYT = ["Today", "Yesterday", "Tomorrow"];
 const GermanTYT = ["Heute", "Gestern", "Morgen"];
 export function TranslateDayName(day: number) {
-    if(getLocale().startsWith("tr")) {
+    if (getLocale().startsWith("tr")) {
         return TurkishDayNames[day];
-    } else if(getLocale().startsWith("de")) {
+    } else if (getLocale().startsWith("de")) {
         return GermanDayNames[day];
     } else {
         return EnglishDayNames[day];
@@ -155,45 +170,61 @@ export function TranslateDayName(day: number) {
 }
 
 export function GetTodayNameLocale() {
-    if(getLocale().startsWith("tr")) {
-        return TurkishTYT[0]+' Saat';
-    } else if(getLocale().startsWith("de")) {
-        return GermanTYT[0]+' um';
+    if (getLocale().startsWith("tr")) {
+        return TurkishTYT[0] + ' Saat';
+    } else if (getLocale().startsWith("de")) {
+        return GermanTYT[0] + ' um';
     } else {
-        return TurkishTYT[0]+' at';
+        return TurkishTYT[0] + ' at';
     }
 }
 
 export function GetYesterdayNameLocale() {
-    if(getLocale().startsWith("tr")) {
-        return TurkishTYT[1]+' Saat';
-    } else if(getLocale().startsWith("de")) {
-        return GermanTYT[1]+' um';
+    if (getLocale().startsWith("tr")) {
+        return TurkishTYT[1] + ' Saat';
+    } else if (getLocale().startsWith("de")) {
+        return GermanTYT[1] + ' um';
     } else {
-        return TurkishTYT[1]+' at';
+        return TurkishTYT[1] + ' at';
     }
 }
 
 export function GetTomorrowNameLocale() {
-    if(getLocale().startsWith("tr")) {
-        return TurkishTYT[2]+' Saat';
-    } else if(getLocale().startsWith("de")) {
-        return GermanTYT[2]+' um';
+    if (getLocale().startsWith("tr")) {
+        return TurkishTYT[2] + ' Saat';
+    } else if (getLocale().startsWith("de")) {
+        return GermanTYT[2] + ' um';
     } else {
-        return TurkishTYT[2]+' at';
+        return TurkishTYT[2] + ' at';
     }
 }
 
 export function GetMessageDateString(date: Date): string {
-    console.log(GetTodayNameLocale());
-    const now = new Date();
-    if (date.getDay() == now.getDay() && date.getMonth() == now.getMonth() && date.getFullYear() == now.getFullYear()) {
-        return `${GetTodayNameLocale()} ${date.getHours().toString().padStart(2,'0')}:${date.getMinutes().toString().padStart(2,'0')}`
-    } else if (date.getDay() == (now.getDay() - 1) && date.getMonth() == now.getMonth() && date.getFullYear() == now.getFullYear()) {
-        return `${GetYesterdayNameLocale()} ${date.getHours().toString().padStart(2,'0')}:${date.getMinutes().toString().padStart(2,'0')}`
-    } else if (date.getDay() == (now.getDay() + 1) && date.getMonth() == now.getMonth() && date.getFullYear() == now.getFullYear()) {
-        return `${GetTomorrowNameLocale()} ${date.getHours().toString().padStart(2,'0')}:${date.getMinutes().toString().padStart(2,'0')}`
+    const now = new Date(Date.now());
+    if (date.getDate() == now.getDate() && date.getMonth() == now.getMonth() && date.getFullYear() == now.getFullYear()) {
+        return `${GetTodayNameLocale()} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`
+    } else if (date.getDate() == (now.getDate() - 1) && date.getMonth() == now.getMonth() && date.getFullYear() == now.getFullYear()) {
+        return `${GetYesterdayNameLocale()} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`
+    } else if (date.getDate() == (now.getDate() + 1) && date.getMonth() == now.getMonth() && date.getFullYear() == now.getFullYear()) {
+        return `${GetTomorrowNameLocale()} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`
     } else {
-        return `${date.getDay()}`
+        return `${(date.getDate()).toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getFullYear()} `
     }
+}
+
+export interface MessageInfo {
+    Message: Message,
+    deleteConfirm: boolean,
+    editMode: boolean,
+    ref: HTMLDivElement | null,
+}
+
+export const UpdateMessageInfo = (message: Message, key: any, value: any, setMessageInfos: any) => {
+    setMessageInfos((prev: any) =>
+        prev.map((info: any) =>
+            info.Message.id === message.id
+                ? { ...info, [key]: value } // Update the specific message
+                : info // Keep the rest unchanged
+        )
+    );
 }
