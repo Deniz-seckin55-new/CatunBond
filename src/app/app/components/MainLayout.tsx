@@ -708,7 +708,7 @@ const MainLayout: React.FC = () => {
                             </div>
                             {!currents.friendsdiv.visible && (<ChannelBox {...ChannelBoxProps} />)}
                             {currents.friendsdiv.visible && (<div id="friends-box" className={styles.friends_box}>
-                                <FriendsDiv {...FriendsDivProps} />
+                                <FriendsDiv {...FriendsDivProps} /> 
                             </div>)}
                         </div>
                         <ServerUsersTab {...ServerUsersTabProps} />
