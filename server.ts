@@ -2,12 +2,9 @@ import { Socket } from "socket.io";
 
 import http from 'http'
 import { Server } from 'socket.io'
-import cors from 'cors'
-import { PrismaClient } from "@prisma/client";
-import { currentUser } from "@clerk/nextjs/server";
+import { PrismaClient, FriendRequest as DBFriendRequest } from "@prisma/client";
 import * as dotenv from 'dotenv';
-import { useUser } from "@clerk/nextjs";
-import { AllowedTypes, ClientResponsePacket, EditContext, Message, SocketData, SocketInformationType } from "@/app/app/utils/utils";
+import { AllowedTypes, ClientResponsePacket, EditContext, Message, PendingFriendRequest, SocketData, SocketInformationType } from "@/app/app/utils/socket_utils";
 
 dotenv.config({ path: '.env.local' }); // Change if its .env for you
 
@@ -15,9 +12,8 @@ const httpServer = http.createServer()
 
 const io = new Server(httpServer, {
     cors: {
-        origin: 'http://localhost:3000', // Replace with your frontend URL
+        origin: 'http://localhost:3001', // Replace with your frontend URL
         methods: ['GET', 'POST'],
-        allowedHeaders: ['my-custom-header'],
         credentials: true,
     },
 })
@@ -25,8 +21,15 @@ const db = new PrismaClient({
     datasourceUrl: process.env.DB_URL
 });
 
+try {
 io.on("connection", (socket: Socket) => {
-    console.log("User connected", socket.id);
+    if (!socket.handshake.query.id) {
+        console.log("No id, refused", socket.id);
+        socket.disconnect();
+        return;
+    }
+    console.log("User connected", socket.id, socket.handshake.query.id);
+    socket.join(socket.handshake.query.id);
 
     socket.on("message", async (data: SocketData) => {
         switch (data.infoType) {
@@ -92,7 +95,7 @@ io.on("connection", (socket: Socket) => {
     socket.on("delete_message", async (data: SocketData) => {
         const message = data.data as Message;
         io.to(message.channel.id).emit("delete_message", message);
-        console.log("Delete message "+data.data.id+" by ", socket.id);
+        console.log("Delete message " + data.data.id + " by ", socket.id);
     });
 
     socket.on("edit_message", async (data: SocketData) => {
@@ -113,9 +116,46 @@ io.on("connection", (socket: Socket) => {
         console.log("User left channel", channelId, " ", socket.id);
         socket.leave(channelId);
     });
+
+    socket.on("friend_request_send", (data: SocketData) => {
+        console.log("friend_request_send", data.data);
+        const friendRequest: PendingFriendRequest = data.data as PendingFriendRequest;
+        io.to(friendRequest.reciever.id).emit("friend_request_send", friendRequest);
+    });
+
+    socket.on("get_status", (userId: string, fn: any) => {
+        if (io.sockets.adapter.rooms.get(userId)) {
+            fn("online");
+        } else {
+            fn("offline");
+        }
+    });
+
+    socket.on("friend_request_answer", (socketData: SocketData) => {
+        console.log("friend_request_answer", socketData);
+        const friendRequest = socketData.data as DBFriendRequest;
+        switch (socketData.infoType) {
+            case SocketInformationType.ClientAcceptFriendRequest:
+                console.log("emitting to ",friendRequest.senderId, {friendRequest: friendRequest, answer: "accept"});
+                io.to(friendRequest.senderId).emit("friend_request_answer", {friendRequest: friendRequest, answer: "accept"});
+                break;
+            case SocketInformationType.ClientCancelFriendRequest:
+                break;
+            case SocketInformationType.ClientDeclineFriendRequest:
+                console.log("emitting to ",friendRequest.senderId, {friendRequest: friendRequest, answer: "decline"});
+                io.to(friendRequest.senderId).emit("friend_request_answer", {friendRequest: friendRequest, answer: "decline"});
+                break;
+            case SocketInformationType.ClientBlockFriendRequest:
+                console.log("emitting to ",friendRequest.senderId, {friendRequest: friendRequest, answer: "block"});
+                io.to(friendRequest.senderId).emit("friend_request_answer", {friendRequest: friendRequest, answer: "block"});
+                break;
+            default:
+                break;
+        }
+    });
 });
 
-const PORT = process.env.PORT || 3001
+const PORT = 3001
 httpServer.listen(PORT, () => {
     console.log(`Socket.io server is running on port ${PORT}`)
 })
@@ -123,3 +163,10 @@ httpServer.listen(PORT, () => {
 httpServer.on('close', async () => {
     await db.$disconnect();
 });
+} catch (err) {
+    if(err instanceof Error) {
+        console.log("Name: ",err.name);
+        console.log("Message: ", err.message);
+        console.log("Stack: \n",err.stack);
+    }
+}

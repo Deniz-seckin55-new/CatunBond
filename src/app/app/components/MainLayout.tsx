@@ -10,7 +10,7 @@ import UserBox from "./UserBox";
 import SideBox from "./SideBox";
 import FriendsDiv from "./FriendsDiv";
 import ChannelBox from "./ChannelBox";
-import { Channel, Server, SyntaxHighlight, ViewingFriendsDiv, Currents, getLineHeight, Message, ClientResponsePacket, AllowedTypes, SocketData, SocketInformationType, MessageInfo, UpdateMessageInfo, EditContext } from "../utils/utils";
+import { SyntaxHighlight, ViewingFriendsDiv, Currents, getLineHeight, UpdateMessageInfo, ExploreBoxMode, GetUser, ToUser, MessageInfo } from "../utils/utils";
 import { useUser } from "@clerk/nextjs";
 import { io, Socket } from 'socket.io-client';
 import UserCheck from "./UserCheck";
@@ -18,6 +18,8 @@ import ContextMenu from "./ContextMenu";
 import SettingsBox from "./SettingsBox";
 import ChannelBoxInfo from "./ChannelBoxInfo";
 import ServerUsersTab from "./ServerUsersTab";
+import { toast } from "react-toastify";
+import { AllowedTypes, Channel, ClientResponsePacket, DirectMessage, EditContext, FriendRequestAnswer, Message, PendingFriendRequest, Server, SocketData, SocketInformationType, User } from "../utils/socket_utils";
 
 let socket: Socket | undefined;
 
@@ -29,6 +31,8 @@ const defaultCurrents: Currents = {
     contextmenu: { shown: false, x: 0, y: 0 },
     contextmenumode: null,
     friendsdiv: { status: "online", visible: false },
+    directmessage: null,
+    setting: null,
 };
 
 const MainLayout: React.FC = () => {
@@ -47,6 +51,8 @@ const MainLayout: React.FC = () => {
     const [ServerUsersDivV, setServerUsersDivV] = useState<boolean>(false);
     const [appGridRows, setappGridRows] = useState<string>(`repeat(32, 1fr)`);
     const [appGridColumns, setappGridColumns] = useState<string>(`repeat(32, 1fr)`);
+    const [pendingSentRequests, setpendingSentRequests] = useState<PendingFriendRequest[]>([]);
+    const [directmessages, setdirectmessages] = useState<DirectMessage[]>([]);
     const user = useUser();
 
     const SocketURL = "http://localhost:3001";
@@ -63,14 +69,6 @@ const MainLayout: React.FC = () => {
         }));
     }
 
-    const toggleBgBlurVisible = () => {
-        setBgBlurV(!BgBlurV);
-    }
-
-    const toggleExploreBox = () => {
-        setExploreBoxV(!ExploreBoxV);
-    }
-
     const onClickSearch = () => {
 
     }
@@ -80,32 +78,12 @@ const MainLayout: React.FC = () => {
         setBgBlurV(false);
     }
 
-    const onClickFBOnline = () => {
+    const onClickFB = (status: ViewingFriendsDiv) => {
         setCurrents((prevCurrents) => ({
             ...prevCurrents,
             friendsdiv: {
                 ...prevCurrents.friendsdiv,
-                status: "online",
-            }
-        }));
-    }
-
-    const onClickFBOffline = () => {
-        setCurrents((prevCurrents) => ({
-            ...prevCurrents,
-            friendsdiv: {
-                ...prevCurrents.friendsdiv,
-                status: "offline",
-            }
-        }));
-    }
-
-    const onClickFBBlocked = () => {
-        setCurrents((prevCurrents) => ({
-            ...prevCurrents,
-            friendsdiv: {
-                ...prevCurrents.friendsdiv,
-                status: "blocked",
+                status: status,
             }
         }));
     }
@@ -209,9 +187,14 @@ const MainLayout: React.FC = () => {
             server: null,
         }));
         setMessages([]);
+        setServerUsersDivV(false);
     }
 
     const onClickExploreButton = () => {
+        setCurrents((prevCurrents) => ({
+            ...prevCurrents,
+            exploreboxmode: 0,
+        }));
         setExploreBoxV(true);
         setBgBlurV(true);
     }
@@ -264,6 +247,71 @@ const MainLayout: React.FC = () => {
             })
     }
 
+    const loadingTextResetTimeout = () => {
+        setTimeout(() => {
+            setExploreBoxV(false);
+            setBgBlurV(false);
+            setCurrents((prevCurrents) => ({
+                ...prevCurrents,
+                exploreboxmode: 0,
+            }));
+            setLoadingText("Loading...");
+        }, 1000);
+    }
+
+    const onClickSendFriendRequestButton = (friendName: string) => {
+        // Fetch add friend && setExploreBox mode to 2 LoadingText
+
+        setLoadingText("Loading...");
+
+        setCurrents((prevCurrents) => ({
+            ...prevCurrents,
+            exploreboxmode: 2,
+        }))
+
+        fetch("/api/v1/user/get", {
+            method: "POST",
+            body: JSON.stringify({
+                name: friendName
+            })
+        }).then(res => res.json().then(data => {
+            if (data.data) {
+                const friend: User = data.data as User;
+                fetch("/api/v1/user/friend/send", {
+                    method: "POST",
+                    body: JSON.stringify({
+                        friendId: friend.id,
+                    }),
+                }).then(res => res.json().then(data => {
+                    if (data.message === "Successfully sent friend request.") {
+                        const FriendRequest: PendingFriendRequest = {
+                            reciever: friend,
+                            sender: ToUser(currents.user!),
+                            friendRequest: data.data,
+                        }
+                        const socketData: SocketData = {
+                            infoType: SocketInformationType.ClientSendFriendRequest,
+                            dataType: AllowedTypes.FriendRequest,
+                            data: FriendRequest
+                        }
+                        socket?.emit("friend_request_send", socketData);
+                        setpendingSentRequests((prev) => [...prev, FriendRequest]);
+                        setLoadingText("Success!");
+                        loadingTextResetTimeout();
+                    } else {
+                        setLoadingText(data.message);
+                        loadingTextResetTimeout();
+                    }
+                }))
+            } else {
+                setLoadingText(data.message);
+                loadingTextResetTimeout();
+            }
+        })).catch(err => {
+            console.log(err);
+        })
+    }
+
     const closeExploreBox = () => {
         setExploreBoxV(false);
         setBgBlurV(false);
@@ -306,7 +354,7 @@ const MainLayout: React.FC = () => {
 
         const messageObject: Message = {
             author: { id: user.user.id, username: user.user.username, avatarUrl: user.user.imageUrl },
-            channel: { id: currents.channel.id, name: currents.channel.name },
+            channel: { id: currents.channel.id, name: currents.channel.name, isDirectMessage: currents.channel.isDirectMessage },
             content: message,
             timestamp: new Date(Date.now()),
             repliedTo: replyingTo,
@@ -368,11 +416,11 @@ const MainLayout: React.FC = () => {
             message.editRef.style.height = message.editRef.scrollHeight + "px";
         }*/
 
-        if(!user.user) {
+        if (!user.user) {
             return;
         }
 
-        if(message.Message.author.id !== user.user.id) {
+        if (message.Message.author.id !== user.user.id) {
             return;
         }
 
@@ -405,17 +453,30 @@ const MainLayout: React.FC = () => {
         }
     }
 
-    const onClickUserAvatar = (messageId: bigint | null,ev: React.MouseEvent) => {
+    const onClickUserAvatar = (messageId: bigint | null, ev: React.MouseEvent) => {
         const messageInfo = MessageInfos.find(x => x.Message.id === messageId);
-        if(messageInfo) {
+        if (messageInfo) {
             console.log("Open user context menu: ");
             console.log(messageInfo);
             OpenUserContextMenu(messageInfo.Message.author.id, ev);
         }
     }
-    
+
     const onClickSettings = () => {
         setsettingsDivV(!settingsDivV);
+    }
+
+    const onClickAddFriend = () => {
+        setCurrents((prevCurrents) => ({
+            ...prevCurrents,
+            exploreboxmode: 3,
+        }))
+        setExploreBoxV(true);
+        setBgBlurV(true);
+    }
+
+    const onClickDirectMessage = (user: User) => {
+        openDirectMessage(user);
     }
 
     const OpenUserContextMenu = (userId: string, ev: React.MouseEvent) => {
@@ -490,12 +551,80 @@ const MainLayout: React.FC = () => {
         });
     }
 
+    const openDirectMessage = (withUser: User) => {
+        // Open or create direct message
+        fetch("/api/v1/user/directmessages/getorcreate", {
+            method: "POST",
+            body: JSON.stringify({
+                withUserId: withUser.id,
+                name: withUser.username,
+            })
+        }).then(res => res.json().then(data => {
+            console.log("DM ", data);
+            if (data.data) {
+                const directMessage: DirectMessage = data.data as DirectMessage;
+                setSideBoxChannelsV(false);
+                setCurrents(prev => ({
+                    ...prev,
+                    friendsdiv: {
+                        ...(prev.friendsdiv),
+                        visible: false,
+                    }
+                }))
+                try {
+                    fetch('api/v1/channel/messages', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            channel: directMessage.id,
+                        })
+                    }).then((res) => {
+                        if (res.status != 200) {
+                            console.log("Error fetching messages for channel " + directMessage.id);
+                            return;
+                        }
+                        res.json().then((data) => {
+                            const messageList: Message[] = data.messages;
+                            setMessages(messageList);
+        
+                            console.log("Messages: ", messageList);
+        
+                            setCurrents(prev => ({
+                                ...prev,
+                                directmessage: directMessage,
+                            }));
+
+                            setCurrents((prevCurrents) => ({
+                                ...prevCurrents,
+                                channel: {
+                                    id: directMessage.id,
+                                    name: directMessage.name,
+                                    isDirectMessage: true,
+                                },
+                            }));
+                        });
+                    })
+                } catch (err) {
+                    console.error(err);
+                }
+            }
+        }))
+    }
+
+    const onClickFriendUser = (user: User) => {
+        try {openDirectMessage(user)} catch (err) {if(err instanceof Error) console.log(err.stack);};
+    }
+
     const SideBoxProps = {
         onClickSearch: onClickSearch,
         onClickFriendsButton: onClickFriendsButton,
         onClickChannel: onClickChannel,
+        onClickDirectMessage: onClickDirectMessage,
         SideBoxChannelsV: SideBoxChannelsV,
         Channels: Channels,
+        directmessages: directmessages,
         Currents: currents,
     }
 
@@ -506,6 +635,7 @@ const MainLayout: React.FC = () => {
         onClickJoinButton: onClickJoinButton,
         onClickBackButton: onClickBackButton,
         onClickServerJoinButton: onClickServerJoinButton,
+        onClickSendFriendRequestButton: onClickSendFriendRequestButton,
         LoadingText: LoadingText,
         setCurrents: setCurrents,
         Currents: currents,
@@ -513,6 +643,10 @@ const MainLayout: React.FC = () => {
 
     const FriendsDivProps = {
         Currents: currents,
+        pendingSentRequests: pendingSentRequests,
+        setpendingSentRequests: setpendingSentRequests,
+        onClickFriendUser: onClickFriendUser,
+        socket: socket,
     }
 
     const ChannelBoxProps = {
@@ -548,6 +682,7 @@ const MainLayout: React.FC = () => {
 
     const SettingsBoxProps = {
         Currents: currents,
+        setCurrents: setCurrents,
         setsettingsDivV: setsettingsDivV,
         settingsDivV: settingsDivV,
     }
@@ -559,7 +694,9 @@ const MainLayout: React.FC = () => {
     const ChannelBoxInfoProps = {
         Currents: currents,
         setServerUsersDivV: setServerUsersDivV,
-        ServerUsersDivV: ServerUsersDivV
+        ServerUsersDivV: ServerUsersDivV,
+        onClickFB: onClickFB,
+        onClickAddFriend: onClickAddFriend,
     }
 
     const ServerUsersTabProps = {
@@ -583,32 +720,77 @@ const MainLayout: React.FC = () => {
     }
 
     useEffect(() => {
-        if (currents.channel) {
-            socket = io(SocketURL);
-            socket.on("message", (data: ClientResponsePacket) => {
-                console.log(data);
-                if (data.dataType == AllowedTypes.Message) {
-                    const recievedMessage = data.data as Message;
-                    console.log("Got message: ", recievedMessage);
-                    setMessages((prevMessages: Message[]) => [...prevMessages, recievedMessage]);
+        if (!user.user) {
+            console.log("No user.");
+            return;
+        }
+        socket = io("http://localhost:3001", {
+            query: {
+                id: user.user.id
+            }
+        });
+        socket.on("message", (data: ClientResponsePacket) => {
+            console.log(data);
+            if (data.dataType == AllowedTypes.Message) {
+                const recievedMessage = data.data as Message;
+                console.log("Got message: ", recievedMessage);
+                setMessages((prevMessages: Message[]) => [...prevMessages, recievedMessage]);
+            }
+        });
+        socket.on("delete_message", (message: Message) => {
+            setMessages(messages.filter((m) => m.id !== message.id));
+        });
+        socket.on("edit_message", (edit: EditContext) => {
+            setMessages((prevMessages: Message[]) =>
+                prevMessages.map((msg) =>
+                    (msg.id == edit.oldMessageid) ? edit.newMessage : msg
+                )
+            );
+        });
+        socket.on("friend_request_send", (friendRequest: PendingFriendRequest) => {
+            if (friendRequest.reciever.id == user.user.id) {
+                // Notification
+                toast(`${friendRequest.sender.username} sent you a friend request`);
+            }
+        });
+        socket.on("friend_request_answer", (data: FriendRequestAnswer) => {
+            const { friendRequest, answer } = data;
+            console.log("friend_request_answer", friendRequest, answer);
+            GetUser(friendRequest.senderId).then((sender) => {
+                switch (answer) {
+                    case "accept":
+                        toast(`${sender.username} accepted your friend request`);
+                        break;
+                    case "decline":
+                        toast(`${sender.username} declined your friend request`);
+                        break;
+                    default:
+                        break;
+                }
+            })
+        });
+        return () => {
+            if (socket) { socket.disconnect(); socket = undefined; }
+        };
+    }, [currents.user]);
+
+    useEffect(() => {
+        if (currents.user && !socket) {
+            socket = io(SocketURL, {
+                query: {
+                    id: currents.user.id
                 }
             });
-            socket.on("delete_message", (message: Message) => {
-                setMessages(messages.filter((m) => m.id !== message.id));
-            });
-            socket.on("edit_message", (edit: EditContext) => {
-                setMessages((prevMessages: Message[]) =>
-                    prevMessages.map((msg) =>
-                        (msg.id == edit.oldMessageid) ? edit.newMessage : msg
-                    )
-                );
-            });
-            socket.emit("joinChannel", currents.channel.id);
+            console.log("Yes");
+        } else {
+            console.log("No");
+        }
+        if (currents.channel) {
+            socket?.emit("joinChannel", currents.channel.id);
         }
         return () => {
             if (currents.channel)
                 socket?.emit("leaveChannel", currents.channel?.id);
-            socket?.disconnect();
         }
     }, [currents.channel]);
 
@@ -628,6 +810,21 @@ const MainLayout: React.FC = () => {
             }));
         }
     }, []);
+
+    useEffect(() => {
+        if(user.user) {
+            fetch("/api/v1/user/directmessages/get", {
+                method: "POST",
+                body: JSON.stringify({}),
+            }).then(res => res.json().then(data => {
+                if(data.data) {
+                    const dms: DirectMessage[] = data.data as DirectMessage[];
+                    console.log("dms ",dms);
+                    setdirectmessages(dms);
+                }
+            }));
+        }
+    }, [user.user]);
 
     useEffect(() => {
         window.addEventListener('mousedown', onMouseDown);
@@ -659,7 +856,7 @@ const MainLayout: React.FC = () => {
 
     useEffect(() => {
         let newappGridColumns = `repeat(32, 1fr)`;
-        if(ServerUsersDivV) {
+        if (ServerUsersDivV) {
             newappGridColumns += " 6fr"
         }
         setappGridColumns(newappGridColumns);
@@ -683,6 +880,7 @@ const MainLayout: React.FC = () => {
         }).then((res) => res.json()).then((data) => {
             console.log(data);
         });*/
+        // toast(`${"meow"} sent you a friend request`);
     }
     Debugging();
 
@@ -692,9 +890,9 @@ const MainLayout: React.FC = () => {
             <div className={styles.body}>
                 <div className={styles.main_container}>
                     <BackgroundBlur BgBlurV={BgBlurV} onClickBgBlur={onClickBgBlur} />
-                    <div className={styles.app_box} style={{gridTemplateRows: `${appGridRows}`, gridTemplateColumns: `${appGridColumns}`}}>
+                    <div className={styles.app_box} style={{ gridTemplateRows: `${appGridRows}`, gridTemplateColumns: `${appGridColumns}` }}>
                         <ExploreBox {...ExploreBoxProps} />
-                        <SettingsBox {...SettingsBoxProps}/>
+                        <SettingsBox {...SettingsBoxProps} />
                         <div id="main-box-wraper" className={styles.main_box_wraper}>
                             <MainBox {...MainBoxProps} />
                         </div>
@@ -708,7 +906,7 @@ const MainLayout: React.FC = () => {
                             </div>
                             {!currents.friendsdiv.visible && (<ChannelBox {...ChannelBoxProps} />)}
                             {currents.friendsdiv.visible && (<div id="friends-box" className={styles.friends_box}>
-                                <FriendsDiv {...FriendsDivProps} /> 
+                                <FriendsDiv {...FriendsDivProps} />
                             </div>)}
                         </div>
                         <ServerUsersTab {...ServerUsersTabProps} />

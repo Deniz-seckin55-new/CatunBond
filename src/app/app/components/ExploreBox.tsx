@@ -1,4 +1,4 @@
-import { SetStateAction, useEffect, useState } from 'react';
+import React, { SetStateAction, useEffect, useState } from 'react';
 import styles from '../page.module.css';
 import Image from 'next/image';
 import { Currents } from '../utils/utils';
@@ -10,22 +10,28 @@ interface Props {
     onClickJoinButton: () => void;
     onClickBackButton: () => void;
     onClickServerJoinButton: (str: string) => void;
+    onClickSendFriendRequestButton: (str: string) => void;
     LoadingText: string;
     setCurrents: React.Dispatch<React.SetStateAction<Currents>>;
     Currents: Currents;
 }
 
-const ExploreBox: React.FC<Props> = ({ ExploreBoxV, setExploreBoxV, closeExploreBox, onClickJoinButton, onClickBackButton, onClickServerJoinButton, LoadingText, setCurrents, Currents }) => {
+const ExploreBox: React.FC<Props> = ({ ExploreBoxV, setExploreBoxV, closeExploreBox, onClickJoinButton, onClickBackButton, onClickServerJoinButton, onClickSendFriendRequestButton, LoadingText, setCurrents, Currents }) => {
 
     useEffect(() => {
         if (Currents.exploreboxmode == null) { setCurrents({ ...Currents, exploreboxmode: 0 }) }
     }, [Currents]);
 
     const [ServerInput, setServerInput] = useState("");
+    const [FriendInput, setFriendInput] = useState("");
     const [boxHeight, setBoxHeight] = useState("50%");
 
     const onServerInputInput = (event: React.ChangeEvent<HTMLInputElement>) => {
         setServerInput(event.target.value);
+    }
+    
+    const onFriendInputInput = (event: React.ChangeEvent<HTMLInputElement>) => {
+        setFriendInput(event.target.value);
     }
 
     const PSList = [
@@ -56,12 +62,14 @@ const ExploreBox: React.FC<Props> = ({ ExploreBoxV, setExploreBoxV, closeExplore
     }, [ExploreBoxV]);
 
     useEffect(() => {
-        if(Currents.exploreboxmode == 0) {
+        if (Currents.exploreboxmode == 0) {
             setBoxHeight("50%");
-        } else if(Currents.exploreboxmode == 1) {
+        } else if (Currents.exploreboxmode == 1) {
             setBoxHeight("30%");
-        } else if(Currents.exploreboxmode == 2) {
+        } else if (Currents.exploreboxmode == 2) {
             setBoxHeight("30%");
+        } else if (Currents.exploreboxmode == 3) {
+            setBoxHeight("50%");
         }
     }, [Currents.exploreboxmode]);
 
@@ -136,6 +144,14 @@ const ExploreBox: React.FC<Props> = ({ ExploreBoxV, setExploreBoxV, closeExplore
                 )}
                 {Currents.exploreboxmode == 2 && (
                     <p>{`${LoadingText}`}</p>
+                )}
+                {Currents.exploreboxmode == 3 && (
+                    <>
+                        <div className={styles.explore_box_top}>
+                            <input type="text" id="explore-input-2" className={styles.explore_input_server} placeholder="Friend Name" onInput={onFriendInputInput} />
+                        </div>
+                        <button className={styles.explore_box_server_join_button} onClick={() => onClickSendFriendRequestButton(FriendInput)}>Send Friend Request</button>
+                    </>
                 )}
             </div>
         </>

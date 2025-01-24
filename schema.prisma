@@ -8,14 +8,38 @@ datasource db {
 }
 
 model User {
-  id         String     @id @unique
-  username   String     @unique
-  avatarUrl  String?
-  friends    Json?
-  directMsgs Json?
-  auth       Auth?
-  messages   Messages[]
-  servers    Server[]   @relation("UserServers")
+  id               String          @id @unique
+  username         String          @unique
+  avatarUrl        String?
+  friends          User[]          @relation("UserFriends")
+  directMsgs       Channel[]       @relation("UserDirectMsgs")
+  friendOf         User[]          @relation("UserFriends")
+  blocked          String[]
+  sentRequests     FriendRequest[] @relation("SentRequests")
+  receivedRequests FriendRequest[] @relation("ReceivedRequests")
+  auth             Auth?
+  messages         Messages[]
+  servers          Server[]        @relation("UserServers")
+}
+
+model FriendRequest {
+  id         String              @id @default(uuid())
+  senderId   String
+  receiverId String
+  status     FriendRequestStatus @default(PENDING)
+  createdAt  DateTime            @default(now())
+  updatedAt  DateTime            @updatedAt
+
+  sender   User @relation("SentRequests", fields: [senderId], references: [id])
+  receiver User @relation("ReceivedRequests", fields: [receiverId], references: [id])
+}
+
+enum FriendRequestStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  CANCELED
+  BLOCKED
 }
 
 model Server {
@@ -29,11 +53,12 @@ model Server {
 }
 
 model Channel {
-  id       String     @id @unique
-  name     String
-  serverId String?
-  server   Server?    @relation(fields: [serverId], references: [id])
-  messages Messages[]
+  id           String     @id @unique
+  name         String
+  serverId     String?
+  server       Server?    @relation(fields: [serverId], references: [id])
+  messages     Messages[]
+  directMsgFor User[]     @relation("UserDirectMsgs")
 }
 
 model Auth {
@@ -52,4 +77,10 @@ model Messages {
   repliedToId String?
   author      User     @relation(fields: [authorId], references: [id])
   channel     Channel  @relation(fields: [channelId], references: [id])
+}
+
+model UserInfo {
+  userId          String @id @unique
+  biography       String
+  usernameColor   String @default("#000D1E")
 }

@@ -9,6 +9,7 @@ import {
   SignedOut,
   UserButton
 } from '@clerk/nextjs'
+import { ToastContainer } from "react-toastify";
 
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
@@ -34,8 +35,12 @@ export default function RootLayout({
   return (
     <ClerkProvider >
       <html lang="en">
+        <head>
+          <script src="http://localhost:8097"></script>
+        </head>
         <body className={`${geistSans.variable} ${geistMono.variable}`}>
           {children}
+          <ToastContainer />
         </body>
       </html>
     </ClerkProvider>

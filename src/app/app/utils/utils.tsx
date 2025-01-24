@@ -1,15 +1,7 @@
 import { JSX, ReactNode, RefObject } from "react";
-
-export interface Server {
-    id: string;
-    name: string;
-    image: string;
-}
-
-export interface Channel {
-    id: string;
-    name: string;
-}
+import { FriendRequest as DBFriendRequest } from '@prisma/client';
+import Appearance from "../components/settings/Appearance";
+import { Channel, DirectMessage, Message, Server, User } from "./socket_utils";
 
 export interface SyntaxPattern {
     pattern: RegExp;
@@ -28,14 +20,23 @@ export interface ContextMenu {
     shown: boolean;
 }
 
+export enum ExploreBoxMode {
+    PublicServerList = 0,
+    ServerJoin = 1,
+    Loading = 2,
+    AddFriend = 3,
+}
+
 export interface Currents {
     user: UserResource | null;
     server: Server | null;
     channel: Channel | null;
-    exploreboxmode: Number | null;
+    exploreboxmode: ExploreBoxMode | null;
     contextmenu: ContextMenu;
     contextmenumode: Number | null;
     friendsdiv: FriendsDivStatus;
+    directmessage: DirectMessage | null;
+    setting: string | null;
 }
 
 export interface FriendsDivStatus {
@@ -43,31 +44,28 @@ export interface FriendsDivStatus {
     status: ViewingFriendsDiv,
 }
 
-export interface Message {
-    id: bigint | null;
-    content: string;
-    timestamp: Date;
-    channel: Channel;
-    repliedTo: Message | null;
-    author: User
+export async function GetUser(id: string) {
+    return (await (await fetch('/api/v1/user/get', {
+        method: "POST",
+        body: JSON.stringify({
+            id: id
+        })
+    })).json()).data as User;
 }
 
-export interface Channel {
-    id: string;
-    name: string;
+export function ToUser(resource: UserResource): User {
+    return {
+        id: resource.id,
+        username: resource.username ?? '',
+        avatarUrl: resource.avatar,
+    }
 }
 
-export interface User {
-    id: string;
-    username: string;
-    avatarUrl: string;
-}
-
-export type ViewingFriendsDiv = 'online' | 'offline' | 'blocked';
+export type ViewingFriendsDiv = 'online' | 'offline' | 'blocked' | 'pending';
 
 export function SyntaxHighlight(patterns: SyntaxPattern[], incoming: string, styles: any): JSX.Element[] {
     const ustyles = require("./util.module.css");
-    
+
     const elements: JSX.Element[] = [];
     let cursor = 0;
 
@@ -111,36 +109,15 @@ export function getLineHeight(element: HTMLElement): number {
     return parseFloat(lineHeight);
 }
 
-export enum SocketInformationType {
-    ClientSendMessage,
-    ClientDeleteMessage,
-    ClientEditMessage
+export interface SettingsProps {
+    Currents: Currents,
+    updateSettings: (setting: string, data: any) => void;
+    
 }
 
-export interface EditContext {
-    oldMessageid: BigInt | null,
-    newMessage: Message,
-}
-
-export enum AllowedTypes {
-    Message,
-    EditContext,
-}
-
-export interface SocketData {
-    infoType: SocketInformationType,
-    dataType: AllowedTypes,
-    data: any
-}
-
-export interface MessageSocketPacket {
-    Message: Message;
-}
-
-export interface ClientResponsePacket {
-    dataType: AllowedTypes,
-    data: any
-}
+export const componentMap: Map<string, React.FC<SettingsProps>> = new Map([
+    ["Appearance", Appearance]
+]);
 
 export function getLocale() {
     if (navigator.languages !== undefined)

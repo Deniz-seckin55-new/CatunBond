@@ -27,7 +27,12 @@ const ServerUsersTab: React.FC<Props> = ({ Currents, ServerUsersDivV }) => {
                 }
             }));
         }
-    }, [Currents.server]);
+        if(Currents.channel?.isDirectMessage) {
+            if(Currents.directmessage) {
+                setusers(Currents.directmessage.users);
+            }
+        }
+    }, [Currents.server, Currents.directmessage]);
 
     return (
         <>

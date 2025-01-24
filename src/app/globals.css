@@ -7,10 +7,20 @@
   --cb-color-black-transparent-soft: rgba(0, 13, 30, 0.2);
   --cb-color-black-transparent-softer: rgba(0, 13, 30, 0.1);
   --cb-color-white: #F0F7EE;
+  --cb-color-white-soft: #adb3ac;
+  --cb-color-white-transparent: rgba(239, 247, 237, 0.5);
+  --cb-color-white-transparent-soft: rgba(239, 247, 237, 0.2);
+  --cb-color-white-transparent-softer: rgba(239, 247, 237, 0.1);
   --cb-color-gray: #3B413C;
+  --cb-color-gray-light: #4d5061;
+  --cb-color-gray-lighter: #696d7d;
+  --cb-color-gray-dark: #30323d;
   --cb-color-cyan: #65AFFF;
   --cb-color-blue: #1E2EDE;
   --cb-color-red: #FF3A20;
+  --cb-color-green: #17B890;
+  --cb-color-green-transparent: rgba(23, 184, 144, 0.5);
+  --cb-color-green-transparent-soft: rgba(23, 184, 144, 0.2);
 }
 
 @media (prefers-color-scheme: dark) {

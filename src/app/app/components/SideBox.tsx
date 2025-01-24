@@ -1,16 +1,18 @@
 import styles from '../page.module.css';
-import { Channel, Currents, SyntaxHighlight, SyntaxPattern } from '../utils/utils';
+import { Channel, Currents, DirectMessage, SyntaxHighlight, SyntaxPattern, User } from '../utils/utils';
 
 interface Props {
     onClickSearch: () => void;
     onClickFriendsButton: () => void;
     onClickChannel: (Channel: Channel) => void;
+    onClickDirectMessage: (user: User) => void;
     SideBoxChannelsV: boolean;
     Channels: Channel[];
+    directmessages: DirectMessage[];
     Currents: Currents;
 }
 
-const SideBox: React.FC<Props> = ({ onClickSearch, onClickFriendsButton, onClickChannel, SideBoxChannelsV, Channels, Currents }) => {
+const SideBox: React.FC<Props> = ({ onClickSearch, onClickFriendsButton, onClickChannel, onClickDirectMessage, SideBoxChannelsV, Channels, directmessages, Currents }) => {
     const ChannelNamePatterns: SyntaxPattern[] = [{
         pattern: new RegExp("^#", "gmi"),
         className: "hl_hashtag"
@@ -32,14 +34,27 @@ const SideBox: React.FC<Props> = ({ onClickSearch, onClickFriendsButton, onClick
                         </div>
                     </div>
                     <div id="side-box-bottom" className={styles.side_box_bottom}>
-
+                        <p className={styles.direct_messages_text}>Direct messages</p>
+                        {directmessages.map(dm => {
+                            const withUser = dm.users.filter(x => x.id !== Currents.user?.id)[0];
+                            return (
+                                <div className={styles.direct_message} onClick={() => onClickDirectMessage(withUser)} key={withUser.id}>
+                                    <div className={styles.direct_message_content}>
+                                        <div className={styles.direct_message_useravatar_holder}>
+                                            <img className={styles.message_useravatar} src={`${withUser.avatarUrl/*https://cat-storage-server.web.app/data/cat1.jpeg"*/}`} />
+                                        </div>
+                                        <p className={styles.direct_message_user_username}>{withUser.username}</p>
+                                    </div>
+                                </div>
+                            )
+                        })}
                     </div>
                 </div>)}
                 {SideBoxChannelsV && (<div id="side-box-channels" className={styles.side_box_channels}>
                     {Channels.map((channel) => {
                         return (
                             <div className={styles.channel_element_wraper} key={`wraper-${channel.id}`}>
-                                <div className={`${styles.channel_element} ${Currents.channel ? (Currents.channel.id == channel.id ? styles.channel_element_active: "") : ""}`} onClick={() => onClickChannel(channel)} key={channel.id}>
+                                <div className={`${styles.channel_element} ${Currents.channel ? (Currents.channel.id == channel.id ? styles.channel_element_active : "") : ""}`} onClick={() => onClickChannel(channel)} key={channel.id}>
                                     <span className={styles.channel_name} id={channel.id} key={`channel-${channel.id}`}>{
                                         SyntaxHighlight(ChannelNamePatterns, `#${channel.name}`, styles)
                                     }</span>

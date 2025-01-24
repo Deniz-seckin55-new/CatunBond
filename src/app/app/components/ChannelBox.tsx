@@ -1,7 +1,8 @@
 import styles from '../page.module.css';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Message, GetMessageDateString, Currents, MessageInfo, UpdateMessageInfo } from '../utils/utils';
+import { GetMessageDateString, Currents, MessageInfo, UpdateMessageInfo } from '../utils/utils';
+import { Message } from '../utils/socket_utils';
 import Image from 'next/image';
 
 interface Props {
