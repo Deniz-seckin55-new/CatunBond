@@ -6,7 +6,7 @@ import http from 'http'
 import { Server } from 'socket.io'
 import { PrismaClient, FriendRequest as DBFriendRequest } from "@prisma/client";
 import * as dotenv from 'dotenv';
-import { AllowedTypes, AudioSlice, ClientResponsePacket, EditContext, Message, PendingFriendRequest, SocketData, SocketInformationType, User, VoiceChatInformation, WritingEvent } from "@/app/app/utils/socket_utils";
+import { User, VoiceChatInformation } from "@/app/app/utils/socket_utils";
 
 dotenv.config({ path: '.env.local' }); // Change if its .env for you
 
@@ -59,17 +59,6 @@ try {
         }
         const voiceChannelID = socket.handshake.query.vc;
         socket.join(voiceChannelID);
-
-        socket.on("audio_stream", (audioData: any) => {
-            console.log("Audio data received", audioData);
-
-            const audioSlice: AudioSlice = {
-                data: audioData,
-                speaker: userUSER,
-            }
-
-            io.to(voiceChannelID).emit("audio_stream", audioSlice);
-        });
 
         socket.on("vc_join", (vc: VoiceChatInformation, user: User) => { io.to(voiceChannelID).emit("vc_update", "join", userUSER); });
         socket.on("vc_leave", (vc: VoiceChatInformation, user: User) => { io.to(voiceChannelID).emit("vc_update", "leave", userUSER); });

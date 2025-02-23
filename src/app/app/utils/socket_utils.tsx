@@ -57,11 +57,6 @@ export interface VoiceChatInformation {
     startTime: Date,
 }
 
-export interface AudioSlice {
-    data: any,
-    speaker: User,
-}
-
 export interface FriendRequestAnswer {
     friendRequest: DBFriendRequest,
     answer: string,

@@ -1,12 +1,9 @@
 import styles from '../page.module.css';
 
-import React, { createElement, useCallback, useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { GetMessageDateString, Currents, MessageInfo, UpdateMessageInfo, onMouseLeaveTooltipElement, onMouseOverTooltipElement, _arrayBufferToBase64, _base64ToarrayBuffer, ToUser } from '../utils/utils';
-import { AudioSlice, Message, User } from '../utils/socket_utils';
-import Image from 'next/image';
+import { Message, User } from '../utils/socket_utils';
 import interact from 'interactjs';
-import Tooltip from './common/Tooltip';
-import { toast } from 'react-toastify';
 import { io, Socket } from 'socket.io-client';
 import { MediaConnection, Peer } from 'peerjs';
 
