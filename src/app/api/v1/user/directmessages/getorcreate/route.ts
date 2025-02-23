@@ -1,10 +1,11 @@
-import { DirectMessage } from "@/app/app/utils/utils";
-import { currentUser } from "@clerk/nextjs/server";
+import { DirectMessage } from "@/app/app/utils/socket_utils";
+import { clerkClient, currentUser } from "@clerk/nextjs/server";
 import { PrismaClient } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import uuid4 from "uuid4";
 
 const db = new PrismaClient();
+const clerk = await clerkClient();
 
 export async function POST(request: NextRequest) {
     try {
@@ -29,6 +30,12 @@ export async function POST(request: NextRequest) {
         }});
 
         if(dm) {
+            const withUser = await db.user.findUnique({where: {id: withUserId}});
+
+            if(!withUser) {
+                return NextResponse.json({message: "With User not found."}, {status: 404});
+            }
+
             const directMessage: DirectMessage = {
                 id: dm.id,
                 name: dm.name,
@@ -36,6 +43,13 @@ export async function POST(request: NextRequest) {
                     id: user.id,
                     username: user.username ?? '',
                     avatarUrl: user.imageUrl,
+                }, {
+                    id: withUser.id,
+                    username: withUser.username ?? '',
+                    avatarUrl: withUser.avatarUrl ?? await (async (userId: string) => {
+                        const user_ = await clerk.users.getUser(userId);
+                        return user_.imageUrl;
+                    })(withUserId),
                 }],
             };
             return NextResponse.json({data: directMessage}, {status: 200});

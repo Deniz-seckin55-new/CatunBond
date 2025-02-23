@@ -8,18 +8,21 @@ datasource db {
 }
 
 model User {
-  id               String          @id @unique
-  username         String          @unique
-  avatarUrl        String?
-  friends          User[]          @relation("UserFriends")
-  directMsgs       Channel[]       @relation("UserDirectMsgs")
-  friendOf         User[]          @relation("UserFriends")
-  blocked          String[]
-  sentRequests     FriendRequest[] @relation("SentRequests")
-  receivedRequests FriendRequest[] @relation("ReceivedRequests")
-  auth             Auth?
-  messages         Messages[]
-  servers          Server[]        @relation("UserServers")
+  id                 String          @id @unique
+  username           String          @unique
+  avatarUrl          String?
+  friends            User[]          @relation("UserFriends")
+  directMsgs         Channel[]       @relation("UserDirectMsgs")
+  friendOf           User[]          @relation("UserFriends")
+  blocked            String[]
+  sentRequests       FriendRequest[] @relation("SentRequests")
+  receivedRequests   FriendRequest[] @relation("ReceivedRequests")
+  auth               Auth?
+  messages           Messages[]
+  servers            Server[]        @relation("UserServers")
+  VoiceChatId        String?
+  VoiceChat          VoiceChat?      @relation(fields: [voiceChatChannelId], references: [channelId])
+  voiceChatChannelId String?
 }
 
 model FriendRequest {
@@ -80,7 +83,14 @@ model Messages {
 }
 
 model UserInfo {
-  userId          String @id @unique
-  biography       String
-  usernameColor   String @default("#000D1E")
+  userId        String @id @unique
+  biography     String
+  usernameColor String @default("#000D1E")
+}
+
+model VoiceChat {
+  channelId String   @id @unique
+  serverId  String?
+  members   User[]
+  createdAt DateTime @default(now())
 }

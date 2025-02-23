@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import styles from '../page.module.css';
 
 import BackgroundBlur from './BackgroundBlur'
@@ -10,7 +10,7 @@ import UserBox from "./UserBox";
 import SideBox from "./SideBox";
 import FriendsDiv from "./FriendsDiv";
 import ChannelBox from "./ChannelBox";
-import { SyntaxHighlight, ViewingFriendsDiv, Currents, getLineHeight, UpdateMessageInfo, ExploreBoxMode, GetUser, ToUser, MessageInfo } from "../utils/utils";
+import { SyntaxHighlight, ViewingFriendsDiv, Currents, getLineHeight, UpdateMessageInfo, ExploreBoxMode, GetUser, ToUser, MessageInfo, ToVCInfo, DBVoiceChatWithMembers, DBuserToUser } from "../utils/utils";
 import { useUser } from "@clerk/nextjs";
 import { io, Socket } from 'socket.io-client';
 import UserCheck from "./UserCheck";
@@ -19,9 +19,13 @@ import SettingsBox from "./SettingsBox";
 import ChannelBoxInfo from "./ChannelBoxInfo";
 import ServerUsersTab from "./ServerUsersTab";
 import { toast } from "react-toastify";
-import { AllowedTypes, Channel, ClientResponsePacket, DirectMessage, EditContext, FriendRequestAnswer, Message, PendingFriendRequest, Server, SocketData, SocketInformationType, User } from "../utils/socket_utils";
+import { AllowedTypes, AudioSlice, Channel, ClientResponsePacket, DirectMessage, EditContext, FriendRequestAnswer, Message, PendingFriendRequest, Server, SocketData, SocketInformationType, User, VoiceChatInformation, WritingEvent } from "../utils/socket_utils";
+import { VoiceChat } from "@prisma/client";
+import Tooltip from "./common/Tooltip";
+import Peer, { MediaConnection } from "peerjs";
 
 let socket: Socket | undefined;
+let voicesocket: Socket | undefined;
 
 const defaultCurrents: Currents = {
     channel: null,
@@ -30,9 +34,13 @@ const defaultCurrents: Currents = {
     user: null,
     contextmenu: { shown: false, x: 0, y: 0 },
     contextmenumode: null,
-    friendsdiv: { status: "online", visible: false },
+    friendsdiv: { status: "online", visible: true },
     directmessage: null,
     setting: null,
+    vc: null,
+    voicechatopen: false,
+    microphone: false,
+    tooltip: { position: { left: 0, top: 0 }, ref: null, text: "", visible: false }
 };
 
 const MainLayout: React.FC = () => {
@@ -53,11 +61,55 @@ const MainLayout: React.FC = () => {
     const [appGridColumns, setappGridColumns] = useState<string>(`repeat(32, 1fr)`);
     const [pendingSentRequests, setpendingSentRequests] = useState<PendingFriendRequest[]>([]);
     const [directmessages, setdirectmessages] = useState<DirectMessage[]>([]);
+    const [writingUsers, setWritingUsers] = useState<string[]>([]);
+    const [userStreams, setUserStreams] = useState<{ [userId: string]: MediaStream }>({});
+    const [peer, setpeer] = useState<Peer | null>(null);
+    const [calls, setcalls] = useState<Record<string, MediaConnection>>({});
+
+    const tooltipRef = useRef<HTMLDivElement | null>(null);
+
+    let timeout: NodeJS.Timeout | null = null;
+
+    const resetTimeout = () => {
+        if (timeout)
+            clearTimeout(timeout);
+        timeout = setTimeout(() => {
+            sendStopWritingEvent();
+            timeout = null;
+        }, 5000);
+    };
+
     const user = useUser();
 
     const SocketURL = "http://localhost:3001";
+    const VoiceSocketURL = "http://localhost:3002";
 
     const [TextareaInitalConstNumber, setTextareaInitalConstNumber] = useState(0);
+
+    const [localStream, setlocalStream] = useState<MediaStream | null>(null);
+
+    const getMediaStream = useCallback(async () => {
+        if (localStream) return localStream;
+
+        try {
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const audioDevices = devices.filter(x => x.kind === "audioinput");
+
+            const stream = await navigator.mediaDevices.getUserMedia({
+                audio: {
+                    echoCancellation: false,
+                    noiseSuppression: true,
+                    channelCount: 2
+                },
+                video: false,
+            });
+
+            setlocalStream(stream);
+            return stream;
+        } catch (err) {
+            console.error(err);
+        }
+    }, []);
 
     const toggleFriendsDivVisibility = () => {
         setCurrents((prevCurrents) => ({
@@ -185,6 +237,11 @@ const MainLayout: React.FC = () => {
             ...prevCurrents,
             channel: null,
             server: null,
+            directmessage: null,
+            friendsdiv: {
+                ...prevCurrents.friendsdiv,
+                visible: true,
+            }
         }));
         setMessages([]);
         setServerUsersDivV(false);
@@ -312,6 +369,24 @@ const MainLayout: React.FC = () => {
         })
     }
 
+    const onClickMicrophone = () => {
+        getMediaStream().then(stream => {
+            if (stream) {
+                stream.getAudioTracks().forEach(track => {
+                    track.enabled = !currents.microphone;
+                });
+                setlocalStream(stream);
+                console.log("Mute/Unmuted microphone stream");
+            }
+        });
+
+        console.log("Microphone clicked", !currents.microphone);
+        setCurrents((prev) => ({
+            ...prev,
+            microphone: (!(prev.microphone)),
+        }));
+    }
+
     const closeExploreBox = () => {
         setExploreBoxV(false);
         setBgBlurV(false);
@@ -352,17 +427,18 @@ const MainLayout: React.FC = () => {
             return;
         }
 
-        const messageObject: Message = {
-            author: { id: user.user.id, username: user.user.username, avatarUrl: user.user.imageUrl },
-            channel: { id: currents.channel.id, name: currents.channel.name, isDirectMessage: currents.channel.isDirectMessage },
-            content: message,
-            timestamp: new Date(Date.now()),
-            repliedTo: replyingTo,
-            id: null, // Will be auto set
-        }
-
         if (event.key == "Enter" && !event.shiftKey) {
             event.preventDefault();
+
+            const messageObject: Message = {
+                author: { id: user.user.id, username: user.user.username, avatarUrl: user.user.imageUrl },
+                channel: { id: currents.channel.id, name: currents.channel.name, isDirectMessage: currents.channel.isDirectMessage },
+                content: message,
+                timestamp: new Date(Date.now()),
+                repliedTo: replyingTo,
+                id: null, // Will be auto set
+            }
+
             console.log("Message: ", message);
 
             try {
@@ -387,6 +463,12 @@ const MainLayout: React.FC = () => {
             } catch (err) {
                 console.error(err);
             }
+        } else {
+            if (timeout) {
+                sendStartWritingEvent();
+            }
+
+            resetTimeout();
         }
     }
 
@@ -479,6 +561,77 @@ const MainLayout: React.FC = () => {
         openDirectMessage(user);
     }
 
+    const onClickCall = () => {
+        if (!currents.channel) return;
+        if (!currents.user) return;
+
+        fetch("/api/v1/vc/get", {
+            method: "POST",
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                channelId: currents.channel!.id,
+            })
+        }).then(res => res.json().then(data => {
+            console.log("VC ", data);
+            if (data.data) {
+                const DBvc: DBVoiceChatWithMembers = data.data;
+                JoinCall(ToVCInfo(DBvc));
+                // There is a vc, return
+                // const vc: VoiceChatInformation = data.data as VoiceChatInformation;
+                return;
+            } else {
+                // Start the call
+                fetch("api/v1/vc", {
+                    method: "POST",
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        channelId: currents.channel!.id,
+                        serverId: currents.server?.id ?? '',
+                    })
+                }).then(res => res.json().then(data => {
+                    if (data.data) {
+                        // Call successfully started
+                        const vc: VoiceChatInformation = data.data as VoiceChatInformation;
+                        setCurrents(prev => ({
+                            ...prev,
+                            vc: vc,
+                        }));
+
+                        // Join the call
+                        JoinCall(vc);
+                    } else {
+                        // Call couldn't start
+                        toast("Couldn't start the call");
+                        return;
+                    }
+                }))
+            }
+        }))
+        // Check if there is already call if there is then return;  ✓
+        // If there is no call, start a call;   ✓
+        // when leaving, if last person Emit "end_call" if "/api/v1/call/end" is successfully;
+        // Leave call if app closes;
+        // When call is started/joined load Users;
+        // Get user's volume and if higher than certain value (>0) then add an effect for talking;
+        // Add voice and video sharing;
+        // Add screen sharing and voice call Options;
+        // Add share system voice switch;
+        // Lots of debugging
+        // If a call has one user for more than 5 minutes then auto-leave call (and also api call and socketio emit)
+        // set voicechatopen to true/false on join/leave of a call;
+        // Add mute/unmute buttons and also shortcuts for them;
+        // Use DB to store who is in the vc currently;
+    }
+
+    const onClickLeaveCall = () => {
+        if (!currents.vc) return;
+        LeaveCall(currents.vc);
+    }
+
     const OpenUserContextMenu = (userId: string, ev: React.MouseEvent) => {
         setCurrents((prev) => ({
             ...prev,
@@ -488,6 +641,108 @@ const MainLayout: React.FC = () => {
                 shown: true
             },
             contextmenumode: 0,
+        }));
+    }
+
+    const JoinCall = (vc: VoiceChatInformation) => {
+        if (!currents.user) return;
+        console.log("Joining call ", vc);
+
+        fetch("/api/v1/vc/action", {
+            method: "POST",
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                action: "join",
+                vc: vc,
+            })
+        }).then(res => res.json().then(data => {
+            console.log("vc join request", data);
+            if (data.message === "Voice chat joined successfully") {
+                console.log("Join call: ", data);
+
+                const newVC = data.data as DBVoiceChatWithMembers;
+
+                getMediaStream().then(stream => {
+                    newVC.members.filter(x => x.id !== currents.user?.id).forEach(vcUser => {
+                        if (!peer) {
+                            toast("Slow down! You aren't ready for some voice chat action yet.");
+                            return;
+                        }
+
+                        const call = peer.call(`${vcUser.id}_peeruser`, stream!, {
+                            metadata: {
+                                user: ToUser(currents.user!),
+                            }
+                        });
+
+                        setcalls((prev) => ({ ...prev, [vcUser.id]: call }));
+
+                        call.on('stream', (remoteStream) => {
+                            setUserStreams(prev => ({
+                                ...prev,
+                                [vcUser.id]: remoteStream,
+                            }))
+                        });
+
+                        call.on("close", () => {
+                            setUserStreams(prev => {
+                                const updatedStreams = { ...prev };
+                                delete updatedStreams[vcUser.id];
+                                return updatedStreams;
+                            });
+                            setCurrents((prev) => ({
+                                ...prev,
+                                vc: {
+                                    ...prev.vc!,
+                                    users: prev.vc!.users.filter(x => x.id !== vcUser.id)
+                                }
+                            }));
+                        });
+                    })
+
+                    setCurrents(prev => ({
+                        ...prev,
+                        vc: {
+                            id: newVC.channelId,
+                            startTime: newVC.createdAt,
+                            users: newVC.members.map(member => DBuserToUser(member)),
+                        },
+                        voicechatopen: true,
+                    }));
+
+                    voicesocket?.emit("vc_join", vc, ToUser(currents.user!));
+                }).catch(err => { console.error("Failed to get media stream", err) });
+            } else {
+                toast("Couldn't join vc " + data.message);
+            }
+        }));
+    }
+
+    const LeaveCall = (vc: VoiceChatInformation) => {
+        console.log("Leaving call", vc);
+        fetch('api/v1/vc/action', {
+            method: "POST",
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                action: "leave",
+                vc: vc,
+            }),
+        }).then(res => res.json().then(data => {
+            if (data.message === "Voice chat left successfully") {
+                console.log("Leave call: ", data);
+                voicesocket?.emit("vc_leave", vc, ToUser(currents.user!));
+                setCurrents(prev => ({
+                    ...prev,
+                    vc: null,
+                    voicechatopen: false,
+                }));
+            } else {
+                toast("Couldn't leave vc " + data.message);
+            }
         }));
     }
 
@@ -551,6 +806,40 @@ const MainLayout: React.FC = () => {
         });
     }
 
+    const sendStartWritingEvent = () => {
+        if (!currents.user) return;
+
+        const data: WritingEvent = {
+            user: ToUser(currents.user),
+            channelId: currents.channel?.id ?? '',
+        }
+
+        const socketData: SocketData = {
+            infoType: SocketInformationType.ClientStopWritingMessage,
+            dataType: AllowedTypes.WritingEvent,
+            data: data,
+        }
+
+        socket?.emit("writing_event", socketData);
+    }
+
+    const sendStopWritingEvent = () => {
+        if (!currents.user) return;
+
+        const data: WritingEvent = {
+            user: ToUser(currents.user),
+            channelId: currents.channel?.id ?? '',
+        }
+
+        const socketData: SocketData = {
+            infoType: SocketInformationType.ClientStopWritingMessage,
+            dataType: AllowedTypes.WritingEvent,
+            data: data,
+        }
+
+        socket?.emit("writing_event", socketData);
+    }
+
     const openDirectMessage = (withUser: User) => {
         // Open or create direct message
         fetch("/api/v1/user/directmessages/getorcreate", {
@@ -588,13 +877,15 @@ const MainLayout: React.FC = () => {
                         res.json().then((data) => {
                             const messageList: Message[] = data.messages;
                             setMessages(messageList);
-        
+
                             console.log("Messages: ", messageList);
-        
+
                             setCurrents(prev => ({
                                 ...prev,
                                 directmessage: directMessage,
                             }));
+
+                            console.log("Set DM to ", directMessage);
 
                             setCurrents((prevCurrents) => ({
                                 ...prevCurrents,
@@ -614,7 +905,7 @@ const MainLayout: React.FC = () => {
     }
 
     const onClickFriendUser = (user: User) => {
-        try {openDirectMessage(user)} catch (err) {if(err instanceof Error) console.log(err.stack);};
+        try { openDirectMessage(user) } catch (err) { if (err instanceof Error) console.log(err.stack); };
     }
 
     const SideBoxProps = {
@@ -662,10 +953,22 @@ const MainLayout: React.FC = () => {
         replyingTo: replyingTo,
         setreplyingTo: setreplyingTo,
         MessageInfos: MessageInfos,
+        onClickMicrophone: onClickMicrophone,
+        onClickLeaveCall: onClickLeaveCall,
         setMessageInfos: setMessageInfos,
+        setCurrents: setCurrents,
         Currents: currents,
         kbState: kbState,
         messages: messages,
+        voicesocket: voicesocket,
+        localStream: localStream,
+        getMediaStream: getMediaStream,
+        userStreams: userStreams,
+        setUserStreams: setUserStreams,
+        calls: calls,
+        setcalls: setcalls,
+        peer: peer,
+        writingUsers: writingUsers,
     }
 
     const MainBoxProps = {
@@ -674,6 +977,8 @@ const MainLayout: React.FC = () => {
         onClickAppIcon: onClickAppIcon,
         onClickExploreButton: onClickExploreButton,
         Currents: currents,
+        setCurrents: setCurrents,
+        ExploreBoxV: ExploreBoxV,
     }
 
     const ContextMenuProps = {
@@ -694,14 +999,28 @@ const MainLayout: React.FC = () => {
     const ChannelBoxInfoProps = {
         Currents: currents,
         setServerUsersDivV: setServerUsersDivV,
+        setCurrents: setCurrents,
         ServerUsersDivV: ServerUsersDivV,
         onClickFB: onClickFB,
         onClickAddFriend: onClickAddFriend,
+        onClickCall: onClickCall,
     }
 
     const ServerUsersTabProps = {
         Currents: currents,
         ServerUsersDivV: ServerUsersDivV,
+    }
+
+    const VoiceChatProps = {
+        Currents: currents,
+        voicesocket: voicesocket,
+    }
+
+    const TooltipProps = {
+        tooltipText: currents.tooltip.text,
+        tooltipVisible: currents.tooltip.visible,
+        tooltipPosition: currents.tooltip.position,
+        tooltipRef: tooltipRef,
     }
 
     const onKeyUp = (event: KeyboardEvent) => {
@@ -769,6 +1088,15 @@ const MainLayout: React.FC = () => {
                 }
             })
         });
+        socket.on("writing_event", (eventUser: User, eventType: string) => {
+            if (eventUser.id !== currents.user?.id) {
+                if (eventType === "start") {
+                    setWritingUsers((prev) => [...prev, eventUser.id]);
+                } else {
+                    setWritingUsers((prev) => prev.filter((id) => id !== eventUser.id));
+                }
+            }
+        });
         return () => {
             if (socket) { socket.disconnect(); socket = undefined; }
         };
@@ -812,14 +1140,14 @@ const MainLayout: React.FC = () => {
     }, []);
 
     useEffect(() => {
-        if(user.user) {
+        if (user.user) {
             fetch("/api/v1/user/directmessages/get", {
                 method: "POST",
                 body: JSON.stringify({}),
             }).then(res => res.json().then(data => {
-                if(data.data) {
+                if (data.data) {
                     const dms: DirectMessage[] = data.data as DirectMessage[];
-                    console.log("dms ",dms);
+                    console.log("dms ", dms);
                     setdirectmessages(dms);
                 }
             }));
@@ -863,6 +1191,60 @@ const MainLayout: React.FC = () => {
         console.log(appGridColumns);
     }, [ServerUsersDivV]);
 
+    useEffect(() => {
+        if (tooltipRef.current) {
+            setCurrents((prev) => ({
+                ...prev,
+                tooltip: { ...prev.tooltip, ref: tooltipRef.current },
+            }));
+        }
+    }, [tooltipRef.current]);
+
+    useEffect(() => {
+        getMediaStream().then(stream => { });
+    }, []);
+
+    useEffect(() => {
+        const newPeer = new Peer(`${currents.user!.id}_peeruser`);
+        setpeer(newPeer);
+
+        getMediaStream().then(stream => {
+            newPeer.on('call', (call_peer) => {
+                console.log("Incoming call from:", call_peer.peer);
+                call_peer.answer(stream); // Answer with local stream
+
+                const vcUser: User = call_peer.metadata.user;
+
+                setCurrents((prev) => ({
+                    ...prev,
+                    vc: {
+                        ...prev.vc!,
+                        users: [...prev.vc!.users, { ...vcUser, avatarUrl: vcUser.avatarUrl || '' }]
+                    }
+                }));
+
+                call_peer.on("stream", (remoteStream) => {
+                    setUserStreams(prev => ({ ...prev, [call_peer.peer]: remoteStream }));
+                });
+
+                call_peer.on("close", () => {
+                    setUserStreams(prev => {
+                        const updatedStreams = { ...prev };
+                        delete updatedStreams[call_peer.peer];
+                        return updatedStreams;
+                    });
+                    setCurrents((prev) => ({
+                        ...prev,
+                        vc: {
+                            ...prev.vc!,
+                            users: prev.vc!.users.filter(x => x.id !== vcUser.id),
+                        }
+                    }));
+                });
+            })
+        })
+    }, []);
+
     // For debug remove later
     const Debugging = () => {
         /*console.log("Highlight: ", await SyntaxHighlight([{
@@ -886,7 +1268,10 @@ const MainLayout: React.FC = () => {
 
     return (
         <>
+            {/*<VoiceChat {...VoiceChatProps} />*/}
+            {/*(<TransComp />)*/}
             <ContextMenu {...ContextMenuProps} />
+            <Tooltip {...TooltipProps} />
             <div className={styles.body}>
                 <div className={styles.main_container}>
                     <BackgroundBlur BgBlurV={BgBlurV} onClickBgBlur={onClickBgBlur} />

@@ -60,14 +60,22 @@ export async function GET(request: NextRequest) {
         /*await db.messages.deleteMany({ where: { authorId: { not: ";" } } });*/
         /*await db.auth.deleteMany({ where: { userId: { not: { contains: ";" } } } });
         await db.user.deleteMany({ where: { id: { not: { contains: ";" } } } });*/
-
+/*
         const servers = await db.server.findMany();
 
         const count = await db.server.count();
 
+        const dms = await db.user.findUnique({ where: { id: user.id } }).directMsgs();
+
+        const dmChannel = await db.channel.delete({where: {id: dms![0].id}});
+*/
+        const e = await db.voiceChat.findMany({include: {members: true}});
+
+        //await db.voiceChat.deleteMany({});
+
         await db.$disconnect();
         return NextResponse.json({
-            message: servercodes
+            message: e,
         }, { status: 200 })
     } catch (err) {
         if (err instanceof Error)

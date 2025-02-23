@@ -1,7 +1,27 @@
 import { JSX, ReactNode, RefObject } from "react";
-import { FriendRequest as DBFriendRequest } from '@prisma/client';
+import { FriendRequest as DBFriendRequest, VoiceChat as DBVoiceChat, Prisma } from '@prisma/client';
 import Appearance from "../components/settings/Appearance";
-import { Channel, DirectMessage, Message, Server, User } from "./socket_utils";
+import { Channel, DirectMessage, Message, Server, User, VoiceChatInformation } from "./socket_utils";
+
+export type DBVoiceChatWithMembers = Prisma.VoiceChatGetPayload<{
+    include: {
+        members: { 
+            select: {
+                id: true,
+                username: true,
+                avatarUrl: true,
+            }
+        }
+    }
+}>
+
+export type DBUser = Prisma.UserGetPayload<{
+    select: {
+        id: true,
+        username: true,
+        avatarUrl: true,
+    }
+}>;
 
 export interface SyntaxPattern {
     pattern: RegExp;
@@ -27,6 +47,13 @@ export enum ExploreBoxMode {
     AddFriend = 3,
 }
 
+export interface TooltipInfo {
+    text: string;
+    ref: HTMLDivElement  | null;
+    position: {left: number, top: number};
+    visible: boolean;
+}
+
 export interface Currents {
     user: UserResource | null;
     server: Server | null;
@@ -37,6 +64,10 @@ export interface Currents {
     friendsdiv: FriendsDivStatus;
     directmessage: DirectMessage | null;
     setting: string | null;
+    vc: VoiceChatInformation | null;
+    voicechatopen: boolean;
+    microphone: boolean;
+    tooltip: TooltipInfo;
 }
 
 export interface FriendsDivStatus {
@@ -58,6 +89,22 @@ export function ToUser(resource: UserResource): User {
         id: resource.id,
         username: resource.username ?? '',
         avatarUrl: resource.avatar,
+    }
+}
+
+export function DBuserToUser(resource: DBUser): User {
+    return {
+        id: resource.id,
+        username: resource.username ?? '',
+        avatarUrl: resource.avatarUrl ?? '',
+    }
+}
+
+export function ToVCInfo(dbvc: DBVoiceChatWithMembers): VoiceChatInformation {
+    return {
+        id: dbvc.channelId,
+        users: dbvc.members.map(member => DBuserToUser(member)),
+        startTime: dbvc.createdAt,
     }
 }
 
@@ -204,4 +251,69 @@ export const UpdateMessageInfo = (message: Message, key: any, value: any, setMes
                 : info // Keep the rest unchanged
         )
     );
+}
+
+export const onMouseOverTooltipElement = (ev: React.MouseEvent, text: string, Currents: Currents, setCurrents: React.Dispatch<React.SetStateAction<Currents>>) => {
+    if(!Currents.tooltip.ref) return;
+
+    const rect = ev.currentTarget.getBoundingClientRect();
+    const scrollX = window.scrollX;
+    const scrollY = window.scrollY;
+
+    const tooltipHeight = Currents.tooltip.ref.offsetHeight || 30;
+    const tooltipWidth = Currents.tooltip.ref.offsetWidth || 100;
+    
+    let top = rect.top + scrollY - tooltipHeight - 10; // Default: Above the button
+    let left = rect.left + scrollX + rect.width / 2 - tooltipWidth / 2; // Center horizontally
+
+    // Prevent tooltip from going out of the screen
+    if (top < 0) {
+        top = rect.bottom + scrollY + 10; // Move below if it overflows top
+        //setPlacement("bottom");
+    } else {
+        //setPlacement("top");
+    }
+
+    if (left < 0) left = 10; // Prevent left overflow
+    if (left + tooltipWidth > window.innerWidth) left = window.innerWidth - tooltipWidth - 10; // Prevent right overflow
+
+
+    setCurrents((prev) => ({
+        ...prev,
+        tooltip: {
+            text: text,
+            position: {left: left, top: top},
+            visible: true,
+            ref: prev.tooltip.ref,
+        }
+    }));
+}
+
+export const onMouseLeaveTooltipElement = (setCurrents: React.Dispatch<React.SetStateAction<Currents>>) => {
+    setCurrents((prev) => ({
+        ...prev,
+        tooltip: {
+            ...prev.tooltip,
+            visible: false,
+        }
+    }));
+}
+
+export function _arrayBufferToBase64( buffer: ArrayBuffer ) {
+    var binary = '';
+    var bytes = new Uint8Array( buffer );
+    var len = bytes.byteLength;
+    for (var i = 0; i < len; i++) {
+        binary += String.fromCharCode( bytes[ i ] );
+    }
+    return window.btoa( binary );
+}
+
+export function _base64ToarrayBuffer(base64: string) {
+    var binaryString = atob(base64);
+    var bytes = new Uint8Array(binaryString.length);
+    for (var i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+    }
+    return bytes.buffer;
 }

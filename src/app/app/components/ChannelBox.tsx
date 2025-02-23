@@ -1,9 +1,14 @@
 import styles from '../page.module.css';
 
-import React, { useEffect, useRef, useState } from 'react';
-import { GetMessageDateString, Currents, MessageInfo, UpdateMessageInfo } from '../utils/utils';
-import { Message } from '../utils/socket_utils';
+import React, { createElement, useCallback, useEffect, useRef, useState } from 'react';
+import { GetMessageDateString, Currents, MessageInfo, UpdateMessageInfo, onMouseLeaveTooltipElement, onMouseOverTooltipElement, _arrayBufferToBase64, _base64ToarrayBuffer, ToUser } from '../utils/utils';
+import { AudioSlice, Message, User } from '../utils/socket_utils';
 import Image from 'next/image';
+import interact from 'interactjs';
+import Tooltip from './common/Tooltip';
+import { toast } from 'react-toastify';
+import { io, Socket } from 'socket.io-client';
+import { MediaConnection, Peer } from 'peerjs';
 
 interface Props {
     onInputTextarea: (event: React.ChangeEvent<HTMLTextAreaElement>) => void;
@@ -13,24 +18,41 @@ interface Props {
     onMessageEdit: (message: MessageInfo) => void;
     onMessageDelete: (message: Message) => void;
     onEditInput: (message: Message, event: React.KeyboardEvent) => void;
-    onClickUserAvatar: (messageId : bigint | null, event: React.MouseEvent) => void;
+    onClickUserAvatar: (messageId: bigint | null, event: React.MouseEvent) => void;
+    onClickMicrophone: () => void;
+    onClickLeaveCall: () => void;
     setreplyingTo: (message: Message | null) => void;
+    getMediaStream: () => Promise<MediaStream | undefined>;
+    setCurrents: React.Dispatch<React.SetStateAction<Currents>>;
     Currents: Currents;
     MessageInfos: MessageInfo[];
     setMessageInfos: React.Dispatch<React.SetStateAction<MessageInfo[]>>;
     replyingTo: Message | null;
     kbState: String[];
     messages: Message[];
+    voicesocket: Socket | undefined;
+    localStream: MediaStream | null;
+    userStreams: { [userId: string]: MediaStream };
+    setUserStreams: React.Dispatch<React.SetStateAction<{ [userId: string]: MediaStream }>>;
+    calls: Record<string, MediaConnection>;
+    setcalls: React.Dispatch<React.SetStateAction<Record<string, MediaConnection>>>;
+    peer: Peer | null;
+    writingUsers: string[];
 }
 
-const ReplyMessageAnimationKeyframes = [{backgroundColor: 'var(--cb-color-red)'}, {backgroundColor: 'transparent'}];
-const ReplyMessageAnimationOptions: KeyframeAnimationOptions = {duration: 500, easing: 'ease-in-out', iterations: 1, fill: 'none'};
+var voicesocket: Socket | undefined;
 
-const ChannelBox: React.FC<Props> = ({ onInputTextarea, onLoadTextarea, onMessageReply, onMessageEdit, onMessageDelete, onEditInput, onKeyDownInput, MessageInfos, setMessageInfos, replyingTo, setreplyingTo, onClickUserAvatar, Currents, kbState, messages }) => {
+const ReplyMessageAnimationKeyframes = [{ backgroundColor: 'var(--cb-color-red)' }, { backgroundColor: 'transparent' }];
+const ReplyMessageAnimationOptions: KeyframeAnimationOptions = { duration: 500, easing: 'ease-in-out', iterations: 1, fill: 'none' };
+
+const ChannelBox: React.FC<Props> = ({ onInputTextarea, onLoadTextarea, onMessageReply, onMessageEdit, onMessageDelete, onEditInput, onKeyDownInput, MessageInfos, setMessageInfos, replyingTo, setreplyingTo, onClickUserAvatar, onClickMicrophone, onClickLeaveCall, getMediaStream, setCurrents, Currents, kbState, messages, localStream, userStreams, setUserStreams, calls, setcalls, peer, writingUsers }) => {
     const [userScroll, setuserScroll] = useState(0);
     const [hoveredMessageId, setHoveredMessageId] = useState<String | null>(null);
+    const [writingUsersText, setwritingUsersText] = useState<string>("");
     const scrollPageRef = useRef<HTMLDivElement>(null);
+    const vcboxRef = useRef<HTMLDivElement>(null);
     const editRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
+    const AudioRef = useRef<HTMLAudioElement>(null);
 
     useEffect(() => {
         console.log("userScroll: ", userScroll);
@@ -61,6 +83,16 @@ const ChannelBox: React.FC<Props> = ({ onInputTextarea, onLoadTextarea, onMessag
             }
         }
     }, [scrollPageRef, messages]);
+
+    useEffect(() => {
+        if (writingUsers.length > 4) {
+            setwritingUsersText(writingUsers.slice(0, 4).join(", ") + " and others are writing...");
+        } else if (writingUsers.length > 1) {
+            setwritingUsersText(writingUsers.join(", ") + " is writing...");
+        } else {
+            setwritingUsersText("");
+        }
+    }, [writingUsers]);
 
     const onMouseHoverOver = (id: (String | undefined)) => {
         if (id !== undefined)
@@ -117,9 +149,217 @@ const ChannelBox: React.FC<Props> = ({ onInputTextarea, onLoadTextarea, onMessag
         }
     }
 
+    const onMouseMove = (ev: React.MouseEvent) => {
+        // if (!vcboxRef.current) return;
+
+        // if (ev.button === 0 && ev.buttons !== 0) {
+        //     vcboxRef.current.style.top = vcboxRef.current.clientHeight + ev.clientY + "px";
+        // }
+    }
+    useEffect(() => {
+        if (vcboxRef.current) {
+            interact(vcboxRef.current).resizable({
+                edges: { bottom: true },
+                modifiers: [
+                    interact.modifiers.restrictEdges({
+                        outer: 'parent'
+                    }),
+
+                    interact.modifiers.restrictSize({
+                        min: { width: vcboxRef.current.clientWidth, height: 100 }
+                    })
+                ],
+                listeners: {
+                    move(event: any) {
+                        var target = event.target;
+                        var y = (parseFloat(target.getAttribute('data-y')) || 0)
+
+                        // update the element's style
+                        target.style.height = event.rect.height + 'px'
+
+                        // translate when resizing from top or left edges
+                        y += event.deltaRect.top
+
+                        target.style.transform = 'translateY(' + y + 'px)'
+
+                        target.setAttribute('data-y', y)
+                    }
+                }
+            })
+        }
+    }, [vcboxRef.current])
+
+    const settooltipText = (text: string) => {
+        setCurrents((prev) => ({
+            ...prev,
+            tooltip: {
+                ...prev.tooltip,
+                text: text,
+            }
+        }))
+    }
+
+    /// Voice Chat
+    useEffect(() => {
+        if (AudioRef.current) {
+            getMediaStream().then(stream => {
+                if (stream)
+                    AudioRef.current!.srcObject = stream;
+            })
+        }
+    }, [AudioRef.current, Currents.microphone])
+
+
+    useEffect(() => {
+        if (!Currents.user) return;
+        if (!Currents.user.id) return;
+        if (!Currents.vc) return;
+
+        voicesocket = io("http://localhost:3002", {
+            query: {
+                info: [Currents.user.id, Currents.user.username, Currents.user.avatar].join(","), // CHANGE LATER !! IMPORTANT !!
+                vc: Currents.vc,
+            }
+        });
+
+        console.log("Set VCS!");
+        voicesocket.on("vc_update", (eventType: string, eventUser: User) => {
+            console.log("vc_update", { eventType, eventUser: eventUser });
+            if (eventType === "join") {
+                if (Currents.vc?.users.find(x => x.id === eventUser.id) === undefined) {
+                    setCurrents((prev) => ({
+                        ...prev,
+                        vc: {
+                            ...prev.vc!,
+                            users: [...prev.vc!.users, eventUser]
+                        }
+                    }));
+                }
+                if (!Object.keys(calls).includes(`${eventUser.id}`)) {
+                    if (!peer) return;
+
+                    const call = peer.call(`${eventUser.id}_peeruser`, localStream!, {
+                        metadata: {
+                            user: ToUser(Currents.user!),
+                        }
+                    });
+
+                    setcalls((prev) => ({ ...prev, [eventUser.id]: call }));
+
+                    call.on('stream', (remoteStream) => {
+                        setUserStreams(prev => ({
+                            ...prev,
+                            [eventUser.id]: remoteStream,
+                        }))
+                    });
+
+                    call.on("close", () => {
+                        setUserStreams(prev => {
+                            const updatedStreams = { ...prev };
+                            delete updatedStreams[eventUser.id];
+                            return updatedStreams;
+                        });
+                        setCurrents((prev) => ({
+                            ...prev,
+                            vc: {
+                                ...prev.vc!,
+                                users: prev.vc!.users.filter(x => x.id !== eventUser.id)
+                            }
+                        }));
+                    });
+                }
+            } else if (eventType === "leave") {
+                if(Currents.vc?.users.find(x => x.id === eventUser.id) !== undefined)
+                    setCurrents((prev) => ({
+                        ...prev,
+                        vc: {
+                            ...prev.vc!,
+                            users: prev.vc!.users.filter(x => x.id !== eventUser.id)
+                        }
+                    }));
+
+                try {
+                    setUserStreams((prev) => {
+                        const newStreams = { ...prev };
+                        delete newStreams[eventUser.id];
+                        return newStreams;
+                    });
+                } catch (err) { }
+            }
+        });
+
+        return () => { voicesocket?.disconnect(); }
+    }, [Currents.user, Currents.vc]);
+    /// Voice Chat End
+
+    useEffect(() => {
+        console.log(userStreams);
+    }, [userStreams])
+
     return (
         <>
-            <div id="channel-box" className={styles.channel_box} style={{ gridTemplateRows: (`${(replyingTo == null) ? ("5fr") : ''} ${(replyingTo !== null) ? "50vh 26vh" : ''} 12vh`) }}>
+            <div id="channel-box" className={styles.channel_box} onMouseMove={onMouseMove}>
+                <audio ref={AudioRef} style={{ display: 'none' }} autoPlay={true} />
+                {Object.entries(userStreams).map(([userId, url]) => {
+                    return <audio key={userId} style={{ display: 'none' }} ref={(audio) => { if (audio) audio.srcObject = url; }} autoPlay={true} />
+                })}
+                {(Currents.voicechatopen && Currents.vc) && (
+                    <div className={styles.channel_box_vc} ref={vcboxRef}>
+                        <div className={styles.channel_box_vc_top}>
+                            <div className={styles.vc_actions_left}>
+
+                            </div>
+                            <div className={styles.vc_actions_right}>
+
+                            </div>
+                        </div>
+                        <div className={styles.channel_box_vc_middle}>
+                            {Currents.vc.users.map((user) => {
+                                return (
+                                    <div key={user.id}>
+                                        <div className={styles.auto_useravatar_holder}>
+                                            <img className={styles.message_useravatar} src={`${user.avatarUrl/*https://cat-storage-server.web.app/data/cat1.jpeg"*/}`} onClick={(ev: React.MouseEvent) => { }} />
+                                        </div>
+                                    </div>
+                                )
+                            })}
+                        </div>
+                        <div className={styles.channel_box_vc_bottom}>
+                            <div className={styles.vc_actions_left}>
+
+                            </div>
+                            <div className={styles.vc_actions_middle}>
+                                <div className={styles.vc_icon_holder}>
+                                    <svg className={styles.vc_icon} onClick={() => { onClickMicrophone(); settooltipText(Currents.microphone ? "Turn Microphone Off" : "Turn Microphone On"); }} onMouseLeave={() => onMouseLeaveTooltipElement(setCurrents)} onMouseOver={(ev) => onMouseOverTooltipElement(ev, Currents.microphone ? "Turn Microphone Off" : "Turn Microphone On", Currents, setCurrents)} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" id="micrphone">
+                                        <path d="M12 15c1.66 0 2.99-1.34 2.99-3L15 6c0-1.66-1.34-3-3-3S9 4.34 9 6v6c0 1.66 1.34 3 3 3zm6.08-3c-.42 0-.77.3-.83.71-.37 2.61-2.72 4.39-5.25 4.39s-4.88-1.77-5.25-4.39c-.06-.41-.42-.71-.83-.71-.52 0-.92.46-.85.97.46 2.97 2.96 5.3 5.93 5.75V21c0 .55.45 1 1 1s1-.45 1-1v-2.28c2.96-.43 5.47-2.78 5.93-5.75.07-.51-.33-.97-.85-.97z" fill="var(--cb-color-white)"></path>
+                                    </svg>
+                                    <div className={styles.vc_icon_overlap_holder}>
+                                        <div className={styles.vc_icon_overlap} style={{ width: (Currents.microphone ? '0em' : '1em') }}></div>
+                                    </div>
+                                </div>
+                                <svg className={styles.vc_icon_inactive} onMouseLeave={() => onMouseLeaveTooltipElement(setCurrents)} onMouseOver={(ev) => onMouseOverTooltipElement(ev, "Screen Share", Currents, setCurrents)} xmlns="http://www.w3.org/2000/svg" enableBackground="new 0 0 24 24" viewBox="0 0 24 24" id="share-screen">
+                                    <g id="share_screen">
+                                        <path fill="var(--cb-color-white-soft)" d="M9,11c0-1.1-0.9-2-2-2H4c-1.1,0-2,0.9-2,2v6c0,1.1,0.9,2,2,2h3c1.1,0,2-0.9,2-2V11z M4,17v-6h3l0,6H4z"></path>
+                                        <path fill="var(--cb-color-white-soft)" d="M19,4H7C5.3,4,4,5.3,4,7c0,0.6,0.4,1,1,1s1-0.4,1-1c0-0.6,0.4-1,1-1h12c0.6,0,1,0.4,1,1v7c0,0.6-0.4,1-1,1h-7
+			c-0.6,0-1,0.4-1,1v2h-1c-0.6,0-1,0.4-1,1s0.4,1,1,1h4c0.6,0,1-0.4,1-1s-0.4-1-1-1h-1v-1h6c1.7,0,3-1.3,3-3V7C22,5.3,20.7,4,19,4z"></path>
+                                    </g>
+                                </svg>
+                                <svg className={styles.vc_icon_inactive} onMouseLeave={() => onMouseLeaveTooltipElement(setCurrents)} onMouseOver={(ev) => onMouseOverTooltipElement(ev, "Video Share", Currents, setCurrents)} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" id="videocam">
+                                    <path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l2.29 2.29c.63.63 1.71.18 1.71-.71V8.91c0-.89-1.08-1.34-1.71-.71L17 10.5z" fill="var(--cb-color-white-soft)"></path>
+                                </svg>
+                                <svg className={`${styles.vc_icon_leave}`} onClick={onClickLeaveCall} onMouseLeave={() => onMouseLeaveTooltipElement(setCurrents)} onMouseOver={(ev) => onMouseOverTooltipElement(ev, "Leave Call", Currents, setCurrents)} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" id="call">
+                                    <path fill="none" d="M0 0h24v24H0V0z"></path>
+                                    <path d="m19.23 15.26-2.54-.29a1.99 1.99 0 0 0-1.64.57l-1.84 1.84a15.045 15.045 0 0 1-6.59-6.59l1.85-1.85c.43-.43.64-1.03.57-1.64l-.29-2.52a2.001 2.001 0 0 0-1.99-1.77H5.03c-1.13 0-2.07.94-2 2.07.53 8.54 7.36 15.36 15.89 15.89 1.13.07 2.07-.87 2.07-2v-1.73c.01-1.01-.75-1.86-1.76-1.98z" fill="var(--cb-color-white)"></path>
+                                </svg>
+                            </div>
+                            <div className={styles.vc_actions_right}>
+
+                            </div>
+                        </div>
+
+                        <hr className={styles.hr_resize} />
+                    </div>
+                )}
                 <div className={`${styles.message_box} ${replyingTo && (styles.message_box_reply)}`} ref={scrollPageRef}>
                     {messages.map((message) => {
                         const messageinfo: MessageInfo = {
@@ -140,7 +380,7 @@ const ChannelBox: React.FC<Props> = ({ onInputTextarea, onLoadTextarea, onMessag
                                         <div className={styles.message_reply_useravatar_holder}>
                                             <img className={styles.message_useravatar} src={`${message.repliedTo.author.avatarUrl/*https://cat-storage-server.web.app/data/cat1.jpeg"*/}`} />
                                         </div>
-                                        <p className={styles.message_reply_content} style={{width: (MessageInfos.find(x => x.Message.id === message.id)!.ref) ? (MessageInfos.find(x => x.Message.id === message.id)!.ref!.clientWidth * 2/5)+"px" : "40vw"}}>{message.repliedTo.content}</p>
+                                        <p className={styles.message_reply_content} style={{ width: (MessageInfos.find(x => x.Message.id === message.id)!.ref) ? (MessageInfos.find(x => x.Message.id === message.id)!.ref!.clientWidth * 2 / 5) + "px" : "40vw" }}>{message.repliedTo.content}</p>
                                     </div>
                                     {(message.repliedTo) && (<div id="message-actions-holder" className={`${styles.message_actions_holder} ${(hoveredMessageId == message.id?.toString()) ? styles.message_actions_holder_active : ''}`}>
                                         <div className={`${styles.message_actions} ${styles.message_actions_holder_reply} `}>
@@ -177,10 +417,10 @@ const ChannelBox: React.FC<Props> = ({ onInputTextarea, onLoadTextarea, onMessag
                                         </div>
                                         <div>
                                             {!(MessageInfos.find(msg => msg.Message.id === message.id)?.editMode) && (
-                                                <p className={styles.message_content} style={{width: (MessageInfos.find(x => x.Message.id === message.id)!.ref) ? (MessageInfos.find(x => x.Message.id === message.id)!.ref!.clientWidth * 7/10)+"px" : "40vw"}}>{message.content}</p>)}
+                                                <p className={styles.message_content} style={{ width: (MessageInfos.find(x => x.Message.id === message.id)!.ref) ? (MessageInfos.find(x => x.Message.id === message.id)!.ref!.clientWidth * 7 / 10) + "px" : "40vw" }}>{message.content}</p>)}
                                             {(MessageInfos.find(msg => msg.Message.id === message.id)?.editMode) && (
                                                 <>
-                                                    <textarea className={styles.edit_message_textarea} style={{width: (MessageInfos.find(x => x.Message.id === message.id)!.ref) ? (MessageInfos.find(x => x.Message.id === message.id)!.ref!.clientWidth * 7/10)+"px" : "40vw"}} onKeyDown={(ev) => { onEditInput(message, ev) }} defaultValue={message.content}></textarea>
+                                                    <textarea className={styles.edit_message_textarea} style={{ width: (MessageInfos.find(x => x.Message.id === message.id)!.ref) ? (MessageInfos.find(x => x.Message.id === message.id)!.ref!.clientWidth * 7 / 10) + "px" : "40vw" }} onKeyDown={(ev) => { onEditInput(message, ev) }} defaultValue={message.content}></textarea>
                                                 </>)}
                                         </div>
                                     </div>
@@ -234,6 +474,9 @@ const ChannelBox: React.FC<Props> = ({ onInputTextarea, onLoadTextarea, onMessag
                 </div>)}
                 <div className={`${styles.message_box_wraper} ${replyingTo && (styles.message_box_wraper_reply)}`}>
                     <textarea className={`${styles.contenteditable} ${styles.msg_typer}`} onKeyDown={onKeyDownInput} />
+                </div>
+                <div className={styles.writing_users_div}>
+                    <p className={styles.writing_users_text}>{writingUsersText}</p>
                 </div>
             </div>
         </>

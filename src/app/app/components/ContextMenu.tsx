@@ -8,7 +8,7 @@ interface Props {
 
 const ContextMenu: React.FC<Props> = ({ Currents }) => {
     useEffect(() => {
-        console.log(Currents.contextmenu)
+        //console.log(Currents.contextmenu)
     }, [Currents.contextmenu]);
     
 

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import styles from '../page.module.css';
-import { Currents, User } from '../utils/utils';
+import { Currents } from '../utils/utils';
+import { User } from '../utils/socket_utils';
 
 interface Props {
     Currents: Currents,

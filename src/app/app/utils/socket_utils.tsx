@@ -51,6 +51,16 @@ export interface DirectMessage {
     users: User[],
 }
 
+export interface VoiceChatInformation {
+    id: string,
+    users: User[],
+    startTime: Date,
+}
+
+export interface AudioSlice {
+    data: any,
+    speaker: User,
+}
 
 export interface FriendRequestAnswer {
     friendRequest: DBFriendRequest,
@@ -66,6 +76,8 @@ export enum SocketInformationType {
     ClientAcceptFriendRequest,
     ClientDeclineFriendRequest,
     ClientBlockFriendRequest,
+    ClientStartWritingMessage,
+    ClientStopWritingMessage,
 }
 
 export interface EditContext {
@@ -73,10 +85,16 @@ export interface EditContext {
     newMessage: Message,
 }
 
+export interface WritingEvent {
+    user: User,
+    channelId: string,
+}
+
 export enum AllowedTypes {
     Message,
     EditContext,
     FriendRequest,
+    WritingEvent,
 }
 
 export interface SocketData {
