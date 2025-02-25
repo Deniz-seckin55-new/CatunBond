@@ -1,8 +1,7 @@
+import { useUser } from "@clerk/nextjs";
 import { currentUser } from "@clerk/nextjs/server";
 import { PrismaClient } from "@prisma/client";
 import { redirect } from "next/navigation";
-
-const db = new PrismaClient();
 
 export default async function Page() {
     async function create() {
@@ -14,17 +13,33 @@ export default async function Page() {
             return;
         }
 
+        const db = new PrismaClient();
+
         // Check if the user exists in the database
         const userExists = await db.user.findUnique({
             where: { id: user.id },
         });
 
         if (!userExists) {
+            let avatarUrl: string;
+            if(user.hasImage)
+                avatarUrl = user.imageUrl;
+            else {
+                avatarUrl = "https://cat-storage-server.web.app/data/cat1.jpeg";
+                await fetch("/api/v1/user/", {
+                    method: "PUT",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({ imageUrl: avatarUrl }),
+                });
+            }
+
             await db.user.create({
                 data: {
                     id: user.id,
                     username: user.username || "Default_User",
-                    avatarUrl: "https://cat-storage-server.web.app/data/cat1.jpeg",
+                    avatarUrl: avatarUrl,
                 },
             });
         }

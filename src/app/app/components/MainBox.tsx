@@ -12,15 +12,7 @@ async function getServerList() {
 
         for (let serverId of sdata) {
             try {
-                const res = await fetch(`/api/v1/server/get/`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        serverId: serverId
-                    })
-                });
+                const res = await fetch(`/api/v1/server/${serverId}`);
 
                 if (res.status !== 200) {
                     console.log("Couldn't load server " + serverId);
@@ -28,11 +20,8 @@ async function getServerList() {
                 }
 
                 const ndata = await res.json();
-                serverList.push({
-                    id: ndata.data.id,
-                    name: ndata.data.name,
-                    image: ndata.data.iconUrl,
-                });
+                const gotserver: Server = ndata.data;
+                serverList.push(gotserver);
             } catch (error) {
                 console.error("Error fetching server details for serverId:", serverId, error);
             }
@@ -88,7 +77,7 @@ const MainBox: React.FC<Props> = ({ onClickServer, onRightClickServer, onClickAp
                         (ServerList ? (ServerList.map((server: Server) => {
                             return (
                                 <div onMouseLeave={() => onMouseLeaveTooltipElement(setCurrents)} onMouseOver={(ev) => onMouseOverTooltipElement(ev, server.name, Currents, setCurrents)} id={server.id} className={`${styles.server_list_element}`} onClick={() => onClickServer(server)} onContextMenu={(ct) => { onRightClickServer(server, ct); ct.preventDefault(); }} key={server.id}>
-                                    <img src={server.image} className={`${styles.server_list_element_image} ${Currents.server ? (Currents.server.id == server.id ? styles.server_list_element_image_active : "") : ""}`} key={`image-${server.id}`} />
+                                    <img src={server.iconUrl} className={`${styles.server_list_element_image} ${Currents.server ? (Currents.server.id == server.id ? styles.server_list_element_image_active : "") : ""}`} key={`image-${server.id}`} />
                                 </div>
                             )
                         })) : <> </>)

@@ -1,0 +1,17 @@
+import { currentUser } from "@clerk/nextjs/server";
+import { PrismaClient } from "@prisma/client";
+import { NextRequest, NextResponse } from "next/server";
+
+const db = new PrismaClient();
+const user = await currentUser();
+export async function GET(request: NextRequest) {
+    try {
+        
+    } catch (err) {
+        if(err instanceof Error)
+            console.log(err.stack);
+        return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
+    } finally {
+        db.$disconnect();
+    }
+}

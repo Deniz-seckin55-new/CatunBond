@@ -20,7 +20,6 @@ model User {
   auth               Auth?
   messages           Messages[]
   servers            Server[]        @relation("UserServers")
-  VoiceChatId        String?
   VoiceChat          VoiceChat?      @relation(fields: [voiceChatChannelId], references: [channelId])
   voiceChatChannelId String?
 }
@@ -46,7 +45,7 @@ enum FriendRequestStatus {
 }
 
 model Server {
-  id       String    @id @unique
+  id       String    @id @unique @default(uuid())
   iconUrl  String
   name     String
   ownerId  String
@@ -55,13 +54,19 @@ model Server {
   members  User[]    @relation("UserServers")
 }
 
+enum ChannelType {
+  TEXT
+  DIRECTMESSAGE
+}
+
 model Channel {
-  id           String     @id @unique
+  id           String     @id @unique @default(uuid())
   name         String
   serverId     String?
   server       Server?    @relation(fields: [serverId], references: [id])
   messages     Messages[]
   directMsgFor User[]     @relation("UserDirectMsgs")
+  channelType  ChannelType  @default(TEXT)
 }
 
 model Auth {
@@ -77,7 +82,9 @@ model Messages {
   timestamp   DateTime @default(now())
   authorId    String
   channelId   String
-  repliedToId String?
+  repliedToId BigInt?
+  repliedTo   Messages? @relation("MessageReplyTo", fields: [repliedToId], references: [id])
+  replies     Messages[] @relation("MessageReplyTo")
   author      User     @relation(fields: [authorId], references: [id])
   channel     Channel  @relation(fields: [channelId], references: [id])
 }

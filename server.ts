@@ -57,23 +57,9 @@ try {
                                 data: {
                                     content: message.content,
                                     timestamp: message.timestamp,
-                                    repliedToId: message.repliedTo?.id?.toString(),
-                                    author: {
-                                        connectOrCreate: {
-                                            create: {
-                                                id: message.author.id,
-                                                username: message.author.username ?? 'Not found',
-                                            },
-                                            where: {
-                                                id: message.author.id
-                                            }
-                                        }
-                                    },
-                                    channel: {
-                                        connect: {
-                                            id: message.channel.id
-                                        }
-                                    }
+                                    authorId: message.author.id,
+                                    channelId: message.channel.id,
+                                    repliedToId: message.repliedTo ? message.repliedTo.id : null,
                                 }
                             });
 

@@ -13,24 +13,12 @@ const ServerUsersTab: React.FC<Props> = ({ Currents, ServerUsersDivV }) => {
 
     useEffect(() => {
         if (Currents.server) {
-            fetch("/api/v1/server/users", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                    serverId: Currents.server.id,
-                })
-            }).then(res => res.json().then(data => {
-                if (data.data) {
-                    const usersData: User[] = data.data;
-                    setusers(usersData);
-                }
-            }));
+            const usersData: User[] = Currents.server.members;
+            setusers(usersData);
         }
-        if(Currents.channel?.isDirectMessage) {
-            if(Currents.directmessage) {
-                setusers(Currents.directmessage.users);
+        if (Currents.channel?.channelType === "DIRECTMESSAGE") {
+            if (Currents.directmessage) {
+                setusers(Currents.directmessage.directMsgFor);
             }
         }
     }, [Currents.server, Currents.directmessage]);

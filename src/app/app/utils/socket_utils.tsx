@@ -1,38 +1,123 @@
 import { ViewingFriendsDiv } from "./utils";
-import { FriendRequest as DBFriendRequest } from "@prisma/client";
+import { FriendRequest as DBFriendRequest, Prisma } from "@prisma/client";
 
-export interface Server {
-    id: string;
-    name: string;
-    image: string;
-}
+export type Server = Prisma.ServerGetPayload<{
+    include: {
+        channels: {
+            select: {
+                id: true,
+                name: true,
+                channelType: true,
+            }
+        },
+        members: {
+            select: {
+                id: true,
+                username: true,
+                avatarUrl: true,
+            }
+        }
+    }
+}>;
 
-export interface Channel {
-    id: string;
-    name: string;
-    isDirectMessage: boolean;
-}
+export type Message = Prisma.MessagesGetPayload<{
+    include: {
+        author: {
+            select: {
+                id: true,
+                username: true,
+                avatarUrl: true
+            }
+        },
+        channel: {
+            select: {
+                id: true,
+                name: true
+            }
+        },
+        repliedTo: {
+            include: {
+                author: {
+                    select: {
+                        id: true,
+                        username: true,
+                        avatarUrl: true
+                    }
+                },
+                channel: {
+                    select: {
+                        id: true,
+                        name: true
+                    }
+                },
+                repliedTo: {
+                    select: { id: true } // Depth End
+                }
+            },
+        }
+    },
+}>
 
+export type Channel = Prisma.ChannelGetPayload<{
+    select: {
+        id: true,
+        name: true,
+        channelType: true,
+    }
+}>;
 
-export interface Message {
-    id: bigint | null;
-    content: string;
-    timestamp: Date;
-    channel: Channel;
-    repliedTo: Message | null;
-    author: User
-}
+export type User = Prisma.UserGetPayload<{
+    select: {
+        id: true,
+        username: true,
+        avatarUrl: true,
+    }
+}>;
 
-export interface Channel {
-    id: string;
-    name: string;
-}
-
-export interface User {
-    id: string;
-    username: string;
-    avatarUrl: string;
-}
+export type DetailedDBUser = Prisma.UserGetPayload<{
+    select: {
+        id: true,
+        friends: {
+            select: {
+                id: true,
+                username: true,
+                avatarUrl: true,
+            }
+        },
+        receivedRequests: {
+            include: {
+                receiver: true,
+                sender: true,
+            }
+        },
+        sentRequests: {
+            include: {
+                receiver: true,
+                sender: true,
+            }
+        },
+        directMsgs: {
+            select: {
+                id: true,
+                directMsgFor: true,
+                channelType: true,
+            }
+        },
+        servers: {
+            select: {
+                channels: {
+                    select: {
+                        id: true,
+                        name: true,
+                        channelType: true,
+                    }
+                }
+            }
+        },
+        username: true,
+        avatarUrl: true,
+    }
+}>
 
 export interface Friend {
     user: User,
@@ -45,11 +130,17 @@ export interface PendingFriendRequest {
     reciever: User,
 }
 
-export interface DirectMessage {
-    id: string,
-    name: string,
-    users: User[],
-}
+export type DirectMessage = Prisma.ChannelGetPayload<{
+    include: {
+        directMsgFor: {
+            select: {
+                id: true,
+                username: true,
+                avatarUrl: true
+            }
+        }
+    }
+}>
 
 export interface VoiceChatInformation {
     id: string,

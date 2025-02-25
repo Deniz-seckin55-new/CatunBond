@@ -150,19 +150,12 @@ const MainLayout: React.FC = () => {
 
     const onClickServer = (server: Server) => {
         try {
-            fetch('/api/v1/server/channels', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    serverId: server.id,
-                })
-            })
+            fetch(`/api/v1/servers/${server.id}`)
                 .then((res) => res.json())
                 .then((data) => {
-                    console.log(data.data);
-                    setChannels(data.data);
+                    const server: Server = data.data;
+                    console.log(server.channels);
+                    setChannels(server.channels);
 
                     setCurrents((prevCurrents) => ({
                         ...prevCurrents,
@@ -199,15 +192,7 @@ const MainLayout: React.FC = () => {
 
     const onClickChannel = (channel: Channel) => {
         try {
-            fetch('api/v1/channel/messages', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    channel: channel.id,
-                })
-            }).then((res) => {
+            fetch(`api/v1/channels/${channel.id}/messages/`).then((res) => {
                 if (res.status != 200) {
                     console.log("Error fetching messages for channel " + channel.id);
                     return;
@@ -430,11 +415,14 @@ const MainLayout: React.FC = () => {
 
             const messageObject: Message = {
                 author: { id: user.user.id, username: user.user.username, avatarUrl: user.user.imageUrl },
-                channel: { id: currents.channel.id, name: currents.channel.name, isDirectMessage: currents.channel.isDirectMessage },
+                channel: { id: currents.channel.id, name: currents.channel.name },
                 content: message,
                 timestamp: new Date(Date.now()),
                 repliedTo: replyingTo,
-                id: null, // Will be auto set
+                authorId: user.user.id,
+                channelId: currents.channel.id,
+                id: BigInt(0),
+                repliedToId: replyingTo?.id ?? null,
             }
 
             console.log("Message: ", message);
@@ -761,17 +749,11 @@ const MainLayout: React.FC = () => {
             dataType: AllowedTypes.Message,
             data: message
         }
-        fetch('/api/v1/message/delete', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                messageId: message.id,
-            })
+        fetch(`/api/v1/messages/${message.id}`, {
+            method: 'DELETE'
         }).then((res) => res.json()).then((data) => {
             console.log(data);
-            if (data.success === "true") {
+            if (data.message === "Message deleted") {
                 socket?.emit("delete_message", socketData);
             }
         });
@@ -787,18 +769,17 @@ const MainLayout: React.FC = () => {
             dataType: AllowedTypes.EditContext,
             data: context
         }
-        fetch('/api/v1/message/edit', {
-            method: 'POST',
+        fetch(`/api/v1/messages/${message.id}`, {
+            method: 'PUT',
             headers: {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                messageId: message.id,
-                newMessage: { ...newmessage, id: newmessage.id?.toString() },
+                content: newmessage.content,
             })
         }).then((res) => res.json()).then((data) => {
             console.log(data);
-            if (data.success === "true") {
+            if (data.message === "Message updated") {
                 socket?.emit("edit_message", socketData);
             }
         });
@@ -840,13 +821,7 @@ const MainLayout: React.FC = () => {
 
     const openDirectMessage = (withUser: User) => {
         // Open or create direct message
-        fetch("/api/v1/user/directmessages/getorcreate", {
-            method: "POST",
-            body: JSON.stringify({
-                withUserId: withUser.id,
-                name: withUser.username,
-            })
-        }).then(res => res.json().then(data => {
+        fetch(`/api/v1/directmessages/withUser/${withUser.id}`).then(res => res.json().then(data => {
             console.log("DM ", data);
             if (data.data) {
                 const directMessage: DirectMessage = data.data as DirectMessage;
@@ -859,15 +834,7 @@ const MainLayout: React.FC = () => {
                     }
                 }))
                 try {
-                    fetch('api/v1/channel/messages', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({
-                            channel: directMessage.id,
-                        })
-                    }).then((res) => {
+                    fetch(`api/v1/channels/${directMessage.id}/messages`).then((res) => {
                         if (res.status != 200) {
                             console.log("Error fetching messages for channel " + directMessage.id);
                             return;
@@ -890,7 +857,7 @@ const MainLayout: React.FC = () => {
                                 channel: {
                                     id: directMessage.id,
                                     name: directMessage.name,
-                                    isDirectMessage: true,
+                                    channelType: "DIRECTMESSAGE",
                                 },
                             }));
                         });
@@ -1241,6 +1208,10 @@ const MainLayout: React.FC = () => {
                 });
             })
         })
+    }, []);
+
+    useEffect(() => {
+        fetch("/api/v1/app/checkUser");
     }, []);
 
     // For debug remove later

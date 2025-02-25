@@ -3,25 +3,40 @@ import { PrismaClient } from "@prisma/client";
 import { redirect } from "next/navigation";
 import { NextRequest, NextResponse } from "next/server";
 
-export async function GET(request: NextRequest) {
-    const db = new PrismaClient();
-    const cUser = await currentUser();
+const db = new PrismaClient();
 
-    const user = await db.user.findUnique({ where: { id: cUser!.id } })
+function RedirectToAfterSignUp() {
+    redirect('/aftersignup');
+    return NextResponse.json({
+        redirect: '/aftersignup'
+    }, {
+        status: 200
+    });
+}
 
-    if (!user) {
-        redirect('/aftersignup');
-        return NextResponse.json({
-            redirect: '/aftersignup'
-        }, {
-            status: 200
-        })
-    }
+function RetrunNull() {
     return NextResponse.json({
         redirect: null
     }, {
         status: 200
     })
+}
 
-    db.$disconnect();
+export async function GET(request: NextRequest) {
+    try {
+        const cUser = await currentUser();
+
+        if (!cUser) return RedirectToAfterSignUp();
+
+        const user: boolean = await db.user.count({ where: { id: cUser?.id } }) > 0;
+
+        if (!user) return RedirectToAfterSignUp();
+
+        return RetrunNull();
+    } catch (err) {
+        if (err instanceof Error)
+            console.log(err.stack);
+    } finally {
+        db.$disconnect();
+    }
 } 

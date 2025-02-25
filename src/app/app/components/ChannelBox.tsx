@@ -121,8 +121,8 @@ const ChannelBox: React.FC<Props> = ({ onInputTextarea, onLoadTextarea, onMessag
     }
 
     const onClickReplyMessage = (ev: React.MouseEvent<HTMLDivElement, MouseEvent>, message: MessageInfo) => {
-        const replyMessageId = message.Message.repliedTo!.id;
-        const replyMessageInfo = MessageInfos.find(x => x.Message.id == replyMessageId);
+        const replyMessageId = message.Message.repliedToId;
+        const replyMessageInfo = MessageInfos.find(x => x.Message.id === replyMessageId);
         const newmessageInfo = MessageInfos.find(x => x.Message.id == message.Message.id);
         console.log(replyMessageId);
         console.log(replyMessageInfo);
@@ -368,18 +368,18 @@ const ChannelBox: React.FC<Props> = ({ onInputTextarea, onLoadTextarea, onMessag
                         MessageInfos.push(messageinfo);
                         return (
                             <div className={styles.message} onMouseOver={() => onMouseHoverOver(message.id?.toString())} onMouseLeave={onMouseHoverOut} ref={(ref) => { let msgInfo = MessageInfos.find(x => x.Message.id == message.id); if (msgInfo) { msgInfo.ref = ref } }} key={message.id}>
-                                {message.repliedTo && (<div className={styles.message_reply_inner}>
+                                {message.repliedToId && (<div className={styles.message_reply_inner}>
                                     <svg xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="x100y54 meet" viewBox="0 0 100 54" width="10vh" height="10vh">
                                         <path d="M 4 54 q 0 -50 50 -50" fill="none" stroke='black' strokeWidth={4} />
                                         <path d="M 54 4 l 50 0" fill="none" stroke='black' strokeWidth={4} />
                                     </svg>
                                     <div className={styles.message_reply_inner_holder} onClick={(ev: React.MouseEvent<HTMLDivElement, MouseEvent>) => { onClickReplyMessage(ev, messageinfo) }}>
                                         <div className={styles.message_reply_useravatar_holder}>
-                                            <img className={styles.message_useravatar} src={`${message.repliedTo.author.avatarUrl/*https://cat-storage-server.web.app/data/cat1.jpeg"*/}`} />
+                                            <img className={styles.message_useravatar} src={`${message.repliedTo?.author.avatarUrl/*https://cat-storage-server.web.app/data/cat1.jpeg"*/}`} />
                                         </div>
-                                        <p className={styles.message_reply_content} style={{ width: (MessageInfos.find(x => x.Message.id === message.id)!.ref) ? (MessageInfos.find(x => x.Message.id === message.id)!.ref!.clientWidth * 2 / 5) + "px" : "40vw" }}>{message.repliedTo.content}</p>
+                                        <p className={styles.message_reply_content} style={{ width: (MessageInfos.find(x => x.Message.id === message.id)!.ref) ? (MessageInfos.find(x => x.Message.id === message.id)!.ref!.clientWidth * 2 / 5) + "px" : "40vw" }}>{message.repliedTo?.content}</p>
                                     </div>
-                                    {(message.repliedTo) && (<div id="message-actions-holder" className={`${styles.message_actions_holder} ${(hoveredMessageId == message.id?.toString()) ? styles.message_actions_holder_active : ''}`}>
+                                    {(message.repliedToId) && (<div id="message-actions-holder" className={`${styles.message_actions_holder} ${(hoveredMessageId == message.id?.toString()) ? styles.message_actions_holder_active : ''}`}>
                                         <div className={`${styles.message_actions} ${styles.message_actions_holder_reply} `}>
                                             <div className={styles.message_action} onClick={() => _onMessageReply(message)}>
                                                 <img src={'/reply.svg'} width={"15vh"} height={"15vh"} alt={'Reply'}></img>
@@ -421,7 +421,7 @@ const ChannelBox: React.FC<Props> = ({ onInputTextarea, onLoadTextarea, onMessag
                                                 </>)}
                                         </div>
                                     </div>
-                                    {(!message.repliedTo) && (<div id="message-actions-holder" className={`${styles.message_actions_holder} ${(hoveredMessageId == message.id?.toString()) ? styles.message_actions_holder_active : ''}`}>
+                                    {(!message.repliedToId) && (<div id="message-actions-holder" className={`${styles.message_actions_holder} ${(hoveredMessageId == message.id?.toString()) ? styles.message_actions_holder_active : ''}`}>
                                         <div className={styles.message_actions}>
                                             <div className={styles.message_action} onClick={() => _onMessageReply(message)}>
                                                 <img src={'/reply.svg'} width={"15vh"} height={"15vh"} alt={'Reply'}></img>
