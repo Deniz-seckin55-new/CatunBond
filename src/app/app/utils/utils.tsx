@@ -2,6 +2,7 @@ import { JSX, ReactNode, RefObject } from "react";
 import { FriendRequest as DBFriendRequest, VoiceChat as DBVoiceChat, Prisma } from '@prisma/client';
 import Appearance from "../components/settings/Appearance";
 import { Channel, DirectMessage, Message, Server, User, VoiceChatInformation } from "./socket_utils";
+import { DetailedDBUser } from "./socket_utils";
 
 export type DBVoiceChatWithMembers = Prisma.VoiceChatGetPayload<{
     include: {
@@ -55,7 +56,7 @@ export interface TooltipInfo {
 }
 
 export interface Currents {
-    user: UserResource | null;
+    user: DetailedDBUser | null;
     server: Server | null;
     channel: Channel | null;
     exploreboxmode: ExploreBoxMode | null;
@@ -64,9 +65,8 @@ export interface Currents {
     friendsdiv: FriendsDivStatus;
     directmessage: DirectMessage | null;
     setting: string | null;
-    vc: VoiceChatInformation | null;
+    vc: DBVoiceChatWithMembers | null;
     voicechatopen: boolean;
-    microphone: boolean;
     tooltip: TooltipInfo;
 }
 
@@ -76,19 +76,14 @@ export interface FriendsDivStatus {
 }
 
 export async function GetUser(id: string) {
-    return (await (await fetch('/api/v1/user/get', {
-        method: "POST",
-        body: JSON.stringify({
-            id: id
-        })
-    })).json()).data as User;
+    return (await (await fetch(`/api/v1/users/${id}`)).json()).data as User;
 }
 
-export function ToUser(resource: UserResource): User {
+export function ToUserSmall(resource: DetailedDBUser): User {
     return {
         id: resource.id,
         username: resource.username ?? '',
-        avatarUrl: resource.avatar,
+        avatarUrl: resource.avatarUrl,
     }
 }
 

@@ -3,35 +3,6 @@ import styles from '../page.module.css';
 import { Currents, onMouseLeaveTooltipElement, onMouseOverTooltipElement } from '../utils/utils';
 import { Server } from '../utils/socket_utils';
 
-async function getServerList() {
-    let serverList: Server[] = [];
-    try {
-        const res = await fetch('/api/v1/user/servers/get');
-        const data = await res.json();
-        const sdata = data.data;
-
-        for (let serverId of sdata) {
-            try {
-                const res = await fetch(`/api/v1/server/${serverId}`);
-
-                if (res.status !== 200) {
-                    console.log("Couldn't load server " + serverId);
-                    continue;
-                }
-
-                const ndata = await res.json();
-                const gotserver: Server = ndata.data;
-                serverList.push(gotserver);
-            } catch (error) {
-                console.error("Error fetching server details for serverId:", serverId, error);
-            }
-        }
-    } catch (error) {
-        console.error("Error fetching server list:", error);
-    }
-    return serverList;
-}
-
 interface Props {
     onClickServer: (server: Server) => void;
     onRightClickServer: (server: Server, ct: React.MouseEvent<HTMLDivElement, MouseEvent>) => void;
@@ -45,13 +16,12 @@ interface Props {
 const MainBox: React.FC<Props> = ({ onClickServer, onRightClickServer, onClickAppIcon, onClickExploreButton, setCurrents, Currents, ExploreBoxV }) => {
 
     const [ServerList, setServerList] = useState<Server[]>([]);
-    const [beep, setBeep] = useState(false);
 
     useEffect(() => {
-        getServerList().then((data) => {
-            setServerList(data);
-        });
-    }, []);
+        if(!Currents.user) return;
+
+        setServerList(Currents.user.servers ?? []);
+    }, [Currents.user]);
 
     /*const ServerList = [
         {

@@ -37,10 +37,10 @@ const SideBox: React.FC<Props> = ({ onClickSearch, onClickFriendsButton, onClick
                     <div id="side-box-bottom" className={styles.side_box_bottom}>
                         <p className={styles.direct_messages_text}>Direct messages</p>
                         {directmessages.map(dm => {
-                            const withUser = dm.users.filter(x => x.id !== Currents.user?.id)[0];
+                            const withUser = dm.directMsgFor.filter(x => x.id !== Currents.user?.id)[0];
                             console.log("Current Direct Message: ",Currents.directmessage);
                             return (
-                                <div className={`${styles.direct_message} ${(Currents.directmessage?.users.some(x => x.id === withUser.id)) ? (styles.direct_message_active) : ''}`} onClick={() => onClickDirectMessage(withUser)} key={withUser.id}>
+                                <div className={`${styles.direct_message} ${(Currents.directmessage?.directMsgFor.some(x => x.id === withUser.id)) ? (styles.direct_message_active) : ''}`} onClick={() => onClickDirectMessage(withUser)} key={withUser.id}>
                                     <div className={styles.direct_message_content}>
                                         <div className={styles.direct_message_useravatar_holder}>
                                             <img className={styles.message_useravatar} src={`${withUser.avatarUrl/*https://cat-storage-server.web.app/data/cat1.jpeg"*/}`} />

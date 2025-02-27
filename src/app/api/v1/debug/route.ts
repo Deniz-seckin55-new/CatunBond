@@ -1,10 +1,6 @@
+import { db } from "@/lib/prisma";
 import { clerkClient, currentUser } from "@clerk/nextjs/server";
-import { PrismaClient } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
-import uuid4 from "uuid4";
-
-const db = new PrismaClient();
-
 export async function GET(request: NextRequest) {
     try {
         const user = await currentUser();

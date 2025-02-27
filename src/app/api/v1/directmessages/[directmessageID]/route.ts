@@ -1,10 +1,9 @@
+import { db } from "@/lib/prisma";
 import { PrismaClient } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
-
-const db = new PrismaClient();
 export async function GET(request: NextRequest, { params }: { params: { directmessageID: string } }) {
     try {
-        const { directmessageID } = params;
+        const { directmessageID } = await params;
 
         if (!directmessageID) return NextResponse.json({ message: "Missing directmessageID" }, { status: 400 });
 
@@ -39,7 +38,7 @@ export async function GET(request: NextRequest, { params }: { params: { directme
 
 export async function DELETE(request: NextRequest, { params }: { params: { directmessageID: string } }) {
     try {
-        const { directmessageID } = params;
+        const { directmessageID } = await params;
 
         if(!directmessageID) return NextResponse.json({ message: "Missing directmessageID" }, { status: 400 });
 
@@ -62,7 +61,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { direc
 // Direct Messages cannot be updated since the only parameter is the withUser and it should not be changed.
 // export async function PUT(request: NextRequest, { params }: { params: { directmessageID: string } }) {
 //     try {
-//         const { directmessageID } = params;
+//         const { directmessageID } = await params;
 
 //         if(!directmessageID) return NextResponse.json({ message: "Missing directmessageID" }, { status: 400 });
 

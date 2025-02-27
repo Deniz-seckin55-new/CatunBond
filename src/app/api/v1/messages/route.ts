@@ -1,11 +1,10 @@
+import { db } from "@/lib/prisma";
 import { currentUser } from "@clerk/nextjs/server";
 import { PrismaClient } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
-
-const db = new PrismaClient();
-const user = await currentUser();
 export async function POST(request: NextRequest) {
     try {
+        const user = await currentUser();
         const data = await request.json();
         const { channelId, content } = data;
 
@@ -24,7 +23,7 @@ export async function POST(request: NextRequest) {
                 channelId: channelId,
             },
         });
-        
+
         return NextResponse.json({ data: newMessage }, { status: 200 });
     } catch (err) {
         if (err instanceof Error)

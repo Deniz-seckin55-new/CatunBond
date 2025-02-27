@@ -1,23 +1,20 @@
+import { db } from "@/lib/prisma";
 import { currentUser } from "@clerk/nextjs/server";
-import { PrismaClient } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
-
-const db = new PrismaClient();
-const user = await currentUser();
 export async function GET(request: NextRequest, { params }: { params: { messageID: string } }) {
     try {
-        const { messageID } = params;
+        const { messageID } = await params;
 
-        if(!messageID) return NextResponse.json({ message: "Missing messageID" }, { status: 400 });
+        if (!messageID) return NextResponse.json({ message: "Missing messageID" }, { status: 400 });
 
-        const messageExists: boolean = await db.messages.count({ where: { id: BigInt(messageID) } }) > 0;
+        const messageExists: boolean = await db.messages.count({ where: { id: messageID } }) > 0;
 
-        if(!messageExists) return NextResponse.json({ message: "Message not found" }, { status: 404 });
+        if (!messageExists) return NextResponse.json({ message: "Message not found" }, { status: 404 });
 
         // Level 2 Depth
         const getMessage = await db.messages.findUnique({
             where: {
-                id: BigInt(messageID)
+                id: messageID
             },
             include: {
                 author: {
@@ -58,7 +55,7 @@ export async function GET(request: NextRequest, { params }: { params: { messageI
 
         return NextResponse.json({ data: getMessage }, { status: 200 });
     } catch (err) {
-        if(err instanceof Error)
+        if (err instanceof Error)
             console.log(err.stack);
         return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
     } finally {
@@ -67,22 +64,23 @@ export async function GET(request: NextRequest, { params }: { params: { messageI
 }
 export async function DELETE(request: NextRequest, { params }: { params: { messageID: string } }) {
     try {
-        const { messageID } = params;
+        const user = await currentUser();
+        const { messageID } = await params;
 
-        if(!user) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-        if(!messageID) return NextResponse.json({ message: "Missing messageID" }, { status: 400 });
+        if (!user) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+        if (!messageID) return NextResponse.json({ message: "Missing messageID" }, { status: 400 });
 
-        const getMessage = await db.messages.findUnique({ where: { id: BigInt(messageID) } });
+        const getMessage = await db.messages.findUnique({ where: { id: messageID } });
 
-        if(!getMessage) return NextResponse.json({ message: "Message not found" }, { status: 404 });
+        if (!getMessage) return NextResponse.json({ message: "Message not found" }, { status: 404 });
 
-        if(getMessage.authorId !== user.id) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+        if (getMessage.authorId !== user.id) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
-        await db.messages.delete({ where: { id: BigInt(messageID) } });
+        await db.messages.delete({ where: { id: messageID } });
 
         return NextResponse.json({ message: "Message deleted" }, { status: 200 });
     } catch (err) {
-        if(err instanceof Error)
+        if (err instanceof Error)
             console.log(err.stack);
         return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
     } finally {
@@ -92,23 +90,24 @@ export async function DELETE(request: NextRequest, { params }: { params: { messa
 
 export async function PUT(request: NextRequest, { params }: { params: { messageID: string } }) {
     try {
-        const { messageID } = params;
+        const user = await currentUser();
+        const { messageID } = await params;
 
         const data = await request.json();
         const { content } = data;
 
-        if(!user) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-        if(!messageID) return NextResponse.json({ message: "Missing messageID" }, { status: 400 });
+        if (!user) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+        if (!messageID) return NextResponse.json({ message: "Missing messageID" }, { status: 400 });
 
-        const messageExists: boolean = await db.messages.count({ where: { id: BigInt(messageID) } }) > 0;
+        const messageExists: boolean = await db.messages.count({ where: { id: messageID } }) > 0;
 
-        if(!messageExists) return NextResponse.json({ message: "Message not found" }, { status: 404 });
+        if (!messageExists) return NextResponse.json({ message: "Message not found" }, { status: 404 });
 
-        await db.messages.update({ where: { id: BigInt(messageID) }, data: { content } });
+        await db.messages.update({ where: { id: messageID }, data: { content } });
 
         return NextResponse.json({ message: "Message updated" }, { status: 200 });
     } catch (err) {
-        if(err instanceof Error)
+        if (err instanceof Error)
             console.log(err.stack);
         return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
     } finally {

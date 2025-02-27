@@ -17,6 +17,9 @@ export type Server = Prisma.ServerGetPayload<{
                 avatarUrl: true,
             }
         }
+    },
+    omit: {
+        invites: true,
     }
 }>;
 
@@ -86,20 +89,50 @@ export type DetailedDBUser = Prisma.UserGetPayload<{
         },
         receivedRequests: {
             include: {
-                receiver: true,
-                sender: true,
+                receiver: {
+                    select: {
+                        id: true,
+                        username: true,
+                        avatarUrl: true,
+                    }
+                },
+                sender: {
+                    select: {
+                        id: true,
+                        username: true,
+                        avatarUrl: true,
+                    }
+                },
             }
         },
         sentRequests: {
             include: {
-                receiver: true,
-                sender: true,
+                receiver: {
+                    select: {
+                        id: true,
+                        username: true,
+                        avatarUrl: true,
+                    }
+                },
+                sender: {
+                    select: {
+                        id: true,
+                        username: true,
+                        avatarUrl: true,
+                    }
+                },
             }
         },
         directMsgs: {
             select: {
                 id: true,
-                directMsgFor: true,
+                directMsgFor: {
+                    select: {
+                        id: true,
+                        username: true,
+                        avatarUrl: true,
+                    },
+                },
                 channelType: true,
             }
         },
@@ -111,11 +144,23 @@ export type DetailedDBUser = Prisma.UserGetPayload<{
                         name: true,
                         channelType: true,
                     }
-                }
+                },
+                id: true,
+                iconUrl: true,
+                members: {
+                    select: {
+                        id: true,
+                        username: true,
+                        avatarUrl: true,
+                    }
+                },
+                name: true,
+                ownerId: true,
             }
         },
         username: true,
         avatarUrl: true,
+        blocked: true,
     }
 }>
 
@@ -124,21 +169,36 @@ export interface Friend {
     status: ViewingFriendsDiv
 }
 
-export interface PendingFriendRequest {
-    friendRequest: DBFriendRequest,
-    sender: User,
-    reciever: User,
-}
+export type PendingFriendRequest = Prisma.FriendRequestGetPayload<{
+    include: {
+        receiver: {
+            select: {
+                id: true,
+                username: true,
+                avatarUrl: true,
+            }
+        },
+        sender: {
+            select: {
+                id: true,
+                username: true,
+                avatarUrl: true,
+            }
+        }
+    }
+}>
 
 export type DirectMessage = Prisma.ChannelGetPayload<{
-    include: {
+    select: {
+        id: true,
         directMsgFor: {
             select: {
                 id: true,
                 username: true,
-                avatarUrl: true
-            }
-        }
+                avatarUrl: true,
+            },
+        },
+        channelType: true,
     }
 }>
 
@@ -167,7 +227,7 @@ export enum SocketInformationType {
 }
 
 export interface EditContext {
-    oldMessageid: BigInt | null,
+    oldMessageid: string | null,
     newMessage: Message,
 }
 

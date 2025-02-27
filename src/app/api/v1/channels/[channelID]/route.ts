@@ -1,12 +1,10 @@
-import { PrismaClient } from "@prisma/client";
+import { db } from "@/lib/prisma";
 import { useRouter } from "next/router";
 import { NextRequest, NextResponse } from "next/server";
 
-const db = new PrismaClient();
-
 export async function GET(request: NextRequest, { params }: {params: {channelID: string}}) {
     try {
-        const { channelID } = params;
+        const { channelID } = await params;
 
         if (!channelID) return NextResponse.json({ message: "Channel ID is required" }, { status: 400 });
 
@@ -27,7 +25,7 @@ export async function GET(request: NextRequest, { params }: {params: {channelID:
 
 export async function DELETE(request: NextRequest, { params }: {params: {channelID: string}}) {
     try {
-        const { channelID } = params;
+        const { channelID } = await params;
 
         if (!channelID) return NextResponse.json({ message: "Channel ID is required" }, { status: 400 });
 
@@ -45,7 +43,7 @@ export async function DELETE(request: NextRequest, { params }: {params: {channel
 
 export async function PATCH(request: NextRequest, { params }: {params: {channelID: string}}) {
     try {
-        const { channelID } = params;
+        const { channelID } = await params;
 
         const data = await request.json();
         const newName = data.name;

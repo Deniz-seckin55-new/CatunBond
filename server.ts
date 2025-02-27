@@ -51,7 +51,6 @@ try {
                 case SocketInformationType.ClientSendMessage:
                     if (data.dataType == AllowedTypes.Message) {
                         try {
-
                             const message = data.data as Message;
                             const sentMsg = await db.messages.create({
                                 data: {
@@ -59,7 +58,7 @@ try {
                                     timestamp: message.timestamp,
                                     authorId: message.author.id,
                                     channelId: message.channel.id,
-                                    repliedToId: message.repliedTo ? message.repliedTo.id : null,
+                                    repliedToId: message.repliedToId,
                                 }
                             });
 
@@ -69,7 +68,7 @@ try {
                                 timestamp: sentMsg.timestamp,
                                 authorId: sentMsg.authorId,
                                 channelId: sentMsg.channelId,
-                                repliedTo: sentMsg.repliedToId,
+                                repliedTo: sentMsg.repliedToId?.toString(),
                             }
                             console.log("Sent DB message: " + JSON.stringify(jsonMessage));
                             const response: ClientResponsePacket = {
@@ -121,7 +120,7 @@ try {
         socket.on("friend_request_send", (data: SocketData) => {
             console.log("friend_request_send", data.data);
             const friendRequest: PendingFriendRequest = data.data as PendingFriendRequest;
-            io.to(friendRequest.reciever.id).emit("friend_request_send", friendRequest);
+            io.to(friendRequest.receiverId).emit("friend_request_send", friendRequest);
         });
 
         socket.on("get_status", (userId: string, fn: any) => {

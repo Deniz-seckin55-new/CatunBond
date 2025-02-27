@@ -23,3 +23,15 @@ export function genInvite(length: number) {
     };
     return str;
 }
+
+export function UserIDListToSmallUserList(userIds: string[], db: PrismaClient) {
+    return userIds.map(async (userId) => {
+        const user = await db.user.findUnique({where: {id: userId}});
+        if(!user) return null;
+        return {
+            id: user.id,
+            username: user.username,
+            avatarUrl: user.avatarUrl,
+        }
+    });
+}

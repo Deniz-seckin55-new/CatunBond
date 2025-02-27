@@ -1,7 +1,7 @@
 import styles from '../page.module.css';
 
 import React, { use, useEffect, useState } from 'react';
-import { Currents, GetUser, ToUser } from '../utils/utils';
+import { Currents, GetUser, ToUserSmall } from '../utils/utils';
 import { Socket } from 'socket.io-client';
 import { FriendRequest as DBFriendRequest } from '@prisma/client';
 import { AllowedTypes, Friend, FriendRequestAnswer, PendingFriendRequest, SocketData, SocketInformationType, User } from '../utils/socket_utils';
@@ -22,7 +22,7 @@ interface LoadingState {
     blocked: boolean,
 }
 
-const FriendsDiv: React.FC<Props> = ({ Currents,pendingSentRequests, setpendingSentRequests, onClickFriendUser, socket }) => {
+const FriendsDiv: React.FC<Props> = ({ Currents, pendingSentRequests, setpendingSentRequests, onClickFriendUser, socket }) => {
     const [friendsList, setfriendsList] = useState<User[]>([]);
     const [friends, setfriends] = useState<Friend[]>([]);
     const [blocked, setblocked] = useState<User[]>([]);
@@ -35,73 +35,57 @@ const FriendsDiv: React.FC<Props> = ({ Currents,pendingSentRequests, setpendingS
         pendingRecieved: false,
     });
     useEffect(() => {
+        if(!Currents.user) { return; }
+
         if (Currents.friendsdiv.visible) {
-            fetch("/api/v1/user/friends", {
-                method: "POST"
-            }).then(res => res.json().then(data => {
-                setfriendsList(data.data as User[]);
-                console.log("FriendsList: ", friendsList);
-                if (friendsList.length == 0) {
+            setfriendsList(Currents.user?.friends as User[]);
+            console.log("FriendsList: ", friendsList);
+            if (friendsList.length == 0) {
+                setLoadingStates((prevState) => ({
+                    ...prevState,
+                    online: true,
+                    offline: true,
+                }));
+            }
+            friendsList.forEach((friend) => {
+                socket?.emit("get_status", friend.id, function (data: any) {
+                    const friendStatus: Friend = {
+                        user: friend,
+                        status: data,
+                    }
+                    setfriends((prev) => [...prev, friendStatus]);
                     setLoadingStates((prevState) => ({
                         ...prevState,
                         online: true,
                         offline: true,
                     }));
-                }
-                friendsList.forEach((friend) => {
-                    socket?.emit("get_status", friend.id, function (data: any) {
-                        const friendStatus: Friend = {
-                            user: friend,
-                            status: data,
-                        }
-                        setfriends((prev) => [...prev, friendStatus]);
-                        setLoadingStates((prevState) => ({
-                            ...prevState,
-                            online: true,
-                            offline: true,
-                        }));
-                        console.log("Friends", friends);
-                    });
-                })
-            }))
+                    console.log("Friends", friends);
+                });
+            })
         }
-    }, [Currents.friendsdiv.visible]);
+    }, [Currents.friendsdiv.visible, Currents.user]);
 
     useEffect(() => {
         if (!Currents.user) { return; }
         if (Currents.friendsdiv.visible) {
-            fetch("/api/v1/user/friendrequests", {
-                method: "POST",
-            }).then(res => res.json().then(rdata => {
-                const data: { sent: DBFriendRequest[], recieved: DBFriendRequest[] } = rdata.data;
-                if (data.sent && data.recieved) {
-                    const _sentRequests = data.sent.map(async (request: DBFriendRequest) => ({
-                        friendRequest: request,
-                        sender: ToUser(Currents.user!),
-                        reciever: await GetUser(request.receiverId)
-                    }));
-                    const _recievedRequests = data.recieved.map(async (request: DBFriendRequest) => ({
-                        friendRequest: request,
-                        sender: await GetUser(request.senderId),
-                        reciever: ToUser(Currents.user!),
-                    }));
-                    Promise.all(_sentRequests).then(sentRequests => {
-                        setpendingSentRequests(sentRequests.filter(x => x.friendRequest.status == "PENDING")); setLoadingStates((prevState) => ({
+                const sent = Currents.user.sentRequests;
+                const recieved = Currents.user.receivedRequests;
+                if (sent && recieved) {
+                        setpendingSentRequests(sent.filter(x => x.status == "PENDING"));
+                        
+                        setLoadingStates((prevState) => ({
                             ...prevState,
                             pendingSent: true,
                         }));
-                    });
-                    Promise.all(_recievedRequests).then(recievedRequests => {
-                        setpendingRecievedRequests(recievedRequests.filter(x => x.friendRequest.status == "PENDING")); setLoadingStates((prevState) => ({
+                    
+                        setpendingRecievedRequests(recieved.filter(x => x.status == "PENDING"));
+                        setLoadingStates((prevState) => ({
                             ...prevState,
                             pendingRecieved: true,
                         }));
-                    });
-                }
-            }));
-            fetch("/api/v1/user/friends/blocked", {
-                method: "POST",
-            }).then(res => res.json().then(data => {
+                    }
+            fetch("/api/v1/user/blocked")
+                .then(res => res.json().then(data => {
                 if (data.data) {
                     const blockedUsers: User[] = data.data as User[];
                     setblocked(blockedUsers);
@@ -112,17 +96,16 @@ const FriendsDiv: React.FC<Props> = ({ Currents,pendingSentRequests, setpendingS
                 }
             }))
         }
-    }, [Currents.friendsdiv.visible]);
+    }, [Currents.friendsdiv.visible, Currents.user]);
 
     const onClickFriendAction = (request: PendingFriendRequest, answer: string) => {
-        fetch("/api/v1/user/friend/answer", {
-            method: "POST",
+        fetch(`/api/v1/user/friendrequests/${request.id}`, {
+            method: "PATCH",
             body: JSON.stringify({
-                requestId: request.friendRequest.id,
-                answer: answer,
+                answer: answer.toUpperCase(),
             })
         }).then(res => res.json().then(data => {
-            if (data.message) {
+            if (data.message !== "Invalid Action" && data.message !== "Internal Server Error") {
                 const infoType = (() => {
                     switch (answer) {
                         case 'cancel':
@@ -144,11 +127,11 @@ const FriendsDiv: React.FC<Props> = ({ Currents,pendingSentRequests, setpendingS
                 const socketData: SocketData = {
                     infoType: infoType,
                     dataType: AllowedTypes.FriendRequest,
-                    data: request.friendRequest,
+                    data: request,
                 }
                 socket?.emit(`friend_request_answer`, socketData);
-                if(infoType == SocketInformationType.ClientCancelFriendRequest) {
-                    setpendingSentRequests(pendingSentRequests.filter(x => x.friendRequest.id !== request.friendRequest.id));
+                if (infoType == SocketInformationType.ClientCancelFriendRequest) {
+                    setpendingSentRequests(pendingSentRequests.filter(x => x.id !== request.id));
                 }
             }
         }))
@@ -158,9 +141,9 @@ const FriendsDiv: React.FC<Props> = ({ Currents,pendingSentRequests, setpendingS
         if (!socket)
             return;
         socket.on("friend_request_send", (friendRequest: PendingFriendRequest) => {
-            if(!Currents.user)
+            if (!Currents.user)
                 return;
-            if(friendRequest.sender.id === Currents.user.id) {
+            if (friendRequest.sender.id === Currents.user.id) {
                 setpendingSentRequests((prev) => [
                     ...prev,
                     friendRequest,
@@ -198,8 +181,8 @@ const FriendsDiv: React.FC<Props> = ({ Currents,pendingSentRequests, setpendingS
                     default:
                         break;
                 }
-                setpendingRecievedRequests(pendingRecievedRequests.filter(x => x.friendRequest.id !== friendRequest.id));
-                setpendingSentRequests(pendingSentRequests.filter(x => x.friendRequest.id !== friendRequest.id));
+                setpendingRecievedRequests(pendingRecievedRequests.filter(x => x.id !== friendRequest.id));
+                setpendingSentRequests(pendingSentRequests.filter(x => x.id !== friendRequest.id));
             })
         });
     }, [])
@@ -290,7 +273,7 @@ const FriendsDiv: React.FC<Props> = ({ Currents,pendingSentRequests, setpendingS
                         const sender: User = request.sender as User;
                         console.log(sender);
                         return (
-                            <div className={styles.friend_user_div_holder} onClick={() => onClickFriendUser(request.sender)} key={`main-${request.friendRequest.senderId}`}>
+                            <div className={styles.friend_user_div_holder} onClick={() => onClickFriendUser(request.sender)} key={`main-${request.senderId}`}>
                                 <hr className={styles.hr_two} />
                                 <div className={styles.friend_user_div} key={`div-${sender.id}`}>
                                     <div className={`${styles.useravatar_holder} ${styles.friend_user_avatar}`} key={`avatar-${sender.id}`}>
@@ -331,9 +314,9 @@ const FriendsDiv: React.FC<Props> = ({ Currents,pendingSentRequests, setpendingS
                     )}
                     {pendingSentRequests.map((request) => {
                         console.log("Rendering friend: ", request);
-                        const reciever: User = request.reciever as User;
+                        const reciever: User = request.receiver as User;
                         return (
-                            <div className={styles.friend_user_div_holder} onClick={() => onClickFriendUser(reciever)} key={`main-${request.friendRequest.receiverId}`}>
+                            <div className={styles.friend_user_div_holder} onClick={() => onClickFriendUser(reciever)} key={`main-${request.receiverId}`}>
                                 <hr className={styles.hr_two} />
                                 <div className={styles.friend_user_div} key={`div-${reciever.id}`}>
                                     <div className={`${styles.useravatar_holder} ${styles.friend_user_avatar}`} key={`avatar-${reciever.id}`}>

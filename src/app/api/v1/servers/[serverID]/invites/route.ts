@@ -1,13 +1,11 @@
+import { db } from "@/lib/prisma";
 import { genInvite } from "../../../utils/utils";
 import { currentUser } from "@clerk/nextjs/server";
-import { PrismaClient } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
-
-const db = new PrismaClient();
-const user = await currentUser();
 export async function POST(request: NextRequest, { params }: { params: { serverID: string } }) {
     try {
-        const { serverID } = params;
+        const user = await currentUser();
+        const { serverID } = await params;
 
         if (!user) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
         if (!serverID) return NextResponse.json({ message: "Server ID is required" }, { status: 400 });

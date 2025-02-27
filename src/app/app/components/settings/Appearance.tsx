@@ -25,7 +25,7 @@ const Appearance: React.FC<SettingsProps> = ({ Currents, updateSettings }) => {
             <div className={styles.appearance_user_box}>
                 <div className={styles.appearance_user}>
                     <div className={styles.useravatar_holder} style={{ width: "24vh", height: "24vh" }}>
-                        <img className={styles.appearance_useravatar} src={`${Currents.user?.avatar/*https://cat-storage-server.web.app/data/cat1.jpeg"*/}`} />
+                        <img className={styles.appearance_useravatar} src={`${Currents.user?.avatarUrl/*https://cat-storage-server.web.app/data/cat1.jpeg"*/}`} />
                     </div>
                     <div className={styles.appearance_user_avatar}>
                         <p className={styles.appearance_username} style={{ fontSize: "2em", color: color }}>{Currents.user?.username}</p>

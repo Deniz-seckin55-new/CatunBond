@@ -1,9 +1,7 @@
+import { db } from "@/lib/prisma";
 import { currentUser } from "@clerk/nextjs/server";
-import { PrismaClient } from "@prisma/client";
 import { redirect } from "next/navigation";
 import { NextRequest, NextResponse } from "next/server";
-
-const db = new PrismaClient();
 
 function RedirectToAfterSignUp() {
     redirect('/aftersignup');

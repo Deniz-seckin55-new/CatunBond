@@ -1,4 +1,3 @@
-import { useUser } from "@clerk/nextjs";
 import { currentUser } from "@clerk/nextjs/server";
 import { PrismaClient } from "@prisma/client";
 import { redirect } from "next/navigation";
@@ -31,7 +30,7 @@ export default async function Page() {
                     headers: {
                         "Content-Type": "application/json",
                     },
-                    body: JSON.stringify({ imageUrl: avatarUrl }),
+                    body: JSON.stringify({ avatarUrl: avatarUrl }),
                 });
             }
 

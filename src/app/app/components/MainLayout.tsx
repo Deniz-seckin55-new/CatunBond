@@ -10,7 +10,7 @@ import UserBox from "./UserBox";
 import SideBox from "./SideBox";
 import FriendsDiv from "./FriendsDiv";
 import ChannelBox from "./ChannelBox";
-import { ViewingFriendsDiv, Currents, UpdateMessageInfo, GetUser, ToUser, MessageInfo, ToVCInfo, DBVoiceChatWithMembers, DBuserToUser } from "../utils/utils";
+import { ViewingFriendsDiv, Currents, UpdateMessageInfo, GetUser, ToUserSmall, MessageInfo, ToVCInfo, DBVoiceChatWithMembers, DBuserToUser } from "../utils/utils";
 import { useUser } from "@clerk/nextjs";
 import { io, Socket } from 'socket.io-client';
 import ContextMenu from "./ContextMenu";
@@ -18,7 +18,7 @@ import SettingsBox from "./SettingsBox";
 import ChannelBoxInfo from "./ChannelBoxInfo";
 import ServerUsersTab from "./ServerUsersTab";
 import { toast } from "react-toastify";
-import { AllowedTypes, Channel, ClientResponsePacket, DirectMessage, EditContext, FriendRequestAnswer, Message, PendingFriendRequest, Server, SocketData, SocketInformationType, User, VoiceChatInformation, WritingEvent } from "../utils/socket_utils";
+import { AllowedTypes, Channel, ClientResponsePacket, DetailedDBUser, DirectMessage, EditContext, FriendRequestAnswer, Message, PendingFriendRequest, Server, SocketData, SocketInformationType, User, VoiceChatInformation, WritingEvent } from "../utils/socket_utils";
 import Tooltip from "./common/Tooltip";
 import Peer, { MediaConnection } from "peerjs";
 
@@ -37,7 +37,6 @@ const defaultCurrents: Currents = {
     setting: null,
     vc: null,
     voicechatopen: false,
-    microphone: false,
     tooltip: { position: { left: 0, top: 0 }, ref: null, text: "", visible: false }
 };
 
@@ -63,6 +62,7 @@ const MainLayout: React.FC = () => {
     const [userStreams, setUserStreams] = useState<{ [userId: string]: MediaStream }>({});
     const [peer, setpeer] = useState<Peer | null>(null);
     const [calls, setcalls] = useState<Record<string, MediaConnection>>({});
+    const [microphoneState, setmicrophoneState] = useState<Boolean>(true);
 
     const tooltipRef = useRef<HTMLDivElement | null>(null);
 
@@ -198,9 +198,10 @@ const MainLayout: React.FC = () => {
                     return;
                 }
                 res.json().then((data) => {
-                    const messageList: Message[] = data.messages;
+                    const messageList: Message[] = data.data;
                     setMessages(messageList);
 
+                    console.log("Channel loaded ", channel);
                     console.log("Messages: ", messageList);
 
                     setCurrents((prevCurrents) => ({
@@ -261,7 +262,7 @@ const MainLayout: React.FC = () => {
             exploreboxmode: 2,
         }));
 
-        fetch('/api/v1/user/servers/join', {
+        fetch('/api/v1/user/servers', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -272,7 +273,7 @@ const MainLayout: React.FC = () => {
         })
             .then((res) => res.json())
             .then((data) => {
-                if (data.message == "You have successfully joined the server.") {
+                if (data.message == "Server joined successfully") {
                     setLoadingText("Success!");
                 } else {
                     setLoadingText("Error!: " + data.message);
@@ -309,26 +310,17 @@ const MainLayout: React.FC = () => {
             exploreboxmode: 2,
         }))
 
-        fetch("/api/v1/user/get", {
-            method: "POST",
-            body: JSON.stringify({
-                name: friendName
-            })
-        }).then(res => res.json().then(data => {
+        fetch(`/api/v1/users/withName/${friendName}`).then(res => res.json().then(data => {
             if (data.data) {
                 const friend: User = data.data as User;
-                fetch("/api/v1/user/friend/send", {
+                fetch("/api/v1/user/friendrequests", {
                     method: "POST",
                     body: JSON.stringify({
                         friendId: friend.id,
                     }),
                 }).then(res => res.json().then(data => {
-                    if (data.message === "Successfully sent friend request.") {
-                        const FriendRequest: PendingFriendRequest = {
-                            reciever: friend,
-                            sender: ToUser(currents.user!),
-                            friendRequest: data.data,
-                        }
+                    if (data.data) {
+                        const FriendRequest: PendingFriendRequest = data.data;
                         const socketData: SocketData = {
                             infoType: SocketInformationType.ClientSendFriendRequest,
                             dataType: AllowedTypes.FriendRequest,
@@ -353,21 +345,16 @@ const MainLayout: React.FC = () => {
     }
 
     const onClickMicrophone = () => {
-        getMediaStream().then(stream => {
-            if (stream) {
-                stream.getAudioTracks().forEach(track => {
-                    track.enabled = !currents.microphone;
-                });
-                setlocalStream(stream);
-                console.log("Mute/Unmuted microphone stream");
-            }
-        });
+        if (!localStream) return;
 
-        console.log("Microphone clicked", !currents.microphone);
-        setCurrents((prev) => ({
-            ...prev,
-            microphone: (!(prev.microphone)),
-        }));
+        let currentMic = !microphoneState;
+
+        setmicrophoneState(currentMic);
+
+        localStream.getAudioTracks()[0].enabled = currentMic;
+
+        console.log("Microphone clicked", currentMic, localStream.getAudioTracks()[0]);
+        // !! IMPORTANT: For some reason, when localStream.getAudioTracks()[0] doesn't get console.log()'ed the code doesn't work.
     }
 
     const closeExploreBox = () => {
@@ -413,16 +400,17 @@ const MainLayout: React.FC = () => {
         if (event.key == "Enter" && !event.shiftKey) {
             event.preventDefault();
 
+            // Change to API Call later on.
             const messageObject: Message = {
                 author: { id: user.user.id, username: user.user.username, avatarUrl: user.user.imageUrl },
                 channel: { id: currents.channel.id, name: currents.channel.name },
                 content: message,
                 timestamp: new Date(Date.now()),
-                repliedTo: replyingTo,
+                repliedTo: replyingTo?.repliedTo ?? null,
                 authorId: user.user.id,
                 channelId: currents.channel.id,
-                id: BigInt(0),
-                repliedToId: replyingTo?.id ?? null,
+                id: "0",
+                repliedToId: (replyingTo?.id) ? replyingTo.id : null,
             }
 
             console.log("Message: ", message);
@@ -521,7 +509,7 @@ const MainLayout: React.FC = () => {
         }
     }
 
-    const onClickUserAvatar = (messageId: bigint | null, ev: React.MouseEvent) => {
+    const onClickUserAvatar = (messageId: string | null, ev: React.MouseEvent) => {
         const messageInfo = MessageInfos.find(x => x.Message.id === messageId);
         if (messageInfo) {
             console.log("Open user context menu: ");
@@ -551,15 +539,7 @@ const MainLayout: React.FC = () => {
         if (!currents.channel) return;
         if (!currents.user) return;
 
-        fetch("/api/v1/vc/get", {
-            method: "POST",
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                channelId: currents.channel!.id,
-            })
-        }).then(res => res.json().then(data => {
+        fetch(`/api/v1/voicechats/${currents.channel!.id}`).then(res => res.json().then(data => {
             console.log("VC ", data);
             if (data.data) {
                 const DBvc: DBVoiceChatWithMembers = data.data;
@@ -569,26 +549,26 @@ const MainLayout: React.FC = () => {
                 return;
             } else {
                 // Start the call
-                fetch("api/v1/vc", {
+                fetch("api/v1/voicechats", {
                     method: "POST",
                     headers: {
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
                         channelId: currents.channel!.id,
-                        serverId: currents.server?.id ?? '',
+                        serverId: currents.server?.id,
                     })
                 }).then(res => res.json().then(data => {
                     if (data.data) {
                         // Call successfully started
-                        const vc: VoiceChatInformation = data.data as VoiceChatInformation;
+                        const vc: DBVoiceChatWithMembers = data.data as DBVoiceChatWithMembers;
                         setCurrents(prev => ({
                             ...prev,
-                            vc: vc,
+                            vc: vc
                         }));
 
                         // Join the call
-                        JoinCall(vc);
+                        JoinCall(ToVCInfo(vc));
                     } else {
                         // Call couldn't start
                         toast("Couldn't start the call");
@@ -615,7 +595,7 @@ const MainLayout: React.FC = () => {
 
     const onClickLeaveCall = () => {
         if (!currents.vc) return;
-        LeaveCall(currents.vc);
+        LeaveCall(ToVCInfo(currents.vc));
     }
 
     const OpenUserContextMenu = (userId: string, ev: React.MouseEvent) => {
@@ -634,18 +614,17 @@ const MainLayout: React.FC = () => {
         if (!currents.user) return;
         console.log("Joining call ", vc);
 
-        fetch("/api/v1/vc/action", {
-            method: "POST",
+        fetch(`/api/v1/voicechats/${vc.id}`, {
+            method: "PATCH",
             headers: {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                action: "join",
-                vc: vc,
+                action: "JOIN",
             })
         }).then(res => res.json().then(data => {
             console.log("vc join request", data);
-            if (data.message === "Voice chat joined successfully") {
+            if (data.message === "Successfully joined voice chat") {
                 console.log("Join call: ", data);
 
                 const newVC = data.data as DBVoiceChatWithMembers;
@@ -659,7 +638,7 @@ const MainLayout: React.FC = () => {
 
                         const call = peer.call(`${vcUser.id}_peeruser`, stream!, {
                             metadata: {
-                                user: ToUser(currents.user!),
+                                user: ToUserSmall(currents.user!),
                             }
                         });
 
@@ -682,7 +661,7 @@ const MainLayout: React.FC = () => {
                                 ...prev,
                                 vc: {
                                     ...prev.vc!,
-                                    users: prev.vc!.users.filter(x => x.id !== vcUser.id)
+                                    users: prev.vc!.members.filter(x => x.id !== vcUser.id)
                                 }
                             }));
                         });
@@ -690,15 +669,11 @@ const MainLayout: React.FC = () => {
 
                     setCurrents(prev => ({
                         ...prev,
-                        vc: {
-                            id: newVC.channelId,
-                            startTime: newVC.createdAt,
-                            users: newVC.members.map(member => DBuserToUser(member)),
-                        },
+                        vc: newVC,
                         voicechatopen: true,
                     }));
 
-                    voicesocket?.emit("vc_join", vc, ToUser(currents.user!));
+                    voicesocket?.emit("vc_join", vc, ToUserSmall(currents.user!));
                 }).catch(err => { console.error("Failed to get media stream", err) });
             } else {
                 toast("Couldn't join vc " + data.message);
@@ -708,19 +683,18 @@ const MainLayout: React.FC = () => {
 
     const LeaveCall = (vc: VoiceChatInformation) => {
         console.log("Leaving call", vc);
-        fetch('api/v1/vc/action', {
-            method: "POST",
+        fetch(`api/v1/voicechats/${vc.id}`, {
+            method: "PATCH",
             headers: {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                action: "leave",
-                vc: vc,
+                action: "LEAVE",
             }),
         }).then(res => res.json().then(data => {
-            if (data.message === "Voice chat left successfully") {
+            if (data.message === "Successfully left voice chat") {
                 console.log("Leave call: ", data);
-                voicesocket?.emit("vc_leave", vc, ToUser(currents.user!));
+                voicesocket?.emit("vc_leave", vc, ToUserSmall(currents.user!));
                 setCurrents(prev => ({
                     ...prev,
                     vc: null,
@@ -759,10 +733,10 @@ const MainLayout: React.FC = () => {
         });
     }
 
-    const editMessage = (newmessage: Message, message: Message) => {
+    const editMessage = (newcontent: Message, message: Message) => {
         const context: EditContext = {
             oldMessageid: message.id,
-            newMessage: newmessage
+            newMessage: newcontent
         }
         const socketData: SocketData = {
             infoType: SocketInformationType.ClientEditMessage,
@@ -775,7 +749,7 @@ const MainLayout: React.FC = () => {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                content: newmessage.content,
+                content: newcontent.content,
             })
         }).then((res) => res.json()).then((data) => {
             console.log(data);
@@ -789,7 +763,7 @@ const MainLayout: React.FC = () => {
         if (!currents.user) return;
 
         const data: WritingEvent = {
-            user: ToUser(currents.user),
+            user: ToUserSmall(currents.user),
             channelId: currents.channel?.id ?? '',
         }
 
@@ -806,7 +780,7 @@ const MainLayout: React.FC = () => {
         if (!currents.user) return;
 
         const data: WritingEvent = {
-            user: ToUser(currents.user),
+            user: ToUserSmall(currents.user),
             channelId: currents.channel?.id ?? '',
         }
 
@@ -856,7 +830,7 @@ const MainLayout: React.FC = () => {
                                 ...prevCurrents,
                                 channel: {
                                     id: directMessage.id,
-                                    name: directMessage.name,
+                                    name: directMessage.directMsgFor.filter(x => x.id !== currents.user?.id)[0].username,
                                     channelType: "DIRECTMESSAGE",
                                 },
                             }));
@@ -934,6 +908,7 @@ const MainLayout: React.FC = () => {
         setcalls: setcalls,
         peer: peer,
         writingUsers: writingUsers,
+        microphoneState: microphoneState,
     }
 
     const MainBoxProps = {
@@ -1027,12 +1002,12 @@ const MainLayout: React.FC = () => {
         socket.on("edit_message", (edit: EditContext) => {
             setMessages((prevMessages: Message[]) =>
                 prevMessages.map((msg) =>
-                    (msg.id == edit.oldMessageid) ? edit.newMessage : msg
+                    (msg.id == edit.oldMessageid?.toString()) ? edit.newMessage : msg
                 )
             );
         });
         socket.on("friend_request_send", (friendRequest: PendingFriendRequest) => {
-            if (friendRequest.reciever.id == user.user.id) {
+            if (friendRequest.receiverId == user.user.id) {
                 // Notification
                 toast(`${friendRequest.sender.username} sent you a friend request`);
             }
@@ -1092,32 +1067,10 @@ const MainLayout: React.FC = () => {
     }, []);
 
     useEffect(() => {
-        if (user.user) {
-            setCurrents((prevCurrents) => ({
-                ...prevCurrents,
-                user: {
-                    avatar: user.user.imageUrl,
-                    id: user.user.id,
-                    username: user.user.username,
-                }
-            }));
+        if (currents.user) {
+            setdirectmessages(currents.user.directMsgs);
         }
-    }, []);
-
-    useEffect(() => {
-        if (user.user) {
-            fetch("/api/v1/user/directmessages/get", {
-                method: "POST",
-                body: JSON.stringify({}),
-            }).then(res => res.json().then(data => {
-                if (data.data) {
-                    const dms: DirectMessage[] = data.data as DirectMessage[];
-                    console.log("dms ", dms);
-                    setdirectmessages(dms);
-                }
-            }));
-        }
-    }, [user.user]);
+    }, [currents.user]);
 
     useEffect(() => {
         window.addEventListener('mousedown', onMouseDown);
@@ -1136,15 +1089,15 @@ const MainLayout: React.FC = () => {
     }, [ExploreBoxV]);
 
     useEffect(() => {
-        if (user.user)
-            setCurrents((prevCurrents) => ({
-                ...prevCurrents,
-                user: {
-                    id: user.user.id,
-                    username: user.user.username,
-                    avatar: user.user.imageUrl
-                }
+        if (user.user) {
+            fetch("/api/v1/user").then(res => res.json().then(data => {
+                const gotUser: DetailedDBUser = data.data;
+                setCurrents((prevCurrents) => ({
+                    ...prevCurrents,
+                    user: gotUser,
+                }));
             }));
+        }
     }, [user.user])
 
     useEffect(() => {
@@ -1170,6 +1123,8 @@ const MainLayout: React.FC = () => {
     }, []);
 
     useEffect(() => {
+        if (!currents.user) return;
+
         const newPeer = new Peer(`${currents.user!.id}_peeruser`);
         setpeer(newPeer);
 
@@ -1184,7 +1139,7 @@ const MainLayout: React.FC = () => {
                     ...prev,
                     vc: {
                         ...prev.vc!,
-                        users: [...prev.vc!.users, { ...vcUser, avatarUrl: vcUser.avatarUrl || '' }]
+                        users: [...prev.vc!.members, { ...vcUser, avatarUrl: vcUser.avatarUrl || '' }]
                     }
                 }));
 
@@ -1202,13 +1157,13 @@ const MainLayout: React.FC = () => {
                         ...prev,
                         vc: {
                             ...prev.vc!,
-                            users: prev.vc!.users.filter(x => x.id !== vcUser.id),
+                            users: prev.vc!.members.filter(x => x.id !== vcUser.id),
                         }
                     }));
                 });
             })
         })
-    }, []);
+    }, [currents.user]);
 
     useEffect(() => {
         fetch("/api/v1/app/checkUser");

@@ -77,12 +77,12 @@ model Auth {
 }
 
 model Messages {
-  id          BigInt   @id @default(autoincrement())
+  id          String   @id @default(uuid())
   content     String
   timestamp   DateTime @default(now())
   authorId    String
   channelId   String
-  repliedToId BigInt?
+  repliedToId String?
   repliedTo   Messages? @relation("MessageReplyTo", fields: [repliedToId], references: [id])
   replies     Messages[] @relation("MessageReplyTo")
   author      User     @relation(fields: [authorId], references: [id])

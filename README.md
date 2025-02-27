@@ -30,6 +30,7 @@ cd CatunBond
 ```bash
 npm run dev
 npm run node
+npm run node2
 ```
 
 That's it! Now you can visit `localhost:3000/app` to start using CatunBond.

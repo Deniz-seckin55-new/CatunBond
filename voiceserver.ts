@@ -60,8 +60,8 @@ try {
         const voiceChannelID = socket.handshake.query.vc;
         socket.join(voiceChannelID);
 
-        socket.on("vc_join", (vc: VoiceChatInformation, user: User) => { io.to(voiceChannelID).emit("vc_update", "join", userUSER); });
-        socket.on("vc_leave", (vc: VoiceChatInformation, user: User) => { io.to(voiceChannelID).emit("vc_update", "leave", userUSER); });
+        socket.on("vc_join", (vc: VoiceChatInformation, user: User) => { io.to(voiceChannelID).emit("vc_update", "join", userUSER); console.log("vc_update join ", userUSER); });
+        socket.on("vc_leave", (vc: VoiceChatInformation, user: User) => { io.to(voiceChannelID).emit("vc_update", "leave", userUSER); console.log("vc_update leave ", userUSER); });
 
         socket.on("disconnect", async () => {
             console.log("User disconnected", socket.id);

@@ -1,7 +1,7 @@
 import styles from '../page.module.css';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { GetMessageDateString, Currents, MessageInfo, UpdateMessageInfo, onMouseLeaveTooltipElement, onMouseOverTooltipElement, _arrayBufferToBase64, _base64ToarrayBuffer, ToUser } from '../utils/utils';
+import { GetMessageDateString, Currents, MessageInfo, UpdateMessageInfo, onMouseLeaveTooltipElement, onMouseOverTooltipElement, _arrayBufferToBase64, _base64ToarrayBuffer, ToUserSmall } from '../utils/utils';
 import { Message, User } from '../utils/socket_utils';
 import interact from 'interactjs';
 import { io, Socket } from 'socket.io-client';
@@ -15,7 +15,7 @@ interface Props {
     onMessageEdit: (message: MessageInfo) => void;
     onMessageDelete: (message: Message) => void;
     onEditInput: (message: Message, event: React.KeyboardEvent) => void;
-    onClickUserAvatar: (messageId: bigint | null, event: React.MouseEvent) => void;
+    onClickUserAvatar: (messageId: string | null, event: React.MouseEvent) => void;
     onClickMicrophone: () => void;
     onClickLeaveCall: () => void;
     setreplyingTo: (message: Message | null) => void;
@@ -35,6 +35,7 @@ interface Props {
     setcalls: React.Dispatch<React.SetStateAction<Record<string, MediaConnection>>>;
     peer: Peer | null;
     writingUsers: string[];
+    microphoneState: Boolean
 }
 
 var voicesocket: Socket | undefined;
@@ -42,7 +43,7 @@ var voicesocket: Socket | undefined;
 const ReplyMessageAnimationKeyframes = [{ backgroundColor: 'var(--cb-color-red)' }, { backgroundColor: 'transparent' }];
 const ReplyMessageAnimationOptions: KeyframeAnimationOptions = { duration: 500, easing: 'ease-in-out', iterations: 1, fill: 'none' };
 
-const ChannelBox: React.FC<Props> = ({ onInputTextarea, onLoadTextarea, onMessageReply, onMessageEdit, onMessageDelete, onEditInput, onKeyDownInput, MessageInfos, setMessageInfos, replyingTo, setreplyingTo, onClickUserAvatar, onClickMicrophone, onClickLeaveCall, getMediaStream, setCurrents, Currents, kbState, messages, localStream, userStreams, setUserStreams, calls, setcalls, peer, writingUsers }) => {
+const ChannelBox: React.FC<Props> = ({ onInputTextarea, onLoadTextarea, onMessageReply, onMessageEdit, onMessageDelete, onEditInput, onKeyDownInput, MessageInfos, setMessageInfos, replyingTo, setreplyingTo, onClickUserAvatar, onClickMicrophone, onClickLeaveCall, getMediaStream, setCurrents, Currents, kbState, messages, localStream, userStreams, setUserStreams, calls, setcalls, peer, writingUsers, microphoneState }) => {
     const [userScroll, setuserScroll] = useState(0);
     const [hoveredMessageId, setHoveredMessageId] = useState<String | null>(null);
     const [writingUsersText, setwritingUsersText] = useState<string>("");
@@ -204,7 +205,7 @@ const ChannelBox: React.FC<Props> = ({ onInputTextarea, onLoadTextarea, onMessag
                     AudioRef.current!.srcObject = stream;
             })
         }
-    }, [AudioRef.current, Currents.microphone])
+    }, [AudioRef.current, microphoneState])
 
 
     useEffect(() => {
@@ -214,7 +215,7 @@ const ChannelBox: React.FC<Props> = ({ onInputTextarea, onLoadTextarea, onMessag
 
         voicesocket = io("http://localhost:3002", {
             query: {
-                info: [Currents.user.id, Currents.user.username, Currents.user.avatar].join(","), // CHANGE LATER !! IMPORTANT !!
+                info: [Currents.user.id, Currents.user.username, Currents.user.avatarUrl].join(","), // CHANGE LATER !! IMPORTANT !!
                 vc: Currents.vc,
             }
         });
@@ -223,12 +224,12 @@ const ChannelBox: React.FC<Props> = ({ onInputTextarea, onLoadTextarea, onMessag
         voicesocket.on("vc_update", (eventType: string, eventUser: User) => {
             console.log("vc_update", { eventType, eventUser: eventUser });
             if (eventType === "join") {
-                if (Currents.vc?.users.find(x => x.id === eventUser.id) === undefined) {
+                if (Currents.vc?.members.find(x => x.id === eventUser.id) === undefined) {
                     setCurrents((prev) => ({
                         ...prev,
                         vc: {
                             ...prev.vc!,
-                            users: [...prev.vc!.users, eventUser]
+                            users: [...prev.vc!.members, eventUser]
                         }
                     }));
                 }
@@ -237,7 +238,7 @@ const ChannelBox: React.FC<Props> = ({ onInputTextarea, onLoadTextarea, onMessag
 
                     const call = peer.call(`${eventUser.id}_peeruser`, localStream!, {
                         metadata: {
-                            user: ToUser(Currents.user!),
+                            user: ToUserSmall(Currents.user!),
                         }
                     });
 
@@ -260,18 +261,18 @@ const ChannelBox: React.FC<Props> = ({ onInputTextarea, onLoadTextarea, onMessag
                             ...prev,
                             vc: {
                                 ...prev.vc!,
-                                users: prev.vc!.users.filter(x => x.id !== eventUser.id)
+                                users: prev.vc!.members.filter(x => x.id !== eventUser.id)
                             }
                         }));
                     });
                 }
             } else if (eventType === "leave") {
-                if(Currents.vc?.users.find(x => x.id === eventUser.id) !== undefined)
+                if(Currents.vc?.members.find(x => x.id === eventUser.id) !== undefined)
                     setCurrents((prev) => ({
                         ...prev,
                         vc: {
                             ...prev.vc!,
-                            users: prev.vc!.users.filter(x => x.id !== eventUser.id)
+                            users: prev.vc!.members.filter(x => x.id !== eventUser.id)
                         }
                     }));
 
@@ -296,7 +297,7 @@ const ChannelBox: React.FC<Props> = ({ onInputTextarea, onLoadTextarea, onMessag
     return (
         <>
             <div id="channel-box" className={styles.channel_box} onMouseMove={onMouseMove}>
-                <audio ref={AudioRef} style={{ display: 'none' }} autoPlay={true} />
+                <audio ref={AudioRef} style={{ display: 'none' }} autoPlay={false} />
                 {Object.entries(userStreams).map(([userId, url]) => {
                     return <audio key={userId} style={{ display: 'none' }} ref={(audio) => { if (audio) audio.srcObject = url; }} autoPlay={true} />
                 })}
@@ -311,7 +312,7 @@ const ChannelBox: React.FC<Props> = ({ onInputTextarea, onLoadTextarea, onMessag
                             </div>
                         </div>
                         <div className={styles.channel_box_vc_middle}>
-                            {Currents.vc.users.map((user) => {
+                            {Currents.vc.members.map((user) => {
                                 return (
                                     <div key={user.id}>
                                         <div className={styles.auto_useravatar_holder}>
@@ -327,11 +328,11 @@ const ChannelBox: React.FC<Props> = ({ onInputTextarea, onLoadTextarea, onMessag
                             </div>
                             <div className={styles.vc_actions_middle}>
                                 <div className={styles.vc_icon_holder}>
-                                    <svg className={styles.vc_icon} onClick={() => { onClickMicrophone(); settooltipText(Currents.microphone ? "Turn Microphone Off" : "Turn Microphone On"); }} onMouseLeave={() => onMouseLeaveTooltipElement(setCurrents)} onMouseOver={(ev) => onMouseOverTooltipElement(ev, Currents.microphone ? "Turn Microphone Off" : "Turn Microphone On", Currents, setCurrents)} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" id="micrphone">
+                                    <svg className={styles.vc_icon} onClick={() => { onClickMicrophone(); settooltipText(microphoneState ? "Turn Microphone Off" : "Turn Microphone On"); }} onMouseLeave={() => onMouseLeaveTooltipElement(setCurrents)} onMouseOver={(ev) => onMouseOverTooltipElement(ev, microphoneState ? "Turn Microphone Off" : "Turn Microphone On", Currents, setCurrents)} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" id="micrphone">
                                         <path d="M12 15c1.66 0 2.99-1.34 2.99-3L15 6c0-1.66-1.34-3-3-3S9 4.34 9 6v6c0 1.66 1.34 3 3 3zm6.08-3c-.42 0-.77.3-.83.71-.37 2.61-2.72 4.39-5.25 4.39s-4.88-1.77-5.25-4.39c-.06-.41-.42-.71-.83-.71-.52 0-.92.46-.85.97.46 2.97 2.96 5.3 5.93 5.75V21c0 .55.45 1 1 1s1-.45 1-1v-2.28c2.96-.43 5.47-2.78 5.93-5.75.07-.51-.33-.97-.85-.97z" fill="var(--cb-color-white)"></path>
                                     </svg>
                                     <div className={styles.vc_icon_overlap_holder}>
-                                        <div className={styles.vc_icon_overlap} style={{ width: (Currents.microphone ? '0em' : '1em') }}></div>
+                                        <div className={styles.vc_icon_overlap} style={{ width: (microphoneState ? '0em' : '1em') }}></div>
                                     </div>
                                 </div>
                                 <svg className={styles.vc_icon_inactive} onMouseLeave={() => onMouseLeaveTooltipElement(setCurrents)} onMouseOver={(ev) => onMouseOverTooltipElement(ev, "Screen Share", Currents, setCurrents)} xmlns="http://www.w3.org/2000/svg" enableBackground="new 0 0 24 24" viewBox="0 0 24 24" id="share-screen">
@@ -375,7 +376,7 @@ const ChannelBox: React.FC<Props> = ({ onInputTextarea, onLoadTextarea, onMessag
                                     </svg>
                                     <div className={styles.message_reply_inner_holder} onClick={(ev: React.MouseEvent<HTMLDivElement, MouseEvent>) => { onClickReplyMessage(ev, messageinfo) }}>
                                         <div className={styles.message_reply_useravatar_holder}>
-                                            <img className={styles.message_useravatar} src={`${message.repliedTo?.author.avatarUrl/*https://cat-storage-server.web.app/data/cat1.jpeg"*/}`} />
+                                            <img className={styles.message_useravatar} src={`${message.repliedTo!.author!.avatarUrl/*https://cat-storage-server.web.app/data/cat1.jpeg"*/}`} />
                                         </div>
                                         <p className={styles.message_reply_content} style={{ width: (MessageInfos.find(x => x.Message.id === message.id)!.ref) ? (MessageInfos.find(x => x.Message.id === message.id)!.ref!.clientWidth * 2 / 5) + "px" : "40vw" }}>{message.repliedTo?.content}</p>
                                     </div>
