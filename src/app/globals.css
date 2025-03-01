@@ -55,11 +55,15 @@ textarea:focus, input:focus{
   margin: 0;
 }
 
-*:not(p, h1, h2, h3, h4, h5, h6) {
+*:not(p, h1, h2, h3, h4, h5, h6, code, span) {
   user-select: none;
 }
 
 .selectable {
+  user-select: text;
+}
+
+.language-cs {
   user-select: text;
 }
 

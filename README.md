@@ -34,3 +34,10 @@ npm run node2
 ```
 
 That's it! Now you can visit `localhost:3000/app` to start using CatunBond.
+
+*Note: You will need to define the following environment variables (.env) for the app to run correctly:*
+- NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+- NEXT_PUBLIC_CLERK_SIGN_IN_URL
+- NEXT_PUBLIC_CLERK_SIGN_UP_URL
+- CLERK_SECRET_KEY
+- DB_URL

@@ -421,13 +421,9 @@
     width: 6vh;
     height: 6vh;
     margin-left: auto;
-    padding-right: 2vh;
+    margin-right: 2vh;
 
     transition: transform 0.25s ease-in-out;
-}
-
-.user_box_settings:hover {
-    cursor: pointer;
 }
 
 .user_box_settings_icon {
@@ -436,6 +432,8 @@
 }
 
 .user_box_settings_icon:hover {
+    cursor: pointer;
+
     transform-origin: center;
     transform: rotate(60deg);
 }
@@ -811,17 +809,50 @@
     grid-template-rows: 24vh 1fr;
 }
 
-.side_box_channels {
-    width: 100%;
-    height: 100%;
+.side_box_channels_wrapper {
+    display: flex;
 
     grid-row: 2 / 4;
     grid-column: 1;
 
+    flex-direction: column;
+
     background-color: var(--cb-color-white);
+}
+
+.side_box_channels {
+    width: 100%;
+    height: 100%;
 
     display: flex;
     flex-direction: column;
+
+    overflow-x: hidden;
+    overflow-y: scroll;
+}
+
+.side_box_channels_server_info {
+    display: flex;
+    
+    justify-content: space-between;
+    align-items: center;
+
+    height: auto;
+    width: 100%;
+
+    padding: 0.2em;
+
+    color: var(--cb-color-black);
+    background-color: var(--cb-color-black-transparent-softer);
+
+    border-bottom-left-radius: 8px;
+    border-bottom-right-radius: 8px;
+
+    font-size: 1em;
+}
+
+.side_box_channels_server_info p {
+    margin-left: 1em;
 }
 
 .side_box_top {
@@ -1180,6 +1211,8 @@
 
     color: var(--cb-color-white);
 
+    caret-color: transparent;
+
     background: linear-gradient(90deg, var(--cb-color-black), var(--cb-color-gray));
 }
 
@@ -1410,6 +1443,10 @@
     user-select: text;
 }
 
+.message_content * {
+    user-select: text;
+}
+
 .message_reply_content {
     font-size: 2rem;
     color: var(--cb-color-white);
@@ -1455,8 +1492,8 @@
     margin-left: auto;
     margin-right: 1em;
 
-    height: 6vh;
-    padding: 1vh;
+    height: 1.5em;
+    padding: 0.2em;
 
     border-radius: 8px;
 
@@ -1482,10 +1519,16 @@
 }
 
 .message_action {
+    display: flex;
+
+    justify-content: center;
+    align-items: center;
+
     color: var(--cb-color-white);
     background: transparent;
 
     border-radius: 2px;
+    height: 1.2em;
 
     transition: background 0.25s ease-in-out;
 }
@@ -1539,7 +1582,7 @@
 .vl {
     border-left: 2px solid var(--cb-color-white);
     border-radius: 8px;
-    height: 2.5vh;
+    height: 0.8em;
     margin-left: 10px;
     margin-right: 10px;
 }
@@ -1625,6 +1668,7 @@
 .settings_box_close {
     margin-left: auto;
     margin-right: 1em;
+    margin-left: 1em;
 
     box-sizing: border-box;
 
@@ -1937,6 +1981,7 @@
     margin-left: 6vw;
 
     overflow-y: scroll;
+    width: fit-content;
 }
 
 .appearance_user {

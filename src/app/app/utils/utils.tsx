@@ -3,6 +3,7 @@ import { FriendRequest as DBFriendRequest, VoiceChat as DBVoiceChat, Prisma } fr
 import Appearance from "../components/settings/Appearance";
 import { Channel, DirectMessage, Message, Server, User, VoiceChatInformation } from "./socket_utils";
 import { DetailedDBUser } from "./socket_utils";
+import emojiNames from "@/data/emojiList.json";
 
 export type DBVoiceChatWithMembers = Prisma.VoiceChatGetPayload<{
     include: {
@@ -68,7 +69,10 @@ export interface Currents {
     vc: DBVoiceChatWithMembers | null;
     voicechatopen: boolean;
     tooltip: TooltipInfo;
+    settingsMode: SettingsMode;
 }
+
+export type SettingsMode = 'UserApp' | 'Server' | 'Channel' | 'Direct Message'; 
 
 export interface FriendsDivStatus {
     visible: boolean,
@@ -311,4 +315,14 @@ export function _base64ToarrayBuffer(base64: string) {
         bytes[i] = binaryString.charCodeAt(i);
     }
     return bytes.buffer;
+}
+
+export function AutocompleteEmojiName(text: string): string[] | null {
+    const emojis: string[] = emojiNames.data;
+    
+    const allAutocompletes = emojis.filter((emojiName) => emojiName.startsWith(text));
+
+    if(allAutocompletes.length === 0) return null;
+
+    return allAutocompletes;
 }

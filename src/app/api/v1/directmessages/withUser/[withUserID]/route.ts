@@ -16,13 +16,10 @@ export async function GET(request: NextRequest, { params }: { params: { withUser
 
         const getDirectMessage = await db.channel.findFirst({
             where: {
-                directMsgFor: {
-                    every: {
-                        id: {
-                            in: [user.id, withUserID]
-                        }
-                    }
-                }
+                AND: [
+                    { directMsgFor: { some: { id: user.id } } },
+                    { directMsgFor: { some: { id: withUserID } } },
+                ]
             },
             select: {
                 id: true,

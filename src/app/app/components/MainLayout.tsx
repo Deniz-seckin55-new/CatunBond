@@ -10,7 +10,7 @@ import UserBox from "./UserBox";
 import SideBox from "./SideBox";
 import FriendsDiv from "./FriendsDiv";
 import ChannelBox from "./ChannelBox";
-import { ViewingFriendsDiv, Currents, UpdateMessageInfo, GetUser, ToUserSmall, MessageInfo, ToVCInfo, DBVoiceChatWithMembers, DBuserToUser } from "../utils/utils";
+import { ViewingFriendsDiv, Currents, UpdateMessageInfo, GetUser, ToUserSmall, MessageInfo, ToVCInfo, DBVoiceChatWithMembers, DBuserToUser, SettingsMode } from "../utils/utils";
 import { useUser } from "@clerk/nextjs";
 import { io, Socket } from 'socket.io-client';
 import ContextMenu from "./ContextMenu";
@@ -37,7 +37,8 @@ const defaultCurrents: Currents = {
     setting: null,
     vc: null,
     voicechatopen: false,
-    tooltip: { position: { left: 0, top: 0 }, ref: null, text: "", visible: false }
+    tooltip: { position: { left: 0, top: 0 }, ref: null, text: "", visible: false },
+    settingsMode: 'UserApp',
 };
 
 const MainLayout: React.FC = () => {
@@ -518,7 +519,12 @@ const MainLayout: React.FC = () => {
         }
     }
 
-    const onClickSettings = () => {
+    const onClickSettings = (mode: SettingsMode) => {
+        setCurrents((prev) => ({
+            ...prev,
+            settingsMode: mode,
+            setting: null,
+        }))
         setsettingsDivV(!settingsDivV);
     }
 
@@ -814,7 +820,7 @@ const MainLayout: React.FC = () => {
                             return;
                         }
                         res.json().then((data) => {
-                            const messageList: Message[] = data.messages;
+                            const messageList: Message[] = data.data;
                             setMessages(messageList);
 
                             console.log("Messages: ", messageList);
@@ -825,6 +831,8 @@ const MainLayout: React.FC = () => {
                             }));
 
                             console.log("Set DM to ", directMessage);
+
+                            console.log("Loading DM ",directMessage);
 
                             setCurrents((prevCurrents) => ({
                                 ...prevCurrents,
@@ -852,6 +860,7 @@ const MainLayout: React.FC = () => {
         onClickFriendsButton: onClickFriendsButton,
         onClickChannel: onClickChannel,
         onClickDirectMessage: onClickDirectMessage,
+        onClickSettings: onClickSettings,
         SideBoxChannelsV: SideBoxChannelsV,
         Channels: Channels,
         directmessages: directmessages,

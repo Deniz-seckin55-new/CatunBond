@@ -6,6 +6,10 @@ import { Message, User } from '../utils/socket_utils';
 import interact from 'interactjs';
 import { io, Socket } from 'socket.io-client';
 import { MediaConnection, Peer } from 'peerjs';
+import ReactMarkdown from 'react-markdown';
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import { atomDark } from "react-syntax-highlighter/dist/esm/styles/prism";
+import Emoji, { toArray as toArrayEmoji } from "react-emoji-render";
 
 interface Props {
     onInputTextarea: (event: React.ChangeEvent<HTMLTextAreaElement>) => void;
@@ -37,6 +41,20 @@ interface Props {
     writingUsers: string[];
     microphoneState: Boolean
 }
+
+const parseEmojis = (value: string) => {
+    const emojisArray = toArrayEmoji(value);
+
+    // toArray outputs React elements for emojis and strings for other
+    const newValue = emojisArray.reduce((previous: any, current: any) => {
+        if (typeof current === "string") {
+            return previous + current;
+        }
+        return previous + current.props.children;
+    }, "");
+
+    return newValue;
+};
 
 var voicesocket: Socket | undefined;
 
@@ -267,7 +285,7 @@ const ChannelBox: React.FC<Props> = ({ onInputTextarea, onLoadTextarea, onMessag
                     });
                 }
             } else if (eventType === "leave") {
-                if(Currents.vc?.members.find(x => x.id === eventUser.id) !== undefined)
+                if (Currents.vc?.members.find(x => x.id === eventUser.id) !== undefined)
                     setCurrents((prev) => ({
                         ...prev,
                         vc: {
@@ -370,7 +388,7 @@ const ChannelBox: React.FC<Props> = ({ onInputTextarea, onLoadTextarea, onMessag
                         return (
                             <div className={styles.message} onMouseOver={() => onMouseHoverOver(message.id?.toString())} onMouseLeave={onMouseHoverOut} ref={(ref) => { let msgInfo = MessageInfos.find(x => x.Message.id == message.id); if (msgInfo) { msgInfo.ref = ref } }} key={message.id}>
                                 {message.repliedToId && (<div className={styles.message_reply_inner}>
-                                    <svg xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="x100y54 meet" viewBox="0 0 100 54" width="10vh" height="10vh">
+                                    <svg xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="x100y54 meet" viewBox="0 0 100 54" width="3em" height="3em">
                                         <path d="M 4 54 q 0 -50 50 -50" fill="none" stroke='black' strokeWidth={4} />
                                         <path d="M 54 4 l 50 0" fill="none" stroke='black' strokeWidth={4} />
                                     </svg>
@@ -383,13 +401,18 @@ const ChannelBox: React.FC<Props> = ({ onInputTextarea, onLoadTextarea, onMessag
                                     {(message.repliedToId) && (<div id="message-actions-holder" className={`${styles.message_actions_holder} ${(hoveredMessageId == message.id?.toString()) ? styles.message_actions_holder_active : ''}`}>
                                         <div className={`${styles.message_actions} ${styles.message_actions_holder_reply} `}>
                                             <div className={styles.message_action} onClick={() => _onMessageReply(message)}>
-                                                <img src={'/reply.svg'} width={"15vh"} height={"15vh"} alt={'Reply'}></img>
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 16 16" id="reply">
+                                                    <path fill="#F0F7EE" d="M3.707,7.99946609 L6.3890873,10.6819805 C6.58434944,10.8772427 6.58434944,11.1938252 6.3890873,11.3890873 C6.21552094,11.5626536 5.94609654,11.5819388 5.7512284,11.4469427 L5.68198052,11.3890873 L2.11603371,7.82029139 L2.11603371,7.82029139 L2.06639375,7.74915207 L2.06639375,7.74915207 L2.03875135,7.69334249 L2.03875135,7.69334249 L2.0159743,7.62570887 L2.0159743,7.62570887 L2.01108568,7.60498705 C2.00382515,7.57130067 2,7.53609704 2,7.5 L2.00546187,7.57391777 L2.00179699,7.5424826 L2.00179699,7.5424826 L2.00179763,7.45747863 L2.00179763,7.45747863 L2.01678848,7.37116919 L2.01678848,7.37116919 L2.03779224,7.30896344 L2.03779224,7.30896344 L2.07718801,7.23298968 L2.07718801,7.23298968 L2.13168953,7.16184291 L2.13168953,7.16184291 L5.68198052,3.6109127 C5.87724266,3.41565056 6.19382515,3.41565056 6.3890873,3.6109127 C6.56265365,3.78447906 6.5819388,4.05390346 6.44694275,4.2487716 L6.3890873,4.31801948 L3.707,6.99946609 L8,7 C11.5217665,7 13.8853902,8.97580254 13.9959473,11.7924218 L14,12 C14,12.2761424 13.7761424,12.5 13.5,12.5 C13.2238576,12.5 13,12.2761424 13,12 C13,9.72683267 11.1925298,8.09541085 8.26151713,8.00404239 L8,8 L3.707,7.99946609 L6.3890873,10.6819805 L3.707,7.99946609 Z"></path>
+                                                </svg>
                                             </div>
                                             {message.author.id === Currents.user?.id && (
                                                 <>
                                                     <div className={styles.vl}> </div>
                                                     <div className={styles.message_action} onClick={(ev: React.MouseEvent) => { onMessageEdit(messageinfo) }}>
-                                                        <img src={'/edit.svg'} width={"15vh"} height={"15vh"} alt={'Edit'}></img>
+                                                        <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24" id="edit">
+                                                            <path fill="none" d="M0 0h24v24H0V0z"></path>
+                                                            <path d="M3 17.46v3.04c0 .28.22.5.5.5h3.04c.13 0 .26-.05.35-.15L17.81 9.94l-3.75-3.75L3.15 17.1c-.1.1-.15.22-.15.36zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" fill="#F0F7EE"></path>
+                                                        </svg>
                                                     </div></>
                                             )}
                                             <div className={`${styles.message_action_delete} ${((kbState && (kbState.find(key => key == "Shift"))) && (message.author.id == Currents.user?.id)) ? styles.message_action_delete_active : ''}`}>
@@ -415,7 +438,29 @@ const ChannelBox: React.FC<Props> = ({ onInputTextarea, onLoadTextarea, onMessag
                                         </div>
                                         <div>
                                             {!(MessageInfos.find(msg => msg.Message.id === message.id)?.editMode) && (
-                                                <p className={styles.message_content} style={{ width: (MessageInfos.find(x => x.Message.id === message.id)!.ref) ? (MessageInfos.find(x => x.Message.id === message.id)!.ref!.clientWidth * 7 / 10) + "px" : "40vw" }}>{message.content}</p>)}
+                                                <div className={styles.message_content} style={{ width: (MessageInfos.find(x => x.Message.id === message.id)!.ref) ? (MessageInfos.find(x => x.Message.id === message.id)!.ref!.clientWidth * 7 / 10) + "px" : "40vw" }}>
+                                                    <ReactMarkdown components={{
+                                                        code(props) {
+                                                            const { children, className, ref, ...rest } = props
+                                                            const match = /language-(\w+)/.exec(className || "");
+                                                            return match ? (
+                                                                <SyntaxHighlighter
+                                                                    PreTag="div"
+                                                                    language={match[1]}
+                                                                    style={atomDark as any}
+                                                                    {...rest}
+                                                                >
+                                                                    {String(children)}
+                                                                </SyntaxHighlighter>
+                                                            ) : (
+                                                                <code {...rest} className={className}>
+                                                                    {children}
+                                                                </code>
+                                                            )
+                                                        }
+                                                    }}>{parseEmojis(message.content)}</ReactMarkdown>
+                                                </div>
+                                            )}
                                             {(MessageInfos.find(msg => msg.Message.id === message.id)?.editMode) && (
                                                 <>
                                                     <textarea className={styles.edit_message_textarea} style={{ width: (MessageInfos.find(x => x.Message.id === message.id)!.ref) ? (MessageInfos.find(x => x.Message.id === message.id)!.ref!.clientWidth * 7 / 10) + "px" : "40vw" }} onKeyDown={(ev) => { onEditInput(message, ev) }} defaultValue={message.content}></textarea>
@@ -425,13 +470,18 @@ const ChannelBox: React.FC<Props> = ({ onInputTextarea, onLoadTextarea, onMessag
                                     {(!message.repliedToId) && (<div id="message-actions-holder" className={`${styles.message_actions_holder} ${(hoveredMessageId == message.id?.toString()) ? styles.message_actions_holder_active : ''}`}>
                                         <div className={styles.message_actions}>
                                             <div className={styles.message_action} onClick={() => _onMessageReply(message)}>
-                                                <img src={'/reply.svg'} width={"15vh"} height={"15vh"} alt={'Reply'}></img>
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 16 16" id="reply">
+                                                    <path fill="#F0F7EE" d="M3.707,7.99946609 L6.3890873,10.6819805 C6.58434944,10.8772427 6.58434944,11.1938252 6.3890873,11.3890873 C6.21552094,11.5626536 5.94609654,11.5819388 5.7512284,11.4469427 L5.68198052,11.3890873 L2.11603371,7.82029139 L2.11603371,7.82029139 L2.06639375,7.74915207 L2.06639375,7.74915207 L2.03875135,7.69334249 L2.03875135,7.69334249 L2.0159743,7.62570887 L2.0159743,7.62570887 L2.01108568,7.60498705 C2.00382515,7.57130067 2,7.53609704 2,7.5 L2.00546187,7.57391777 L2.00179699,7.5424826 L2.00179699,7.5424826 L2.00179763,7.45747863 L2.00179763,7.45747863 L2.01678848,7.37116919 L2.01678848,7.37116919 L2.03779224,7.30896344 L2.03779224,7.30896344 L2.07718801,7.23298968 L2.07718801,7.23298968 L2.13168953,7.16184291 L2.13168953,7.16184291 L5.68198052,3.6109127 C5.87724266,3.41565056 6.19382515,3.41565056 6.3890873,3.6109127 C6.56265365,3.78447906 6.5819388,4.05390346 6.44694275,4.2487716 L6.3890873,4.31801948 L3.707,6.99946609 L8,7 C11.5217665,7 13.8853902,8.97580254 13.9959473,11.7924218 L14,12 C14,12.2761424 13.7761424,12.5 13.5,12.5 C13.2238576,12.5 13,12.2761424 13,12 C13,9.72683267 11.1925298,8.09541085 8.26151713,8.00404239 L8,8 L3.707,7.99946609 L6.3890873,10.6819805 L3.707,7.99946609 Z"></path>
+                                                </svg>
                                             </div>
                                             {message.author.id === Currents.user?.id && (
                                                 <>
                                                     <div className={styles.vl}> </div>
                                                     <div className={styles.message_action} onClick={(ev: React.MouseEvent) => { onMessageEdit(messageinfo) }}>
-                                                        <img src={'/edit.svg'} width={"15vh"} height={"15vh"} alt={'Edit'}></img>
+                                                        <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24" id="edit">
+                                                            <path fill="none" d="M0 0h24v24H0V0z"></path>
+                                                            <path d="M3 17.46v3.04c0 .28.22.5.5.5h3.04c.13 0 .26-.05.35-.15L17.81 9.94l-3.75-3.75L3.15 17.1c-.1.1-.15.22-.15.36zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" fill="#F0F7EE"></path>
+                                                        </svg>
                                                     </div></>
                                             )}
                                             <div className={`${styles.message_action_delete} ${((kbState && (kbState.find(key => key == "Shift"))) && (message.author.id == Currents.user?.id)) ? styles.message_action_delete_active : ''}`}>

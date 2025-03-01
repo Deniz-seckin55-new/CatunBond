@@ -29,6 +29,12 @@ const SettingsBox: React.FC<Props> = ({ Currents, setCurrents, setsettingsDivV, 
         "Modes",
     ];
 
+    const ServerSettingOptions = [
+        "Server Information",
+        "Channels",
+        "Text & Audio",
+    ]
+
     const updateSettings = (setting: string, data: any) => {
 
     }
@@ -59,8 +65,8 @@ const SettingsBox: React.FC<Props> = ({ Currents, setCurrents, setsettingsDivV, 
     const onSearchInput = (ev: React.KeyboardEvent) => {
         const textbox = ev.currentTarget as HTMLTextAreaElement;
         if (ev.key == "Enter") {
-            Search(searchInput);
             ev.preventDefault();
+            Search(searchInput);
         }
     }
 
@@ -77,20 +83,30 @@ const SettingsBox: React.FC<Props> = ({ Currents, setCurrents, setsettingsDivV, 
                 <div className={styles.settings_box_left}>
                     <textarea className={styles.settings_search} placeholder="Search" onInput={(ev) => setsearchInput(ev.currentTarget.value)} onKeyDown={(ev) => onSearchInput(ev)}></textarea>
                     <div className={styles.pad} />
-                    <div className={styles.settings_options_container}>
-                        <p className={styles.settings_nav_header}>User Settings</p>
-                        <button className={styles.settings_user_button} onClick={() => clerk.openUserProfile()}>Profile Settings</button>
-                        {UserSettingOptions.map((setting) =>
-                            <p className={`${styles.settings_nav_element} ${Currents.setting == setting ? (styles.settings_nav_element_active) : ''}`} onClick={() => SelectSetting(setting)} key={setting}>{setting}</p>
-                        )}
-                        <p className={styles.settings_nav_header}>App Settings</p>
-                        {AppSettingOptions.map((setting) =>
-                            <p className={`${styles.settings_nav_element} ${Currents.setting == setting ? (styles.settings_nav_element_active) : ''}`} onClick={() => SelectSetting(setting)} key={setting}>{setting}</p>
-                        )}
-                    </div>
+                    {Currents.settingsMode === 'UserApp' && (
+                        <div className={styles.settings_options_container}>
+                            <p className={styles.settings_nav_header}>User Settings</p>
+                            <button className={styles.settings_user_button} onClick={() => clerk.openUserProfile()}>Profile Settings</button>
+                            {UserSettingOptions.map((setting) =>
+                                <p className={`${styles.settings_nav_element} ${Currents.setting == setting ? (styles.settings_nav_element_active) : ''}`} onClick={() => SelectSetting(setting)} key={setting}>{setting}</p>
+                            )}
+                            <p className={styles.settings_nav_header}>App Settings</p>
+                            {AppSettingOptions.map((setting) =>
+                                <p className={`${styles.settings_nav_element} ${Currents.setting == setting ? (styles.settings_nav_element_active) : ''}`} onClick={() => SelectSetting(setting)} key={setting}>{setting}</p>
+                            )}
+                        </div>
+                    )}
+                    {Currents.settingsMode === 'Server' && (
+                        <div className={styles.settings_options_container}>
+                            <p className={styles.settings_nav_header}>Server Settings</p>
+                            {ServerSettingOptions.map((setting) =>
+                                <p className={`${styles.settings_nav_element} ${Currents.setting == setting ? (styles.settings_nav_element_active) : ''}`} onClick={() => SelectSetting(setting)} key={setting}>{setting}</p>
+                            )}
+                        </div>
+                    )}
                 </div>
                 <div className={styles.settings_box_right}>
-                    {Currents.setting ? React.createElement(componentMap.get(Currents.setting) || (() => null), {...SettingsProps}) : ''}
+                    {Currents.setting ? React.createElement(componentMap.get(Currents.setting) || (() => null), { ...SettingsProps }) : ''}
                     <button className={styles.settings_box_close}>
                         <img src={'/clear.svg'} width={"50vh"} height={"50vh"} alt={'Close'} onClick={onClickClose} className={styles.settings_box_close_icon}></img>
                     </button>
