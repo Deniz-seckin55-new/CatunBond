@@ -227,8 +227,8 @@ export enum SocketInformationType {
 }
 
 export interface EditContext {
-    oldMessageid: string | null,
-    newMessage: Message,
+    messageId: string,
+    newContent: string,
 }
 
 export interface WritingEvent {

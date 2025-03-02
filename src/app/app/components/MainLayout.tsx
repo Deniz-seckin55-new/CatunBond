@@ -21,6 +21,7 @@ import { toast } from "react-toastify";
 import { AllowedTypes, Channel, ClientResponsePacket, DetailedDBUser, DirectMessage, EditContext, FriendRequestAnswer, Message, PendingFriendRequest, Server, SocketData, SocketInformationType, User, VoiceChatInformation, WritingEvent } from "../utils/socket_utils";
 import Tooltip from "./common/Tooltip";
 import Peer, { MediaConnection } from "peerjs";
+import LoadingPage from "./LoadingPage";
 
 let socket: Socket | undefined;
 let voicesocket: Socket | undefined;
@@ -64,6 +65,7 @@ const MainLayout: React.FC = () => {
     const [peer, setpeer] = useState<Peer | null>(null);
     const [calls, setcalls] = useState<Record<string, MediaConnection>>({});
     const [microphoneState, setmicrophoneState] = useState<Boolean>(true);
+    const [appLoaded, setappLoaded] = useState<Boolean>(false);
 
     const tooltipRef = useRef<HTMLDivElement | null>(null);
 
@@ -151,27 +153,22 @@ const MainLayout: React.FC = () => {
 
     const onClickServer = (server: Server) => {
         try {
-            fetch(`/api/v1/servers/${server.id}`)
-                .then((res) => res.json())
-                .then((data) => {
-                    const server: Server = data.data;
-                    console.log(server.channels);
-                    setChannels(server.channels);
+            console.log(server.channels);
+            setChannels(server.channels);
 
-                    setCurrents((prevCurrents) => ({
-                        ...prevCurrents,
-                        friendsdiv: {
-                            ...prevCurrents.friendsdiv,
-                            visible: false,
-                        }
-                    }));
-                    setSideBoxChannelsV(true);
+            setCurrents((prevCurrents) => ({
+                ...prevCurrents,
+                friendsdiv: {
+                    ...prevCurrents.friendsdiv,
+                    visible: false,
+                }
+            }));
+            setSideBoxChannelsV(true);
 
-                    setCurrents((prevCurrents) => ({
-                        ...prevCurrents,
-                        server: server,
-                    }));
-                });
+            setCurrents((prevCurrents) => ({
+                ...prevCurrents,
+                server: server,
+            }));
         } catch (err) {
             console.error(err);
         }
@@ -400,40 +397,27 @@ const MainLayout: React.FC = () => {
 
         if (event.key == "Enter" && !event.shiftKey) {
             event.preventDefault();
-
-            // Change to API Call later on.
-            const messageObject: Message = {
-                author: { id: user.user.id, username: user.user.username, avatarUrl: user.user.imageUrl },
-                channel: { id: currents.channel.id, name: currents.channel.name },
-                content: message,
-                timestamp: new Date(Date.now()),
-                repliedTo: replyingTo?.repliedTo ?? null,
-                authorId: user.user.id,
-                channelId: currents.channel.id,
-                id: "0",
-                repliedToId: (replyingTo?.id) ? replyingTo.id : null,
-            }
-
-            console.log("Message: ", message);
-
             try {
-                sendMessage(messageObject, setMessages);
-                setreplyingTo(null);
-                /*fetch('/api/v1/channel/messages/send', {
+                fetch(`/api/v1/channels/${currents.channel.id}/messages`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
-                        channel: currents.channel.id,
-                        message: JSON.stringify(messageObject),
+                        content: message,
                     })
                 })
                     .then((res) => res.json())
                     .then((data) => {
-                        console.log(data);
+                        if (!data.data) return;
+
+                        const sentMessage: Message = data.data;
+
+                        console.log("message", data);
+
+                        sendMessage(sentMessage, setMessages);
+                        setreplyingTo(null);
                     });
-                */
                 textarea.value = "";
             } catch (err) {
                 console.error(err);
@@ -739,10 +723,10 @@ const MainLayout: React.FC = () => {
         });
     }
 
-    const editMessage = (newcontent: Message, message: Message) => {
+    const editMessage = (newMessage: Message, message: Message) => {
         const context: EditContext = {
-            oldMessageid: message.id,
-            newMessage: newcontent
+            messageId: message.id,
+            newContent: newMessage.content,
         }
         const socketData: SocketData = {
             infoType: SocketInformationType.ClientEditMessage,
@@ -755,7 +739,7 @@ const MainLayout: React.FC = () => {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                content: newcontent.content,
+                content: newMessage.content,
             })
         }).then((res) => res.json()).then((data) => {
             console.log(data);
@@ -832,7 +816,7 @@ const MainLayout: React.FC = () => {
 
                             console.log("Set DM to ", directMessage);
 
-                            console.log("Loading DM ",directMessage);
+                            console.log("Loading DM ", directMessage);
 
                             setCurrents((prevCurrents) => ({
                                 ...prevCurrents,
@@ -869,12 +853,14 @@ const MainLayout: React.FC = () => {
 
     const ExploreBoxProps = {
         ExploreBoxV: ExploreBoxV,
+        setBgBlurV: setBgBlurV,
         setExploreBoxV: setExploreBoxV,
         closeExploreBox: closeExploreBox,
         onClickJoinButton: onClickJoinButton,
         onClickBackButton: onClickBackButton,
         onClickServerJoinButton: onClickServerJoinButton,
         onClickSendFriendRequestButton: onClickSendFriendRequestButton,
+        setLoadingText: setLoadingText,
         LoadingText: LoadingText,
         setCurrents: setCurrents,
         Currents: currents,
@@ -1011,7 +997,7 @@ const MainLayout: React.FC = () => {
         socket.on("edit_message", (edit: EditContext) => {
             setMessages((prevMessages: Message[]) =>
                 prevMessages.map((msg) =>
-                    (msg.id == edit.oldMessageid?.toString()) ? edit.newMessage : msg
+                    (msg.id === edit.messageId) ? { ...msg, content: edit.newContent } : msg
                 )
             );
         });
@@ -1198,6 +1184,20 @@ const MainLayout: React.FC = () => {
         // toast(`${"meow"} sent you a friend request`);
     }
     Debugging();
+
+    if (!currents.user || !user || !user.isLoaded) {
+        console.log(!!currents.user);
+        console.log(!!socket);
+        console.log(!!user);
+        console.log(!!user.isLoaded);
+        return <><LoadingPage isDone={false} /></>
+    } else if (!appLoaded) {
+        setTimeout(() => {
+            setappLoaded(true);
+        }, 2000);
+
+        return <><LoadingPage isDone={true} /></>
+    }
 
     return (
         <>

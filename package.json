@@ -25,6 +25,7 @@
     "react-audio-voice-recorder": "^2.2.0",
     "react-colorful": "^5.6.1",
     "react-dom": "^19.0.0",
+    "react-dropzone": "^14.3.8",
     "react-emoji-render": "^2.0.1",
     "react-markdown": "^10.0.0",
     "react-syntax-highlighter": "^15.6.1",

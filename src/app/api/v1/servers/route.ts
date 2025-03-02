@@ -11,6 +11,10 @@ export async function POST(request: NextRequest) {
         if (!user) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
         if (!name) return NextResponse.json({ message: "Name is required" }, { status: 400 });
 
+        const userExists: boolean = await db.user.count({where: {id: user.id}}) > 0;
+
+        if(!userExists) return NextResponse.json({ message: "Unauthorized" }, {status: 401});
+
         const newServer = await db.server.create({
             data: {
                 iconUrl: iconUrl ?? "https://cat-storage-server.web.app/data/cat1.jpeg",
@@ -24,6 +28,15 @@ export async function POST(request: NextRequest) {
                 }
             }
         });
+
+        // Auto join server
+        await db.user.update({where: {id: user.id}, data: {
+            servers: {
+                connect: {
+                    id: newServer.id,
+                }
+            }
+        }});
 
         return NextResponse.json({ data: newServer }, { status: 200 });
     } catch (err) {

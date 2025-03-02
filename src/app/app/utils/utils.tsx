@@ -47,6 +47,7 @@ export enum ExploreBoxMode {
     ServerJoin = 1,
     Loading = 2,
     AddFriend = 3,
+    ServerCreate = 4,
 }
 
 export interface TooltipInfo {
