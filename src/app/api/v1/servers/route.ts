@@ -20,10 +20,22 @@ export async function POST(request: NextRequest) {
                 iconUrl: iconUrl ?? "https://cat-storage-server.web.app/data/cat1.jpeg",
                 name: name,
                 ownerId: user.id,
-                channels: {
+                categories: {
                     create: {
-                        channelType: "TEXT",
-                        name: "general",
+                        name: "Text Channels",
+                        channels: {
+                            create: {
+                                channelType: "TEXT",
+                                name: "general",
+                            }
+                        }
+                    }
+                }
+            },
+            include: {
+                categories: {
+                    include: {
+                        channels: true,
                     }
                 }
             }

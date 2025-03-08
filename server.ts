@@ -6,7 +6,14 @@ import http from 'http'
 import { Server } from 'socket.io'
 import { PrismaClient, FriendRequest as DBFriendRequest } from "@prisma/client";
 import * as dotenv from 'dotenv';
-import { AllowedTypes, ClientResponsePacket, EditContext, Message, PendingFriendRequest, SocketData, SocketInformationType, User, WritingEvent } from "@/app/app/utils/socket_utils";
+import { AllowedTypes, ClientResponsePacket, EditContext, Message, PendingFriendRequest, SendMessageI, SocketData, SocketInformationType, User, WritingEvent } from "@/app/app/utils/socket_utils";
+
+type NextWrapperServer = {
+    prepare: () => Promise<void>;
+};
+
+import next from "next";
+import nextConfig from "./next.config";
 
 dotenv.config({ path: '.env' }); // Change if its .env for you
 
@@ -34,6 +41,32 @@ const db = new PrismaClient({
     datasourceUrl: process.env.DB_URL
 });
 
+var awaitingMessages: SendMessageI[] = [];
+
+function awaitMessageTempDelete(id: string, tries: number) {
+    setTimeout(async () => {
+        const messageExists = await db.messages.count({ where: { id: id } });
+        if (messageExists) {
+            await db.messages.delete({ where: { id: id } });
+        } else {
+            if (tries < 5)   // 5 seconds
+                awaitMessageTempDelete(id, tries++);
+        }
+    }, 1000);
+}
+
+function awaitMessageTempEdit(id: string, newContent: string, tries: number) {
+    setTimeout(async () => {
+        const messageExists = await db.messages.count({ where: { id: id } });
+        if (messageExists) {
+            await db.messages.update({ where: { id: id }, data: { content: newContent, } });
+        } else {
+            if (tries < 5)   // 5 seconds
+                awaitMessageTempEdit(id, newContent, tries++);
+        }
+    }, 1000);
+}
+
 try {
     io.on("connection", (socket: Socket) => {
         if (!socket.handshake.query.id) {
@@ -47,60 +80,123 @@ try {
         socket.join(socket.handshake.query.id);
 
         socket.on("message", async (data: SocketData) => {
-            switch (data.infoType) {
-                case SocketInformationType.ClientSendMessage:
-                    if (data.dataType == AllowedTypes.Message) {
-                        try {
-                            const message = data.data as Message;
-                            const sentMsg = await db.messages.create({
-                                data: {
-                                    content: message.content,
-                                    timestamp: message.timestamp,
-                                    authorId: message.author.id,
-                                    channelId: message.channel.id,
-                                    repliedToId: message.repliedToId,
-                                }
-                            });
+            if (data.infoType === SocketInformationType.ClientSendMessage && data.dataType === AllowedTypes.MessageI) {
+                const message: SendMessageI = data.data;
 
-                            let jsonMessage = {
-                                id: sentMsg.id.toString(),
-                                content: sentMsg.content,
-                                timestamp: sentMsg.timestamp,
-                                authorId: sentMsg.authorId,
-                                channelId: sentMsg.channelId,
-                                repliedTo: sentMsg.repliedToId?.toString(),
-                            }
-                            console.log("Sent DB message: " + JSON.stringify(jsonMessage));
-                            const response: ClientResponsePacket = {
-                                dataType: AllowedTypes.Message,
-                                data: {
-                                    ...message,
-                                    id: sentMsg.id.toString(),
-                                }
-                            }
-                            io.to(message.channel.id).emit("message", response);
-                            console.log("Sending message to", message.channel.id, " by ", socket.id);
-                        } catch (err) {
-                            if (err instanceof Error)
-                                console.error(err.stack);
-                        }
+                console.log("User Sent Message ", message);
+
+                const response: ClientResponsePacket = {
+                    dataType: AllowedTypes.MessageI,
+                    data: message,
+                };
+
+                console.log("Sending to ", message.channelId);
+
+                awaitingMessages.push(message);
+
+                io.to(message.channelId).emit("message", response);
+
+                const newMessage = await db.messages.create({
+                    data: {
+                        content: message.content, channelId: message.channelId, authorId: message.author.id,
+                        repliedToId: message.repliedToId,
                     }
-                    break;
+                    ,
+                    include: {
+                        author: {
+                            select: {
+                                id: true,
+                                username: true,
+                                avatarUrl: true
+                            }
+                        },
+                        channel: {
+                            select: {
+                                id: true,
+                                categoryId: true,
+                                name: true
+                            }
+                        },
+                        repliedTo: {
+                            include: {
+                                author: {
+                                    select: {
+                                        id: true,
+                                        username: true,
+                                        avatarUrl: true
+                                    }
+                                },
+                                channel: {
+                                    select: {
+                                        id: true,
+                                        categoryId: true,
+                                        name: true
+                                    }
+                                },
+                                repliedTo: {
+                                    select: { id: true } // Depth End
+                                }
+                            },
+                        }
+                    },
+                });
 
-                default:
-                    break;
+                awaitingMessages = awaitingMessages.filter(x => x.tempID !== message.tempID);
+
+                io.to(message.channelId).emit("db_message", message.tempID, newMessage);
+            } else {
+                console.error("InfoType or DataType mismatch.");
             }
+
+            // switch (data.infoType) {
+            //     case SocketInformationType.ClientSendMessage:
+            //         if (data.dataType === AllowedTypes.Message) {
+            //             try {
+            //                 const message: Message = data.data;
+            //                 console.log("Sent DB message: " + message.author.username );
+            //                 const response: ClientResponsePacket = {
+            //                     dataType: AllowedTypes.Message,
+            //                     data: message,
+            //                 }
+            //                 io.to(message.channel.id).emit("message", response);
+            //                 console.log("Sending message to", message.channel.id, " by ", socket.id);
+            //             } catch (err) {
+            //                 if (err instanceof Error)
+            //                     console.error(err.stack);
+            //             }
+            //         }
+            //         break;
+
+            //     default:
+            //         break;
+            // }
         });
 
         socket.on("delete_message", async (data: SocketData) => {
             const message = data.data as Message;
             io.to(message.channel.id).emit("delete_message", message);
             console.log("Delete message " + data.data.id + " by ", socket.id);
+
+            if (!message.id.startsWith("temp_"))
+                await db.messages.delete({ where: { id: message.id } });
         });
+
+        socket.on("db_delete_message", async (messageID: string, callback) => {
+            await db.messages.delete({ where: { id: messageID } });
+            callback();
+        })
+
+        socket.on("db_edit_message", async (messageID: string, edit: EditContext, callback) => {
+            await db.messages.update({ where: { id: messageID }, data: { content: edit.newContent, } });
+            callback();
+        })
 
         socket.on("edit_message", async (data: SocketData) => {
             const edit = data.data as EditContext;
-            io.to(edit.newMessage.channel.id).emit("edit_message", edit)
+            io.to(edit.channelId).emit("edit_message", edit);
+
+            if (!edit.messageId.startsWith("temp_"))
+                await db.messages.update({ where: { id: edit.messageId }, data: { content: edit.newContent, } });
         })
 
         socket.on("disconnect", async () => {
@@ -110,6 +206,14 @@ try {
         socket.on("joinChannel", (channelId: any) => {
             console.log("User joined channel", channelId, " ", socket.id);
             socket.join(channelId);
+
+            if (awaitingMessages.length > 0) {
+                const sendWaitingMessages = awaitingMessages.filter(x => x.channelId === channelId);
+
+                if (sendWaitingMessages.length > 0) {
+                    io.to(socket.id).emit("temp_messages", sendWaitingMessages.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime()));
+                }
+            }
         });
 
         socket.on("leaveChannel", (channelId: any) => {

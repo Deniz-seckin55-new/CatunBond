@@ -3,11 +3,16 @@ import { FriendRequest as DBFriendRequest, Prisma } from "@prisma/client";
 
 export type Server = Prisma.ServerGetPayload<{
     include: {
-        channels: {
-            select: {
-                id: true,
-                name: true,
-                channelType: true,
+        categories: {
+            include: {
+                channels: {
+                    select: {
+                        id: true,
+                        name: true,
+                        channelType: true,
+                        categoryId: true,
+                    }
+                },
             }
         },
         members: {
@@ -35,6 +40,7 @@ export type Message = Prisma.MessagesGetPayload<{
         channel: {
             select: {
                 id: true,
+                categoryId: true,
                 name: true
             }
         },
@@ -50,6 +56,7 @@ export type Message = Prisma.MessagesGetPayload<{
                 channel: {
                     select: {
                         id: true,
+                        categoryId: true,
                         name: true
                     }
                 },
@@ -61,11 +68,44 @@ export type Message = Prisma.MessagesGetPayload<{
     },
 }>
 
+export interface SendMessageI {
+    tempID: string;
+    content: string;
+    channelId: string;
+    author: {
+        id: string;
+        username: string;
+        avatarUrl: string | null;
+    }
+    repliedToId?: string;
+    repliedToAuthor?: {
+        id: string;
+        username: string;
+        avatarUrl: string | null;
+    };
+    repliedToContent?: string;
+    timestamp: Date;
+}
+
 export type Channel = Prisma.ChannelGetPayload<{
     select: {
         id: true,
         name: true,
         channelType: true,
+        categoryId: true,
+    }
+}>;
+
+export type Category = Prisma.CategoryGetPayload<{
+    include: {
+        channels: {
+            select: {
+                id: true,
+                name: true,
+                categoryId: true,
+                channelType: true,
+            }
+        },
     }
 }>;
 
@@ -138,11 +178,16 @@ export type DetailedDBUser = Prisma.UserGetPayload<{
         },
         servers: {
             select: {
-                channels: {
-                    select: {
-                        id: true,
-                        name: true,
-                        channelType: true,
+                categories: {
+                    include: {
+                        channels: {
+                            select: {
+                                id: true,
+                                name: true,
+                                categoryId: true,
+                                channelType: true,
+                            }
+                        },
                     }
                 },
                 id: true,
@@ -228,6 +273,7 @@ export enum SocketInformationType {
 
 export interface EditContext {
     messageId: string,
+    channelId: string,
     newContent: string,
 }
 
@@ -238,6 +284,7 @@ export interface WritingEvent {
 
 export enum AllowedTypes {
     Message,
+    MessageI,
     EditContext,
     FriendRequest,
     WritingEvent,

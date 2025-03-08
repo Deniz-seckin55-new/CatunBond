@@ -76,11 +76,15 @@ export async function GET(request: NextRequest) {
                 },
                 servers: {
                     select: {
-                        channels: {
-                            select: {
-                                id: true,
-                                name: true,
-                                channelType: true,
+                        categories: {
+                            include: {
+                                channels: {
+                                    select: {
+                                        id: true,
+                                        name: true,
+                                        channelType: true,
+                                    }
+                                },
                             }
                         },
                         id: true,

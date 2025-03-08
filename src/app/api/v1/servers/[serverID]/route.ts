@@ -10,11 +10,9 @@ export async function GET(request: NextRequest, { params }: { params: { serverID
 
         const getServer = await db.server.findUnique({
             where: { id: serverID }, include: {
-                channels: {
-                    select: {
-                        id: true,
-                        name: true,
-                        channelType: true,
+                categories: {
+                    include: {
+                        channels: true,
                     }
                 },
                 members: {

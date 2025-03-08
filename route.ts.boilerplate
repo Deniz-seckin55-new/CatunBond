@@ -3,9 +3,9 @@ import { PrismaClient } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 
 const db = new PrismaClient();
-const user = await currentUser();
 export async function GET(request: NextRequest) {
     try {
+        const user = await currentUser();
         
     } catch (err) {
         if(err instanceof Error)

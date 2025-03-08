@@ -45,13 +45,13 @@ enum FriendRequestStatus {
 }
 
 model Server {
-  id       String    @id @unique @default(uuid())
-  iconUrl  String
-  name     String
-  ownerId  String
-  invites  String[]
-  channels Channel[]
-  members  User[]    @relation("UserServers")
+  id         String     @id @unique @default(uuid())
+  iconUrl    String
+  name       String
+  ownerId    String
+  invites    String[]
+  categories Category[] @relation("ServerCategory")
+  members    User[]     @relation("UserServers")
 }
 
 enum ChannelType {
@@ -59,14 +59,24 @@ enum ChannelType {
   DIRECTMESSAGE
 }
 
+model Category {
+  id       String    @id @unique @default(uuid())
+  index    Int       @default(0)
+  name     String
+  serverId String
+  server   Server    @relation("ServerCategory", fields: [serverId], references: [id])
+  channels Channel[] @relation("ChannelCategory")
+}
+
 model Channel {
-  id           String     @id @unique @default(uuid())
+  id           String      @id @unique @default(uuid())
+  index        Int         @default(0)
   name         String
-  serverId     String?
-  server       Server?    @relation(fields: [serverId], references: [id])
+  categoryId   String?
+  category     Category?   @relation("ChannelCategory", fields: [categoryId], references: [id])
   messages     Messages[]
-  directMsgFor User[]     @relation("UserDirectMsgs")
-  channelType  ChannelType  @default(TEXT)
+  directMsgFor User[]      @relation("UserDirectMsgs")
+  channelType  ChannelType @default(TEXT)
 }
 
 model Auth {
@@ -77,16 +87,18 @@ model Auth {
 }
 
 model Messages {
-  id          String   @id @default(uuid())
+  id          String     @id @default(uuid())
   content     String
-  timestamp   DateTime @default(now())
+  timestamp   DateTime   @default(now())
   authorId    String
   channelId   String
   repliedToId String?
-  repliedTo   Messages? @relation("MessageReplyTo", fields: [repliedToId], references: [id])
+  repliedTo   Messages?  @relation("MessageReplyTo", fields: [repliedToId], references: [id])
   replies     Messages[] @relation("MessageReplyTo")
-  author      User     @relation(fields: [authorId], references: [id])
-  channel     Channel  @relation(fields: [channelId], references: [id])
+  author      User       @relation(fields: [authorId], references: [id])
+  channel     Channel    @relation(fields: [channelId], references: [id])
+
+  @@index([timestamp])
 }
 
 model UserInfo {
@@ -100,4 +112,23 @@ model VoiceChat {
   serverId  String?
   members   User[]
   createdAt DateTime @default(now())
+}
+
+enum MutedInType {
+  SERVER
+  CHANNEl
+}
+
+enum MuteType {
+  FINITE
+  INFINITE
+}
+
+model UserMute {
+  userId      String      @id @unique
+  startedAt   DateTime    @default(now())
+  endsAt      DateTime
+  mutedIn     String
+  mutedInType MutedInType
+  muteType    MuteType
 }

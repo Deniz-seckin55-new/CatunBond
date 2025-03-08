@@ -3,12 +3,16 @@ import styles from '../page.module.css';
 import Image from 'next/image';
 import { Currents, ExploreBoxMode } from '../utils/utils';
 import { useDropzone } from 'react-dropzone'
-import { DetailedDBUser, Server } from '../utils/socket_utils';
+import { Category, Channel, DetailedDBUser, Server } from '../utils/socket_utils';
+import { toast } from 'react-toastify';
+import { useCurrents } from '@/store/currents';
 
 interface Props {
     ExploreBoxV: boolean;
+    createBoxC: Category | null,
     setExploreBoxV: React.Dispatch<React.SetStateAction<boolean>>;
     setBgBlurV: React.Dispatch<React.SetStateAction<boolean>>;
+    setcreateBoxV: React.Dispatch<React.SetStateAction<boolean>>;
     closeExploreBox: () => void;
     onClickJoinButton: () => void;
     onClickBackButton: () => void;
@@ -16,8 +20,6 @@ interface Props {
     onClickSendFriendRequestButton: (str: string) => void;
     setLoadingText: React.Dispatch<React.SetStateAction<string>>;
     LoadingText: string;
-    setCurrents: React.Dispatch<React.SetStateAction<Currents>>;
-    Currents: Currents;
 }
 
 function getFileDataUrl(file: File) {
@@ -36,11 +38,12 @@ function getFileDataUrl(file: File) {
     });
 }
 
-const ExploreBox: React.FC<Props> = ({ ExploreBoxV, setExploreBoxV, setBgBlurV, closeExploreBox, onClickJoinButton, onClickBackButton, onClickServerJoinButton, onClickSendFriendRequestButton, setLoadingText, LoadingText, setCurrents, Currents }) => {
+const ExploreBox: React.FC<Props> = ({ ExploreBoxV, createBoxC, setExploreBoxV, setBgBlurV, setcreateBoxV, closeExploreBox, onClickJoinButton, onClickBackButton, onClickServerJoinButton, onClickSendFriendRequestButton, setLoadingText, LoadingText }) => {
+    const currents = useCurrents();
 
     useEffect(() => {
-        if (Currents.exploreboxmode == null) { setCurrents({ ...Currents, exploreboxmode: 0 }) }
-    }, [Currents]);
+        if (currents.exploreboxmode == null) { currents.setExploreBoxMode(0); }
+    }, [currents]);
 
     const [ServerInput, setServerInput] = useState("");
     const [FriendInput, setFriendInput] = useState("");
@@ -49,6 +52,8 @@ const ExploreBox: React.FC<Props> = ({ ExploreBoxV, setExploreBoxV, setBgBlurV, 
     const [serverCreatePageIndex, setserverCreatePageIndex] = useState<number>(1);
     const [serverCreateButton, setserverCreateButton] = useState<{ text: string, disabled: boolean }>({ text: "Continue", disabled: false });
     const [serverCreateInput, setserverCreateInput] = useState<string>("");
+    const [channelCreateInput, setchannelCreateInput] = useState<string>("");
+    const [categoryCreateInput, setcategoryCreateInput] = useState<string>("");
 
     const totalPages = 2;
 
@@ -79,20 +84,22 @@ const ExploreBox: React.FC<Props> = ({ ExploreBoxV, setExploreBoxV, setBgBlurV, 
         setFriendInput(event.target.value);
     }
 
+    const onChannelCreateInputInput = (text: string) => {
+        setchannelCreateInput(text);
+    }
+
+    const onCategoryCreateInputInput = (text: string) => {
+        setcategoryCreateInput(text);
+    }
+
     const onClickCreateServer = () => {
-        setCurrents((prev) => ({
-            ...prev,
-            exploreboxmode: 4,
-        }));
+        currents.setExploreBoxMode(4);
     }
 
     const onClickServerCreateContinueButton = () => {
         if (serverCreatePageIndex === totalPages) {
             setLoadingText("Creating Server...");
-            setCurrents((prev) => ({
-                ...prev,
-                exploreboxmode: 2,
-            }));
+            currents.setExploreBoxMode(2);
 
             fetch("/api/v1/servers", {
                 method: "POST",
@@ -106,23 +113,14 @@ const ExploreBox: React.FC<Props> = ({ ExploreBoxV, setExploreBoxV, setBgBlurV, 
             }).then(res => res.json().then(data => {
                 if (data.data) {
                     const server: Server = data.data;
-                    setCurrents((prev) => ({
-                        ...prev,
-                        user: {
-                            ...prev.user!,
-                            servers: [...prev.user!.servers, server]
-                        }
-                    }))
+                    currents.addUserServer(server);
 
                     setLoadingText("Successfully created server!");
                     setTimeout(() => {
                         setExploreBoxV(false);
                         setBgBlurV(false);
 
-                        setCurrents((prev) => ({
-                            ...prev,
-                            exploreboxmode: 0,
-                        }))
+                        currents.setExploreBoxMode(0);
                         setLoadingText("Loading...");
                     }, 1000);
                 } else {
@@ -131,10 +129,7 @@ const ExploreBox: React.FC<Props> = ({ ExploreBoxV, setExploreBoxV, setBgBlurV, 
                         setExploreBoxV(false);
                         setBgBlurV(false);
 
-                        setCurrents((prev) => ({
-                            ...prev,
-                            exploreboxmode: 0,
-                        }))
+                        currents.setExploreBoxMode(0);
                         setLoadingText("Loading...");
                     }, 1000);
                 }
@@ -168,6 +163,133 @@ const ExploreBox: React.FC<Props> = ({ ExploreBoxV, setExploreBoxV, setBgBlurV, 
         setserverCreatePageIndex(serverCreatePageIndex - 1);
     }
 
+    const onClickChannelCreateButton = () => {
+        if (!currents.server) {
+            toast("Not in a server.");
+            return;
+        }
+
+        if (!createBoxC) {
+            toast("No category selected.");
+            return;
+        }
+
+        var currentServer = currents.server;
+
+        setLoadingText("Creating Channel...");
+
+        currents.setExploreBoxMode(2);
+
+        fetch("/api/v1/channels", {
+            method: "POST",
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                name: channelCreateInput,
+                categoryId: createBoxC.id,
+                serverId: currents.server.id,
+            })
+        }).then(res => res.json().then(data => {
+            if (data.data) {
+                console.log("Channel Creation", data);
+
+                const gotChannel: Channel = data.data;
+
+                const category = currentServer.categories.find(x => x.id === createBoxC.id);
+
+                if (!category) {
+                    toast("Error while creating channel: Category/Channel not found.");
+                    console.log(currentServer.categories);
+                    return;
+                }
+
+                category.channels.push(gotChannel);
+
+                currentServer.categories = currentServer.categories.filter(x => x.id !== createBoxC.id);
+                currentServer.categories.push(category);
+
+                currents.setServer({ ...currents.server, categories: currentServer.categories } as Server);
+
+                setLoadingText("Successfully created channel!");
+                setTimeout(() => {
+                    setExploreBoxV(false);
+                    setBgBlurV(false);
+                    setcreateBoxV(false);
+
+                    currents.setExploreBoxMode(0);
+                    setLoadingText("Loading...");
+                }, 1000);
+            } else {
+                setLoadingText("Couldn't create the channel: " + data.message);
+                setTimeout(() => {
+                    setExploreBoxV(false);
+                    setBgBlurV(false);
+                    setcreateBoxV(false);
+
+                    currents.setExploreBoxMode(0);
+                    setLoadingText("Loading...");
+                }, 1000);
+            }
+        }))
+        return;
+    }
+
+    const onClickCategoryCreateButton = () => {
+        if (!currents.server) {
+            toast("Not in a server.");
+            return;
+        }
+
+        if (!createBoxC) {
+            toast("No category selected.");
+            return;
+        }
+
+        var currentServer = currents.server;
+
+        setLoadingText("Creating Channel...");
+
+        currents.setExploreBoxMode(2);
+
+        fetch(`/api/v1/servers/${currentServer.id}/categories`, {
+            method: "POST",
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                name: categoryCreateInput,
+            })
+        }).then(res => res.json().then(data => {
+            if (data.data) {
+                const gotCategory: Category = data.data;
+
+                currents.setServer({ ...currentServer, categories: [...currentServer.categories, gotCategory]} as Server)
+
+                setLoadingText("Successfully created category!");
+                setTimeout(() => {
+                    setExploreBoxV(false);
+                    setBgBlurV(false);
+                    setcreateBoxV(false);
+
+                    currents.setExploreBoxMode(0);
+                    setLoadingText("Loading...");
+                }, 1000);
+            } else {
+                setLoadingText("Couldn't create the category: " + data.message);
+                setTimeout(() => {
+                    setExploreBoxV(false);
+                    setBgBlurV(false);
+                    setcreateBoxV(false);
+
+                    currents.setExploreBoxMode(0);
+                    setLoadingText("Loading...");
+                }, 1000);
+            }
+        }))
+        return;
+    }
+
     const PSList = [
         { name: "Cat Server", id: "abc0" },
         { name: "Kitty Server", id: "abc1" },
@@ -199,18 +321,22 @@ const ExploreBox: React.FC<Props> = ({ ExploreBoxV, setExploreBoxV, setBgBlurV, 
     }, [ExploreBoxV]);
 
     useEffect(() => {
-        if (Currents.exploreboxmode == 0) {
+        if (currents.exploreboxmode == 0) {
             setBoxHeight("50%");
-        } else if (Currents.exploreboxmode === 1) {
+        } else if (currents.exploreboxmode === 1) {
             setBoxHeight("30%");
-        } else if (Currents.exploreboxmode === 2) {
+        } else if (currents.exploreboxmode === 2) {
             setBoxHeight("30%");
-        } else if (Currents.exploreboxmode === 3) {
+        } else if (currents.exploreboxmode === 3) {
             setBoxHeight("50%");
-        } else if (Currents.exploreboxmode === 4) {
+        } else if (currents.exploreboxmode === 4) {
             setBoxHeight("75%");
+        } else if (currents.exploreboxmode === 5) {
+            setBoxHeight("50%");
+        } else if (currents.exploreboxmode === 6) {
+            setBoxHeight("50%");
         }
-    }, [Currents.exploreboxmode]);
+    }, [currents.exploreboxmode]);
 
     const onInputSearch = (event: React.ChangeEvent<HTMLInputElement>) => {
         setSRRegexError("")
@@ -225,8 +351,7 @@ const ExploreBox: React.FC<Props> = ({ ExploreBoxV, setExploreBoxV, setBgBlurV, 
             } catch (e: any) {
                 if (e instanceof SyntaxError) {
                     setSRRegexError(e.message)
-                    console.log("error!")
-                    console.log(e);
+                    console.log("error!", e)
                 }
             }
         }
@@ -261,7 +386,7 @@ const ExploreBox: React.FC<Props> = ({ ExploreBoxV, setExploreBoxV, setBgBlurV, 
     return (
         <>
             <div id="explore-box" className={`${styles.explore_box} ${ExploreBoxV ? styles.explore_box_active : ''}`} style={{ visibility: (showElement ? "visible" : "hidden"), height: boxHeight }} onKeyDown={onKeyDownExploreBox} tabIndex={0}>
-                {Currents.exploreboxmode == 0 && (
+                {currents.exploreboxmode == 0 && (
                     <>
                         {(SRRegexError != "") && (<p id="regex-error-message" className={styles.regex_error_message}>Regex Error: {SRRegexError}</p>)}
                         <div className={styles.explore_box_top}>
@@ -284,7 +409,7 @@ const ExploreBox: React.FC<Props> = ({ ExploreBoxV, setExploreBoxV, setBgBlurV, 
                         <p className={styles.create_server_text}>Or... <span onClick={onClickCreateServer} className={styles.create_server_link}>create a server</span></p>
                         <div className={styles.pad5} />
                     </>)}
-                {Currents.exploreboxmode == 1 && (
+                {currents.exploreboxmode == 1 && (
                     <>
                         <div className={styles.explore_box_top}>
                             <button className={styles.explore_box_join_button} onClick={onClickBackButton}>{"<-"}</button>
@@ -293,10 +418,10 @@ const ExploreBox: React.FC<Props> = ({ ExploreBoxV, setExploreBoxV, setBgBlurV, 
                         <button className={styles.explore_box_server_join_button} onClick={() => onClickServerJoinButton(ServerInput)}>Join Server</button>
                     </>
                 )}
-                {Currents.exploreboxmode == 2 && (
+                {currents.exploreboxmode == 2 && (
                     <p>{`${LoadingText}`}</p>
                 )}
-                {Currents.exploreboxmode == 3 && (
+                {currents.exploreboxmode == 3 && (
                     <>
                         <div className={styles.explore_box_top}>
                             <input type="text" id="explore-input-2" className={styles.explore_input_server} placeholder="Friend Name" onInput={onFriendInputInput} />
@@ -304,7 +429,7 @@ const ExploreBox: React.FC<Props> = ({ ExploreBoxV, setExploreBoxV, setBgBlurV, 
                         <button className={styles.explore_box_server_join_button} onClick={() => onClickSendFriendRequestButton(FriendInput)}>Send Friend Request</button>
                     </>
                 )}
-                {Currents.exploreboxmode === 4 && (
+                {currents.exploreboxmode === 4 && (
                     <div className={`${styles.explore_box_full_div} ${styles.ow_hidden_both}`}>
                         <div className={`${styles.center_both} ${styles.wh_full} ${styles.transition_transform} ${styles.explore_box_slide}`} style={{ transform: `translateX(-${(serverCreatePageIndex - 1) * 100}%)` }}>
                             <div className={styles.pad1} />
@@ -335,6 +460,40 @@ const ExploreBox: React.FC<Props> = ({ ExploreBoxV, setExploreBoxV, setBgBlurV, 
                         </div>
                         <button className={`${styles.explore_box_join_button} ${styles.explore_box_left_bottom}`} onClick={onClickServerCreateBackButton}>{"Back"}</button>
                         <button className={`${styles.explore_box_join_button} ${styles.explore_box_right_bottom} ${serverCreateButton.disabled && styles.explore_box_button_disabled}`} onClick={onClickServerCreateContinueButton} disabled={serverCreateButton.disabled}>{serverCreateButton.text}</button>
+                    </div>
+                )}
+                {currents.exploreboxmode === 5 && (
+                    <div className={`${styles.explore_box_full_div} ${styles.ow_hidden_both}`}>
+                        <div className={`${styles.center_both} ${styles.wh_full}`}>
+                            <div className={styles.pad1} />
+                            <p className={styles.fontn}>Create a new channel</p>
+                            <div className={styles.pad5} />
+                            <p className={styles.fonts3}>Choose your channel name</p>
+                            <div className={styles.pad2} />
+                            <input type='text' className={styles.setting_field_input_text} style={{ background: 'var(--cb-color-gray)' }} onInput={(ev) => onChannelCreateInputInput(ev.currentTarget.value)} />
+                            <div className={styles.pad5} />
+                            <p className={styles.image_alt_text}>Channel Name</p>
+                            <div className={styles.pad2} />
+                            <button className={`${styles.explore_box_join_button} ${styles.explore_box_left_bottom}`} onClick={closeExploreBox}>{"Back"}</button>
+                            <button className={`${styles.explore_box_join_button} ${styles.explore_box_right_bottom} ${serverCreateButton.disabled && styles.explore_box_button_disabled}`} onClick={onClickChannelCreateButton} disabled={serverCreateButton.disabled}>{serverCreateButton.text}</button>
+                        </div>
+                    </div>
+                )}
+                {currents.exploreboxmode === 6 && (
+                    <div className={`${styles.explore_box_full_div} ${styles.ow_hidden_both}`}>
+                        <div className={`${styles.center_both} ${styles.wh_full}`}>
+                            <div className={styles.pad1} />
+                            <p className={styles.fontn}>Create a new category</p>
+                            <div className={styles.pad5} />
+                            <p className={styles.fonts3}>Choose your category name</p>
+                            <div className={styles.pad2} />
+                            <input type='text' className={styles.setting_field_input_text} style={{ background: 'var(--cb-color-gray)' }} onInput={(ev) => onCategoryCreateInputInput(ev.currentTarget.value)} />
+                            <div className={styles.pad5} />
+                            <p className={styles.image_alt_text}>Category Name</p>
+                            <div className={styles.pad2} />
+                            <button className={`${styles.explore_box_join_button} ${styles.explore_box_left_bottom}`} onClick={closeExploreBox}>{"Back"}</button>
+                            <button className={`${styles.explore_box_join_button} ${styles.explore_box_right_bottom} ${serverCreateButton.disabled && styles.explore_box_button_disabled}`} onClick={onClickCategoryCreateButton} disabled={serverCreateButton.disabled}>{serverCreateButton.text}</button>
+                        </div>
                     </div>
                 )}
             </div>

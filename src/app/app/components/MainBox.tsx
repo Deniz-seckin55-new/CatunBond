@@ -2,26 +2,26 @@ import React, { useEffect, useState } from 'react';
 import styles from '../page.module.css';
 import { Currents, onMouseLeaveTooltipElement, onMouseOverTooltipElement } from '../utils/utils';
 import { Server } from '../utils/socket_utils';
+import { useCurrents } from '@/store/currents';
 
 interface Props {
     onClickServer: (server: Server) => void;
     onRightClickServer: (server: Server, ct: React.MouseEvent<HTMLDivElement, MouseEvent>) => void;
     onClickAppIcon: () => void;
     onClickExploreButton: () => void;
-    setCurrents: React.Dispatch<React.SetStateAction<Currents>>;
-    Currents: Currents;
     ExploreBoxV: boolean;
 }
 
-const MainBox: React.FC<Props> = ({ onClickServer, onRightClickServer, onClickAppIcon, onClickExploreButton, setCurrents, Currents, ExploreBoxV }) => {
+const MainBox: React.FC<Props> = ({ onClickServer, onRightClickServer, onClickAppIcon, onClickExploreButton, ExploreBoxV }) => {
+    const currents = useCurrents();
 
     const [ServerList, setServerList] = useState<Server[]>([]);
 
     useEffect(() => {
-        if(!Currents.user) return;
+        if(!currents.user) return;
 
-        setServerList(Currents.user.servers ?? []);
-    }, [Currents.user]);
+        setServerList(currents.user.servers ?? []);
+    }, [currents.user]);
 
     /*const ServerList = [
         {
@@ -46,8 +46,8 @@ const MainBox: React.FC<Props> = ({ onClickServer, onRightClickServer, onClickAp
                     {
                         (ServerList ? (ServerList.map((server: Server) => {
                             return (
-                                <div onMouseLeave={() => onMouseLeaveTooltipElement(setCurrents)} onMouseOver={(ev) => onMouseOverTooltipElement(ev, server.name, Currents, setCurrents)} id={server.id} className={`${styles.server_list_element}`} onClick={() => onClickServer(server)} onContextMenu={(ct) => { onRightClickServer(server, ct); ct.preventDefault(); }} key={server.id}>
-                                    <img src={server.iconUrl} className={`${styles.server_list_element_image} ${Currents.server ? (Currents.server.id == server.id ? styles.server_list_element_image_active : "") : ""}`} key={`image-${server.id}`} />
+                                <div onMouseLeave={() => onMouseLeaveTooltipElement(currents)} onMouseOver={(ev) => onMouseOverTooltipElement(ev, server.name, currents)} id={server.id} className={`${styles.server_list_element}`} onClick={() => onClickServer(server)} onContextMenuCapture={(ev) => {ev.preventDefault(); onRightClickServer(server, ev)}} key={server.id}>
+                                    <img src={server.iconUrl} className={`${styles.server_list_element_image} ${currents.server ? (currents.server.id == server.id ? styles.server_list_element_image_active : "") : ""}`} key={`image-${server.id}`} onContextMenuCapture={(ev) => {ev.preventDefault(); onRightClickServer(server, ev)}} />
                                 </div>
                             )
                         })) : <> </>)

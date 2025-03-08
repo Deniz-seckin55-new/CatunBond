@@ -2,15 +2,16 @@ import { componentMap, Currents } from "../utils/utils";
 import styles from "../page.module.css";
 import React, { useEffect, useState } from "react";
 import { ClerkProvider, useClerk } from "@clerk/nextjs"
+import { useCurrents } from "@/store/currents";
 
 interface Props {
-    Currents: Currents;
-    setCurrents: React.Dispatch<React.SetStateAction<Currents>>;
     setsettingsDivV: React.Dispatch<React.SetStateAction<boolean>>;
     settingsDivV: boolean,
 }
 
-const SettingsBox: React.FC<Props> = ({ Currents, setCurrents, setsettingsDivV, settingsDivV }) => {
+const SettingsBox: React.FC<Props> = ({ setsettingsDivV, settingsDivV }) => {
+    const currents = useCurrents();
+
     const [showElement, setshowElement] = useState<boolean>(false);
     const [searchInput, setsearchInput] = useState<string>("");
     const clerk = useClerk();
@@ -40,7 +41,7 @@ const SettingsBox: React.FC<Props> = ({ Currents, setCurrents, setsettingsDivV, 
     }
 
     const SettingsProps = {
-        Currents: Currents,
+        Currents: currents,
         updateSettings: updateSettings,
     };
 
@@ -71,10 +72,7 @@ const SettingsBox: React.FC<Props> = ({ Currents, setCurrents, setsettingsDivV, 
     }
 
     const SelectSetting = (setting: string) => {
-        setCurrents((prev) => ({
-            ...prev,
-            setting: setting,
-        }));
+        currents.setSetting(setting);
     }
 
     return (
@@ -83,30 +81,30 @@ const SettingsBox: React.FC<Props> = ({ Currents, setCurrents, setsettingsDivV, 
                 <div className={styles.settings_box_left}>
                     <textarea className={styles.settings_search} placeholder="Search" onInput={(ev) => setsearchInput(ev.currentTarget.value)} onKeyDown={(ev) => onSearchInput(ev)}></textarea>
                     <div className={styles.pad} />
-                    {Currents.settingsMode === 'UserApp' && (
+                    {currents.settingsMode === 'UserApp' && (
                         <div className={styles.settings_options_container}>
                             <p className={styles.settings_nav_header}>User Settings</p>
                             <button className={styles.settings_user_button} onClick={() => clerk.openUserProfile()}>Profile Settings</button>
                             {UserSettingOptions.map((setting) =>
-                                <p className={`${styles.settings_nav_element} ${Currents.setting == setting ? (styles.settings_nav_element_active) : ''}`} onClick={() => SelectSetting(setting)} key={setting}>{setting}</p>
+                                <p className={`${styles.settings_nav_element} ${currents.setting == setting ? (styles.settings_nav_element_active) : ''}`} onClick={() => SelectSetting(setting)} key={setting}>{setting}</p>
                             )}
                             <p className={styles.settings_nav_header}>App Settings</p>
                             {AppSettingOptions.map((setting) =>
-                                <p className={`${styles.settings_nav_element} ${Currents.setting == setting ? (styles.settings_nav_element_active) : ''}`} onClick={() => SelectSetting(setting)} key={setting}>{setting}</p>
+                                <p className={`${styles.settings_nav_element} ${currents.setting == setting ? (styles.settings_nav_element_active) : ''}`} onClick={() => SelectSetting(setting)} key={setting}>{setting}</p>
                             )}
                         </div>
                     )}
-                    {Currents.settingsMode === 'Server' && (
+                    {currents.settingsMode === 'Server' && (
                         <div className={styles.settings_options_container}>
                             <p className={styles.settings_nav_header}>Server Settings</p>
                             {ServerSettingOptions.map((setting) =>
-                                <p className={`${styles.settings_nav_element} ${Currents.setting == setting ? (styles.settings_nav_element_active) : ''}`} onClick={() => SelectSetting(setting)} key={setting}>{setting}</p>
+                                <p className={`${styles.settings_nav_element} ${currents.setting == setting ? (styles.settings_nav_element_active) : ''}`} onClick={() => SelectSetting(setting)} key={setting}>{setting}</p>
                             )}
                         </div>
                     )}
                 </div>
                 <div className={styles.settings_box_right}>
-                    {Currents.setting ? React.createElement(componentMap.get(Currents.setting) || (() => null), { ...SettingsProps }) : ''}
+                    {currents.setting ? React.createElement(componentMap.get(currents.setting) || (() => null), { ...SettingsProps }) : ''}
                     <button className={styles.settings_box_close}>
                         <img src={'/clear.svg'} width={"50vh"} height={"50vh"} alt={'Close'} onClick={onClickClose} className={styles.settings_box_close_icon}></img>
                     </button>

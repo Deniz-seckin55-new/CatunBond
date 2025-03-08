@@ -10,7 +10,7 @@ import UserBox from "./UserBox";
 import SideBox from "./SideBox";
 import FriendsDiv from "./FriendsDiv";
 import ChannelBox from "./ChannelBox";
-import { ViewingFriendsDiv, Currents, UpdateMessageInfo, GetUser, ToUserSmall, MessageInfo, ToVCInfo, DBVoiceChatWithMembers, DBuserToUser, SettingsMode } from "../utils/utils";
+import { ViewingFriendsDiv, Currents, UpdateMessageInfo, GetUser, ToUserSmall, MessageInfo, ToVCInfo, DBVoiceChatWithMembers, DBuserToUser, SettingsMode, ExploreBoxMode, genTempID, tempMessageToMessage, ContextMenuMode } from "../utils/utils";
 import { useUser } from "@clerk/nextjs";
 import { io, Socket } from 'socket.io-client';
 import ContextMenu from "./ContextMenu";
@@ -18,36 +18,36 @@ import SettingsBox from "./SettingsBox";
 import ChannelBoxInfo from "./ChannelBoxInfo";
 import ServerUsersTab from "./ServerUsersTab";
 import { toast } from "react-toastify";
-import { AllowedTypes, Channel, ClientResponsePacket, DetailedDBUser, DirectMessage, EditContext, FriendRequestAnswer, Message, PendingFriendRequest, Server, SocketData, SocketInformationType, User, VoiceChatInformation, WritingEvent } from "../utils/socket_utils";
+import { AllowedTypes, Category, Channel, ClientResponsePacket, DetailedDBUser, DirectMessage, EditContext, FriendRequestAnswer, Message, PendingFriendRequest, SendMessageI, Server, SocketData, SocketInformationType, User, VoiceChatInformation, WritingEvent } from "../utils/socket_utils";
 import Tooltip from "./common/Tooltip";
 import Peer, { MediaConnection } from "peerjs";
 import LoadingPage from "./LoadingPage";
+import { useCurrents } from "@/store/currents";
+import { useSocket, useSocketStore } from "@/store/socket";
+import { useAwaiting } from "@/store/awaiting";
+import axios from "axios";
+import { useQuery } from "@tanstack/react-query";
+import { useDirectMessageStore } from "@/store/directmessages";
 
-let socket: Socket | undefined;
+const fetchLocalUser = async () => {
+    const data = await axios.get("/api/v1/user");
+
+    console.log("Got data as ",data);
+    return data.data.data as DetailedDBUser; // Funny
+}
+
 let voicesocket: Socket | undefined;
 
-const defaultCurrents: Currents = {
-    channel: null,
-    server: null,
-    exploreboxmode: null,
-    user: null,
-    contextmenu: { shown: false, x: 0, y: 0 },
-    contextmenumode: null,
-    friendsdiv: { status: "online", visible: true },
-    directmessage: null,
-    setting: null,
-    vc: null,
-    voicechatopen: false,
-    tooltip: { position: { left: 0, top: 0 }, ref: null, text: "", visible: false },
-    settingsMode: 'UserApp',
-};
-
 const MainLayout: React.FC = () => {
+    const { socket, connect } = useSocketStore();
+    const awaiting = useAwaiting();
+    const { directmessages, setDirectMessages } = useDirectMessageStore();
+
     const [BgBlurV, setBgBlurV] = useState(false);
     const [ExploreBoxV, setExploreBoxV] = useState(false);
     const [SideBoxChannelsV, setSideBoxChannelsV] = useState(false);
-    const [currents, setCurrents] = useState<Currents>({ ...defaultCurrents });
-    const [Channels, setChannels] = useState<Channel[]>([]);
+    const currents = useCurrents();
+    const [Categories, setCategories] = useState<Category[]>([]);
     const [inputTextRows, setinputTextRows] = useState(1);
     const [LoadingText, setLoadingText] = useState("Loading..."); // Replace with loading gif
     const [messages, setMessages] = useState<Message[]>([]);
@@ -59,13 +59,15 @@ const MainLayout: React.FC = () => {
     const [appGridRows, setappGridRows] = useState<string>(`repeat(32, 1fr)`);
     const [appGridColumns, setappGridColumns] = useState<string>(`repeat(32, 1fr)`);
     const [pendingSentRequests, setpendingSentRequests] = useState<PendingFriendRequest[]>([]);
-    const [directmessages, setdirectmessages] = useState<DirectMessage[]>([]);
-    const [writingUsers, setWritingUsers] = useState<string[]>([]);
     const [userStreams, setUserStreams] = useState<{ [userId: string]: MediaStream }>({});
     const [peer, setpeer] = useState<Peer | null>(null);
     const [calls, setcalls] = useState<Record<string, MediaConnection>>({});
     const [microphoneState, setmicrophoneState] = useState<Boolean>(true);
     const [appLoaded, setappLoaded] = useState<Boolean>(false);
+    const [createBoxC, setcreateBoxC] = useState<Category | null>(null);
+    const [createBoxV, setcreateBoxV] = useState<boolean>(false);
+
+    useSocket();
 
     const tooltipRef = useRef<HTMLDivElement | null>(null);
 
@@ -81,6 +83,11 @@ const MainLayout: React.FC = () => {
     };
 
     const user = useUser();
+
+    const { data: localUser, isFetched: localUserReady } = useQuery({
+        queryKey: ['userData'],
+        queryFn: fetchLocalUser,
+    });
 
     const SocketURL = "http://localhost:3001";
     const VoiceSocketURL = "http://localhost:3002";
@@ -113,13 +120,13 @@ const MainLayout: React.FC = () => {
     }, []);
 
     const toggleFriendsDivVisibility = () => {
-        setCurrents((prevCurrents) => ({
-            ...prevCurrents,
-            friendsdiv: {
-                ...prevCurrents.friendsdiv,
-                visible: !prevCurrents.friendsdiv.visible,
-            }
-        }));
+        currents.setFriendsDivV(!currents.friendsdiv.visible);
+    }
+
+    const openExploreBox = (mode: ExploreBoxMode) => {
+        currents.setExploreBoxMode(mode);
+        setExploreBoxV(true);
+        setBgBlurV(true);
     }
 
     const onClickSearch = () => {
@@ -132,43 +139,21 @@ const MainLayout: React.FC = () => {
     }
 
     const onClickFB = (status: ViewingFriendsDiv) => {
-        setCurrents((prevCurrents) => ({
-            ...prevCurrents,
-            friendsdiv: {
-                ...prevCurrents.friendsdiv,
-                status: status,
-            }
-        }));
+        currents.setFriendsDivState(status);
     }
 
     const onClickFriendsButton = () => {
-        setCurrents((prevCurrents) => ({
-            ...prevCurrents,
-            friendsdiv: {
-                ...prevCurrents.friendsdiv,
-                visible: true,
-            }
-        }));
+        currents.setFriendsDivV(true);
     }
 
     const onClickServer = (server: Server) => {
         try {
-            console.log(server.channels);
-            setChannels(server.channels);
+            setCategories(server.categories);
 
-            setCurrents((prevCurrents) => ({
-                ...prevCurrents,
-                friendsdiv: {
-                    ...prevCurrents.friendsdiv,
-                    visible: false,
-                }
-            }));
+            currents.setFriendsDivV(false);
             setSideBoxChannelsV(true);
 
-            setCurrents((prevCurrents) => ({
-                ...prevCurrents,
-                server: server,
-            }));
+            currents.setServer(server);
         } catch (err) {
             console.error(err);
         }
@@ -177,14 +162,10 @@ const MainLayout: React.FC = () => {
     }
 
     const onRightClickServer = (server: Server, ct: React.MouseEvent<HTMLDivElement, MouseEvent>) => {
-        setCurrents((prevCurrents) => ({
-            ...prevCurrents,
-            contextmenu: {
-                shown: true,
-                x: ct.screenX,
-                y: ct.screenY,
-            }
-        }));
+        currents.setContextMenuXY(ct.pageX, ct.pageY);
+        currents.setContextMenuID(server.id);
+        currents.setContextMenuShown(true);
+
         return false;
     }
 
@@ -199,13 +180,10 @@ const MainLayout: React.FC = () => {
                     const messageList: Message[] = data.data;
                     setMessages(messageList);
 
-                    console.log("Channel loaded ", channel);
-                    console.log("Messages: ", messageList);
+                    // console.log("Channel loaded ", channel);
+                    // console.log("Messages: ", messageList);
 
-                    setCurrents((prevCurrents) => ({
-                        ...prevCurrents,
-                        channel: channel,
-                    }));
+                    currents.setChannel(channel);
                 });
             })
         } catch (err) {
@@ -215,50 +193,34 @@ const MainLayout: React.FC = () => {
 
     const onClickAppIcon = () => {
         setSideBoxChannelsV(false);
-        setCurrents((prevCurrents) => ({
-            ...prevCurrents,
-            channel: null,
-            server: null,
-            directmessage: null,
-            friendsdiv: {
-                ...prevCurrents.friendsdiv,
-                visible: true,
-            }
-        }));
+        currents.setChannel(null);
+        currents.setServer(null);
+        currents.setDirectMessage(null);
+        currents.setFriendsDivV(true);
+
         setMessages([]);
         setServerUsersDivV(false);
     }
 
     const onClickExploreButton = () => {
-        setCurrents((prevCurrents) => ({
-            ...prevCurrents,
-            exploreboxmode: 0,
-        }));
+        currents.setExploreBoxMode(0);
+
         setExploreBoxV(true);
         setBgBlurV(true);
     }
 
     const onClickJoinButton = () => {
-        setCurrents((prevCurrents) => ({
-            ...prevCurrents,
-            exploreboxmode: 1,
-        }));
+        currents.setExploreBoxMode(1);
     }
 
     const onClickBackButton = () => {
-        setCurrents((prevCurrents) => ({
-            ...prevCurrents,
-            exploreboxmode: 0,
-        }));
+        currents.setExploreBoxMode(0);
     }
 
     const onClickServerJoinButton = (server: string) => {
         setLoadingText("Loading...");
 
-        setCurrents((prevCurrents) => ({
-            ...prevCurrents,
-            exploreboxmode: 2,
-        }));
+        currents.setExploreBoxMode(2);
 
         fetch('/api/v1/user/servers', {
             method: 'POST',
@@ -277,10 +239,7 @@ const MainLayout: React.FC = () => {
                     setLoadingText("Error!: " + data.message);
                 }
                 setTimeout(() => {
-                    setCurrents((prevCurrents) => ({
-                        ...prevCurrents,
-                        exploreboxmode: 0,
-                    }));
+                    currents.setExploreBoxMode(0);
                     setLoadingText("Loading...");
                 }, 1000);
             })
@@ -290,10 +249,7 @@ const MainLayout: React.FC = () => {
         setTimeout(() => {
             setExploreBoxV(false);
             setBgBlurV(false);
-            setCurrents((prevCurrents) => ({
-                ...prevCurrents,
-                exploreboxmode: 0,
-            }));
+            currents.setExploreBoxMode(0);
             setLoadingText("Loading...");
         }, 1000);
     }
@@ -303,10 +259,7 @@ const MainLayout: React.FC = () => {
 
         setLoadingText("Loading...");
 
-        setCurrents((prevCurrents) => ({
-            ...prevCurrents,
-            exploreboxmode: 2,
-        }))
+        currents.setExploreBoxMode(2);
 
         fetch(`/api/v1/users/withName/${friendName}`).then(res => res.json().then(data => {
             if (data.data) {
@@ -376,6 +329,8 @@ const MainLayout: React.FC = () => {
     }
 
     const onKeyDownInput = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+        const sentDateTime = new Date();
+
         if (!currents.channel) {
             return;
         }
@@ -388,6 +343,8 @@ const MainLayout: React.FC = () => {
             return;
         }
 
+        if (!currents.user) return;
+
         const textarea = event.target as HTMLTextAreaElement;
         const message = textarea.value;
 
@@ -395,33 +352,36 @@ const MainLayout: React.FC = () => {
             return;
         }
 
+        const isReplying = !!replyingTo;
+        const ReplyingToMessage = replyingTo;
+
         if (event.key == "Enter" && !event.shiftKey) {
             event.preventDefault();
-            try {
-                fetch(`/api/v1/channels/${currents.channel.id}/messages`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        content: message,
-                    })
-                })
-                    .then((res) => res.json())
-                    .then((data) => {
-                        if (!data.data) return;
-
-                        const sentMessage: Message = data.data;
-
-                        console.log("message", data);
-
-                        sendMessage(sentMessage, setMessages);
-                        setreplyingTo(null);
-                    });
-                textarea.value = "";
-            } catch (err) {
-                console.error(err);
+            var messageI: SendMessageI = {
+                content: message,
+                channelId: currents.channel.id,
+                tempID: genTempID(),
+                author: {
+                    id: currents.user.id,
+                    username: currents.user.username,
+                    avatarUrl: currents.user.avatarUrl,
+                },
+                timestamp: sentDateTime,
             }
+
+            if (isReplying) {
+                messageI.repliedToId = ReplyingToMessage?.id;
+                messageI.repliedToAuthor = {
+                    id: ReplyingToMessage!.author.id,
+                    username: ReplyingToMessage!.author.username,
+                    avatarUrl: ReplyingToMessage!.author.avatarUrl,
+                }
+                messageI.repliedToContent = ReplyingToMessage!.content;
+            }
+
+            sendMessage(messageI);
+            setreplyingTo(null);
+            textarea.value = "";
         } else {
             if (timeout) {
                 sendStartWritingEvent();
@@ -437,13 +397,7 @@ const MainLayout: React.FC = () => {
             return;
         }
         if (target.id != "context-menu") {
-            setCurrents((prevCurrents) => ({
-                ...prevCurrents,
-                contextmenu: {
-                    ...prevCurrents.contextmenu,
-                    shown: false,
-                }
-            }));
+            currents.setContextMenuShown(false);
         }
     }
 
@@ -494,7 +448,7 @@ const MainLayout: React.FC = () => {
         }
     }
 
-    const onClickUserAvatar = (messageId: string | null, ev: React.MouseEvent) => {
+    const onClickUserAvatarWithMesssageId = (messageId: string | null, ev: React.MouseEvent) => {
         const messageInfo = MessageInfos.find(x => x.Message.id === messageId);
         if (messageInfo) {
             console.log("Open user context menu: ");
@@ -503,20 +457,26 @@ const MainLayout: React.FC = () => {
         }
     }
 
+    const onClickUserAvatar = (userId: string, ev: React.MouseEvent) => {
+        console.log("Open user context menu: ");
+        console.log(userId);
+        OpenUserContextMenu(userId, ev);
+    }
+
     const onClickSettings = (mode: SettingsMode) => {
-        setCurrents((prev) => ({
-            ...prev,
-            settingsMode: mode,
-            setting: null,
-        }))
+        currents.setSetting(null);
+        currents.setSettingsMode(mode);
         setsettingsDivV(!settingsDivV);
     }
 
+    const openSettings = (mode: SettingsMode) => {
+        currents.setSetting(null);
+        currents.setSettingsMode(mode);
+        setsettingsDivV(true);
+    }
+
     const onClickAddFriend = () => {
-        setCurrents((prevCurrents) => ({
-            ...prevCurrents,
-            exploreboxmode: 3,
-        }))
+        currents.setExploreBoxMode(3);
         setExploreBoxV(true);
         setBgBlurV(true);
     }
@@ -552,10 +512,7 @@ const MainLayout: React.FC = () => {
                     if (data.data) {
                         // Call successfully started
                         const vc: DBVoiceChatWithMembers = data.data as DBVoiceChatWithMembers;
-                        setCurrents(prev => ({
-                            ...prev,
-                            vc: vc
-                        }));
+                        currents.setVC(vc);
 
                         // Join the call
                         JoinCall(ToVCInfo(vc));
@@ -589,15 +546,10 @@ const MainLayout: React.FC = () => {
     }
 
     const OpenUserContextMenu = (userId: string, ev: React.MouseEvent) => {
-        setCurrents((prev) => ({
-            ...prev,
-            contextmenu: {
-                x: ev.pageX,
-                y: ev.pageY,
-                shown: true
-            },
-            contextmenumode: 0,
-        }));
+        currents.setContextMenuXY(ev.pageX, ev.pageY);
+        currents.setContextMenuID(userId);
+        currents.setContextMenuShown(true);
+        currents.setContextMenuMode("User");
     }
 
     const JoinCall = (vc: VoiceChatInformation) => {
@@ -647,21 +599,15 @@ const MainLayout: React.FC = () => {
                                 delete updatedStreams[vcUser.id];
                                 return updatedStreams;
                             });
-                            setCurrents((prev) => ({
-                                ...prev,
-                                vc: {
-                                    ...prev.vc!,
-                                    users: prev.vc!.members.filter(x => x.id !== vcUser.id)
-                                }
-                            }));
+
+                            if (currents.vc?.members) {
+                                currents.setVCUsers(currents.vc.members.filter((user: User) => user.id !== vcUser.id));
+                            }
                         });
                     })
 
-                    setCurrents(prev => ({
-                        ...prev,
-                        vc: newVC,
-                        voicechatopen: true,
-                    }));
+                    currents.setVC(newVC);
+                    currents.setVCOpen(true);
 
                     voicesocket?.emit("vc_join", vc, ToUserSmall(currents.user!));
                 }).catch(err => { console.error("Failed to get media stream", err) });
@@ -685,25 +631,26 @@ const MainLayout: React.FC = () => {
             if (data.message === "Successfully left voice chat") {
                 console.log("Leave call: ", data);
                 voicesocket?.emit("vc_leave", vc, ToUserSmall(currents.user!));
-                setCurrents(prev => ({
-                    ...prev,
-                    vc: null,
-                    voicechatopen: false,
-                }));
+
+                currents.setVC(null);
+                currents.setVCOpen(false);
             } else {
                 toast("Couldn't leave vc " + data.message);
             }
         }));
     }
 
-    const sendMessage = (message: Message, setMessages: (msg: any) => void) => {
+    const sendMessage = (message: SendMessageI,) => {
         console.log("Sending message: ", message);
+
         const socketData: SocketData = {
             infoType: SocketInformationType.ClientSendMessage,
-            dataType: AllowedTypes.Message,
+            dataType: AllowedTypes.MessageI,
             data: message
         }
         socket?.emit("message", socketData);
+
+
         /*setMessages((prevMessages: Message[]) => [...prevMessages, message]);*/
     }
 
@@ -713,19 +660,17 @@ const MainLayout: React.FC = () => {
             dataType: AllowedTypes.Message,
             data: message
         }
-        fetch(`/api/v1/messages/${message.id}`, {
-            method: 'DELETE'
-        }).then((res) => res.json()).then((data) => {
-            console.log(data);
-            if (data.message === "Message deleted") {
-                socket?.emit("delete_message", socketData);
-            }
-        });
+        socket?.emit("delete_message", socketData);
+
+        if (message.id.startsWith("temp_")) {
+            awaiting.addAwaitingDeletionMessages(message.id);
+        }
     }
 
     const editMessage = (newMessage: Message, message: Message) => {
         const context: EditContext = {
             messageId: message.id,
+            channelId: message.channelId,
             newContent: newMessage.content,
         }
         const socketData: SocketData = {
@@ -733,20 +678,11 @@ const MainLayout: React.FC = () => {
             dataType: AllowedTypes.EditContext,
             data: context
         }
-        fetch(`/api/v1/messages/${message.id}`, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                content: newMessage.content,
-            })
-        }).then((res) => res.json()).then((data) => {
-            console.log(data);
-            if (data.message === "Message updated") {
-                socket?.emit("edit_message", socketData);
-            }
-        });
+        socket?.emit("edit_message", socketData);
+
+        if (message.id.startsWith("temp_")) {
+            awaiting.addAwaitingEditionMessages(context);
+        }
     }
 
     const sendStartWritingEvent = () => {
@@ -790,13 +726,8 @@ const MainLayout: React.FC = () => {
             if (data.data) {
                 const directMessage: DirectMessage = data.data as DirectMessage;
                 setSideBoxChannelsV(false);
-                setCurrents(prev => ({
-                    ...prev,
-                    friendsdiv: {
-                        ...(prev.friendsdiv),
-                        visible: false,
-                    }
-                }))
+
+                currents.setFriendsDivV(false);
                 try {
                     fetch(`api/v1/channels/${directMessage.id}/messages`).then((res) => {
                         if (res.status != 200) {
@@ -809,23 +740,18 @@ const MainLayout: React.FC = () => {
 
                             console.log("Messages: ", messageList);
 
-                            setCurrents(prev => ({
-                                ...prev,
-                                directmessage: directMessage,
-                            }));
+                            currents.setDirectMessage(directMessage);
 
                             console.log("Set DM to ", directMessage);
 
                             console.log("Loading DM ", directMessage);
 
-                            setCurrents((prevCurrents) => ({
-                                ...prevCurrents,
-                                channel: {
-                                    id: directMessage.id,
-                                    name: directMessage.directMsgFor.filter(x => x.id !== currents.user?.id)[0].username,
-                                    channelType: "DIRECTMESSAGE",
-                                },
-                            }));
+                            currents.setChannel({
+                                categoryId: null,
+                                channelType: "DIRECTMESSAGE",
+                                id: directMessage.id,
+                                name: directMessage.directMsgFor.filter(x => x.id !== currents.user?.id)[0].username,
+                            });
                         });
                     })
                 } catch (err) {
@@ -845,15 +771,22 @@ const MainLayout: React.FC = () => {
         onClickChannel: onClickChannel,
         onClickDirectMessage: onClickDirectMessage,
         onClickSettings: onClickSettings,
+        openExploreBox: openExploreBox,
+        setcreateBoxC: setcreateBoxC,
+        setcreateBoxV: setcreateBoxV,
+        createBoxV: createBoxV,
+        createBoxC: createBoxC,
         SideBoxChannelsV: SideBoxChannelsV,
-        Channels: Channels,
+        Categories: Categories,
         directmessages: directmessages,
         Currents: currents,
     }
 
     const ExploreBoxProps = {
         ExploreBoxV: ExploreBoxV,
+        createBoxC: createBoxC,
         setBgBlurV: setBgBlurV,
+        setcreateBoxV: setcreateBoxV,
         setExploreBoxV: setExploreBoxV,
         closeExploreBox: closeExploreBox,
         onClickJoinButton: onClickJoinButton,
@@ -862,8 +795,6 @@ const MainLayout: React.FC = () => {
         onClickSendFriendRequestButton: onClickSendFriendRequestButton,
         setLoadingText: setLoadingText,
         LoadingText: LoadingText,
-        setCurrents: setCurrents,
-        Currents: currents,
     }
 
     const FriendsDivProps = {
@@ -883,15 +814,13 @@ const MainLayout: React.FC = () => {
         onMessageEdit: onMessageEdit,
         onMessageDelete: onMessageDelete,
         onEditInput: onEditInput,
-        onClickUserAvatar: onClickUserAvatar,
+        onClickUserAvatar: onClickUserAvatarWithMesssageId,
         replyingTo: replyingTo,
         setreplyingTo: setreplyingTo,
         MessageInfos: MessageInfos,
         onClickMicrophone: onClickMicrophone,
         onClickLeaveCall: onClickLeaveCall,
         setMessageInfos: setMessageInfos,
-        setCurrents: setCurrents,
-        Currents: currents,
         kbState: kbState,
         messages: messages,
         voicesocket: voicesocket,
@@ -902,27 +831,24 @@ const MainLayout: React.FC = () => {
         calls: calls,
         setcalls: setcalls,
         peer: peer,
-        writingUsers: writingUsers,
         microphoneState: microphoneState,
     }
 
     const MainBoxProps = {
         onClickServer: (server: Server) => onClickServer(server),
-        onRightClickServer: (server: Server, ct: React.MouseEvent<HTMLDivElement, MouseEvent>) => onRightClickServer(server, ct),
+        onRightClickServer: onRightClickServer,
         onClickAppIcon: onClickAppIcon,
         onClickExploreButton: onClickExploreButton,
-        Currents: currents,
-        setCurrents: setCurrents,
         ExploreBoxV: ExploreBoxV,
     }
 
     const ContextMenuProps = {
-        Currents: currents,
+        openExploreBox: openExploreBox,
+        openSettings: openSettings,
     }
 
     const SettingsBoxProps = {
         Currents: currents,
-        setCurrents: setCurrents,
         setsettingsDivV: setsettingsDivV,
         settingsDivV: settingsDivV,
     }
@@ -932,9 +858,7 @@ const MainLayout: React.FC = () => {
     }
 
     const ChannelBoxInfoProps = {
-        Currents: currents,
         setServerUsersDivV: setServerUsersDivV,
-        setCurrents: setCurrents,
         ServerUsersDivV: ServerUsersDivV,
         onClickFB: onClickFB,
         onClickAddFriend: onClickAddFriend,
@@ -974,83 +898,8 @@ const MainLayout: React.FC = () => {
     }
 
     useEffect(() => {
-        if (!user.user) {
-            console.log("No user.");
-            return;
-        }
-        socket = io("http://localhost:3001", {
-            query: {
-                id: user.user.id
-            }
-        });
-        socket.on("message", (data: ClientResponsePacket) => {
-            console.log(data);
-            if (data.dataType == AllowedTypes.Message) {
-                const recievedMessage = data.data as Message;
-                console.log("Got message: ", recievedMessage);
-                setMessages((prevMessages: Message[]) => [...prevMessages, recievedMessage]);
-            }
-        });
-        socket.on("delete_message", (message: Message) => {
-            setMessages(messages.filter((m) => m.id !== message.id));
-        });
-        socket.on("edit_message", (edit: EditContext) => {
-            setMessages((prevMessages: Message[]) =>
-                prevMessages.map((msg) =>
-                    (msg.id === edit.messageId) ? { ...msg, content: edit.newContent } : msg
-                )
-            );
-        });
-        socket.on("friend_request_send", (friendRequest: PendingFriendRequest) => {
-            if (friendRequest.receiverId == user.user.id) {
-                // Notification
-                toast(`${friendRequest.sender.username} sent you a friend request`);
-            }
-        });
-        socket.on("friend_request_answer", (data: FriendRequestAnswer) => {
-            const { friendRequest, answer } = data;
-            console.log("friend_request_answer", friendRequest, answer);
-            GetUser(friendRequest.senderId).then((sender) => {
-                switch (answer) {
-                    case "accept":
-                        toast(`${sender.username} accepted your friend request`);
-                        break;
-                    case "decline":
-                        toast(`${sender.username} declined your friend request`);
-                        break;
-                    default:
-                        break;
-                }
-            })
-        });
-        socket.on("writing_event", (eventUser: User, eventType: string) => {
-            if (eventUser.id !== currents.user?.id) {
-                if (eventType === "start") {
-                    setWritingUsers((prev) => [...prev, eventUser.id]);
-                } else {
-                    setWritingUsers((prev) => prev.filter((id) => id !== eventUser.id));
-                }
-            }
-        });
-        return () => {
-            if (socket) { socket.disconnect(); socket = undefined; }
-        };
-    }, [currents.user]);
-
-    useEffect(() => {
-        if (currents.user && !socket) {
-            socket = io(SocketURL, {
-                query: {
-                    id: currents.user.id
-                }
-            });
-            console.log("Yes");
-        } else {
-            console.log("No");
-        }
-        if (currents.channel) {
+        if (currents.channel)
             socket?.emit("joinChannel", currents.channel.id);
-        }
         return () => {
             if (currents.channel)
                 socket?.emit("leaveChannel", currents.channel?.id);
@@ -1063,7 +912,7 @@ const MainLayout: React.FC = () => {
 
     useEffect(() => {
         if (currents.user) {
-            setdirectmessages(currents.user.directMsgs);
+            setDirectMessages(currents.user.directMsgs);
         }
     }, [currents.user]);
 
@@ -1087,10 +936,8 @@ const MainLayout: React.FC = () => {
         if (user.user) {
             fetch("/api/v1/user").then(res => res.json().then(data => {
                 const gotUser: DetailedDBUser = data.data;
-                setCurrents((prevCurrents) => ({
-                    ...prevCurrents,
-                    user: gotUser,
-                }));
+
+                currents.setUser(gotUser);
             }));
         }
     }, [user.user])
@@ -1106,10 +953,7 @@ const MainLayout: React.FC = () => {
 
     useEffect(() => {
         if (tooltipRef.current) {
-            setCurrents((prev) => ({
-                ...prev,
-                tooltip: { ...prev.tooltip, ref: tooltipRef.current },
-            }));
+            currents.setTooltipRef(tooltipRef.current);
         }
     }, [tooltipRef.current]);
 
@@ -1130,13 +974,7 @@ const MainLayout: React.FC = () => {
 
                 const vcUser: User = call_peer.metadata.user;
 
-                setCurrents((prev) => ({
-                    ...prev,
-                    vc: {
-                        ...prev.vc!,
-                        users: [...prev.vc!.members, { ...vcUser, avatarUrl: vcUser.avatarUrl || '' }]
-                    }
-                }));
+                currents.setVCUsers([...currents.vc!.members, { ...vcUser, avatarUrl: vcUser.avatarUrl }]);
 
                 call_peer.on("stream", (remoteStream) => {
                     setUserStreams(prev => ({ ...prev, [call_peer.peer]: remoteStream }));
@@ -1148,13 +986,7 @@ const MainLayout: React.FC = () => {
                         delete updatedStreams[call_peer.peer];
                         return updatedStreams;
                     });
-                    setCurrents((prev) => ({
-                        ...prev,
-                        vc: {
-                            ...prev.vc!,
-                            users: prev.vc!.members.filter(x => x.id !== vcUser.id),
-                        }
-                    }));
+                    currents.setVCUsers(currents.vc!.members.filter(x => x.id !== vcUser.id));
                 });
             })
         })
@@ -1163,6 +995,12 @@ const MainLayout: React.FC = () => {
     useEffect(() => {
         fetch("/api/v1/app/checkUser");
     }, []);
+
+    useEffect(() => {
+        if(localUserReady) {
+            currents.setUser(localUser as DetailedDBUser);
+        }
+    }, [localUserReady])
 
     // For debug remove later
     const Debugging = () => {
@@ -1185,11 +1023,7 @@ const MainLayout: React.FC = () => {
     }
     Debugging();
 
-    if (!currents.user || !user || !user.isLoaded) {
-        console.log(!!currents.user);
-        console.log(!!socket);
-        console.log(!!user);
-        console.log(!!user.isLoaded);
+    if (!currents.user) {
         return <><LoadingPage isDone={false} /></>
     } else if (!appLoaded) {
         setTimeout(() => {
@@ -1200,7 +1034,7 @@ const MainLayout: React.FC = () => {
     }
 
     return (
-        <>
+        <div>
             {/*<VoiceChat {...VoiceChatProps} />*/}
             {/*(<TransComp />)*/}
             <ContextMenu {...ContextMenuProps} />
@@ -1232,7 +1066,7 @@ const MainLayout: React.FC = () => {
                 </div>
             </div>
             {/* Functional Components */}
-        </>
+        </div>
     )
 };
 

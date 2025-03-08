@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
 export async function POST(request: NextRequest, { params }: { params: { channelID: string } }) {
     try {
         const data = await request.json();
-        const { content } = data;
+        const { content, tempID } = data;
         const { channelID } = await params;
 
         const user = await currentUser();
@@ -16,10 +16,53 @@ export async function POST(request: NextRequest, { params }: { params: { channel
 
         if (!content) return NextResponse.json({ message: "Content is required" }, { status: 400 });
         if (!channelID) return NextResponse.json({ message: "Channel ID is required" }, { status: 400 });
+        if (!tempID) return NextResponse.json({ message: "Temp ID is required" }, { status: 400 });
 
-        await db.messages.create({ data: { content: content, channelId: channelID, authorId: user.id } });
+        const newMessage = await db.messages.create({
+            data: { content: content, channelId: channelID, authorId: user.id }
+            ,
+            include: {
+                author: {
+                    select: {
+                        id: true,
+                        username: true,
+                        avatarUrl: true
+                    }
+                },
+                channel: {
+                    select: {
+                        id: true,
+                        categoryId: true,
+                        name: true
+                    }
+                },
+                repliedTo: {
+                    include: {
+                        author: {
+                            select: {
+                                id: true,
+                                username: true,
+                                avatarUrl: true
+                            }
+                        },
+                        channel: {
+                            select: {
+                                id: true,
+                                categoryId: true,
+                                name: true
+                            }
+                        },
+                        repliedTo: {
+                            select: { id: true } // Depth End
+                        }
+                    },
+                }
+            },
+        });
 
-        return NextResponse.json({ message: "Message sent successfully" }, { status: 200 });
+        // io.to(channelID).emit("db_message", tempID, newMessage);
+
+        return NextResponse.json({ data: newMessage }, { status: 200 });
     } catch (err) {
         if (err instanceof Error)
             console.log(err.stack);
@@ -95,6 +138,7 @@ export async function GET(request: NextRequest, { params }: { params: { channelI
                     },
                 }
             },
+            orderBy: { timestamp:  'asc'}
         });
 
         return NextResponse.json({ data: getMessages }, { status: 200 });
