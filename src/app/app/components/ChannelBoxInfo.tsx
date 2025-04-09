@@ -4,18 +4,16 @@ import { useCurrents } from "@/store/currents";
 
 
 interface Props {
-    setServerUsersDivV: React.Dispatch<React.SetStateAction<boolean>>;
-    ServerUsersDivV: boolean;
     onClickFB: (status: ViewingFriendsDiv) => void;
     onClickAddFriend: () => void;
     onClickCall: () => void;
 }
 
-const ChannelBoxInfo: React.FC<Props> = ({ setServerUsersDivV, ServerUsersDivV, onClickAddFriend, onClickFB, onClickCall }) => {
+const ChannelBoxInfo: React.FC<Props> = ({ onClickAddFriend, onClickFB, onClickCall }) => {
     const currents = useCurrents();
 
     const onClickUsers = () => {
-        setServerUsersDivV(!ServerUsersDivV);
+        currents.setServerUsersDivV(!currents.ServerUsersDivV);
     }
 
     return (

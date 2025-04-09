@@ -1,11 +1,15 @@
 import { JSX, ReactNode, RefObject } from "react";
 import { FriendRequest as DBFriendRequest, VoiceChat as DBVoiceChat, Prisma } from '@prisma/client';
 import Appearance from "../components/settings/Appearance";
-import { Channel, DirectMessage, Message, SendMessageI, Server, User, VoiceChatInformation } from "./socket_utils";
+import { Category, Channel, DirectMessage, Message, SendMessageI, Server, User, VoiceChatInformation } from "./socket_utils";
 import { DetailedDBUser } from "./socket_utils";
 import emojiNames from "@/data/emojiList.json";
 import { genInvite } from "@/app/api/v1/utils/utils";
 import { useCurrents } from "@/store/currents";
+import { ColorfulText, GlitchText, SpoilerText } from "../components/common/StyleTexts";
+import ServerInformation from "../components/settings/ServerInformation";
+import ServerInvites from "../components/settings/Invites";
+import ChannelInformation from "../components/settings/ChannelInformation";
 
 export type DBVoiceChatWithMembers = Prisma.VoiceChatGetPayload<{
     include: {
@@ -61,6 +65,7 @@ export enum ExploreBoxMode {
 
 export interface TooltipInfo {
     text: string;
+    textColor: string;
     ref: HTMLDivElement | null;
     position: { left: number, top: number };
     visible: boolean;
@@ -80,6 +85,31 @@ export interface Currents {
     voicechatopen: boolean;
     tooltip: TooltipInfo;
     settingsMode: SettingsMode;
+    userFetching: boolean;
+    BgBlurV: boolean;
+    ExploreBoxV: boolean;
+    confirmationMenu: boolean;
+    confirmationMenuText: string;
+    confirmationMenuRetypeText?: string;
+    settingsDivV: boolean;
+    SideBoxChannelsV: boolean;
+    Categories: Category[];
+    ServerUsersDivV: boolean;
+    settingsObject: any;
+    setSettingsObject: (settingsObject: any) => void;
+    setServerUsersDivV: (ServerUsersDivV: boolean) => void;
+    onClickAppIcon: () => void;
+    setCategories: (categories: Category[]) => void;
+    setSideBoxChannelsV: (SideBoxChannelsV: boolean) => void;
+    setSettingsDivV: (settingDivV: boolean) => void;
+    setconfirmationMenuRetypeText: (retype: (string | undefined)) => void;
+    confirmationMenuCallback: (answer: boolean) => void,
+    setconfirmationMenuCallback: (confirmationMenuCallback: (answer: boolean) => void) => void;
+    setConfirmationMenuText: (text: string) => void;
+    setConfirmationMenu: (confirmationMenu: boolean) => void;
+    setBgBlurV: (BgBlurV: boolean) => void;
+    setExploreBoxV: (ExploreBoxV: boolean) => void;
+    setUserFetching: (fetching: boolean) => void;
     setChannel: (Channel: Channel | null) => void;
     setServer: (server: Server | null) => void;
     setExploreBoxMode: (exploreboxmode: ExploreBoxMode | null) => void;
@@ -99,6 +129,7 @@ export interface Currents {
     setContextMenuMode: (mode: ContextMenuMode | null) => void;
     setVCUsers: (users: User[]) => void;
     setTooltipText: (text: string) => void;
+    setTooltipTextColor: (textColor: string) => void;
     setTooltipV: (visible: boolean) => void;
     setTooltipRef: (ref: HTMLDivElement | null) => void;
     setUserServers: (servers: Server[]) => void;
@@ -113,10 +144,6 @@ export type ContextMenuMode = 'User' | 'Channel' | 'Server' | 'Direct Message' |
 export interface FriendsDivStatus {
     visible: boolean,
     status: ViewingFriendsDiv,
-}
-
-export async function GetUser(id: string) {
-    return (await (await fetch(`/api/v1/users/${id}`)).json()).data as User;
 }
 
 export function ToUserSmall(resource: DetailedDBUser): User {
@@ -145,39 +172,76 @@ export function ToVCInfo(dbvc: DBVoiceChatWithMembers): VoiceChatInformation {
 
 export type ViewingFriendsDiv = 'online' | 'offline' | 'blocked' | 'pending';
 
-export function SyntaxHighlight(patterns: SyntaxPattern[], incoming: string, styles: any): JSX.Element[] {
+function renderMatchContent(className: string, match: RegExpMatchArray): JSX.Element | string {
+    switch (className) {
+        case "hackTextStyle":
+            return <GlitchText text={match[1]} />;
+        case "colorfulTextStyle":
+            return <ColorfulText text={match[1]} time="10s" />;
+        case "colorfulfastTextStyle":
+            return <ColorfulText text={match[1]} time="5s" />;
+        case "spoilerTextStyle":
+            return <SpoilerText text={match[1]} />;
+        default:
+            return match[1];
+    }
+}
+
+export function SyntaxHighlight(
+    patterns: SyntaxPattern[],
+    incoming: string,
+    styles: Record<string, string>
+): JSX.Element[] {
     const ustyles = require("./util.module.css");
 
-    const elements: JSX.Element[] = [];
-    let cursor = 0;
+    let elements: (string | JSX.Element)[] = [incoming]; // Start with the full text
+    let lastIndex = 0;
 
     for (const pattern of patterns) {
-        const matches = incoming.matchAll(pattern.pattern);
+        let newElements: (string | JSX.Element)[] = [];
 
-        for (const match of matches) {
-            if (match.index === undefined) continue;
+        for (const el of elements) {
+            if (typeof el === "string") {
+                // If it's plain text, apply syntax highlighting
+                const matches = [...el.matchAll(pattern.pattern)];
+                let cursor = 0;
 
-            if (cursor < match.index) {
-                elements.push(<span key={`text-${cursor}`}>{incoming.slice(cursor, match.index)}</span>);
+                for (const match of matches) {
+                    if (match.index === undefined) continue;
+
+                    // Add unstyled text before the match
+                    if (cursor < match.index) {
+                        newElements.push(el.slice(cursor, match.index));
+                    }
+
+                    // Add styled match
+                    newElements.push(
+                        <span key={`match-${lastIndex++}`} className={`${styles[pattern.className]} ${ustyles.hl}`}>
+                            {renderMatchContent(pattern.className, match)}
+                        </span>
+                    );
+
+                    cursor = match.index + match[0].length;
+                }
+
+                // Add any remaining text after the last match
+                if (cursor < el.length) {
+                    newElements.push(el.slice(cursor));
+                }
+            } else {
+                // If it's already a JSX element, keep it
+                newElements.push(el);
             }
-
-            elements.push(
-                <span key={`match-${match.index}`} className={`${styles[pattern.className]} ${ustyles.hl}`}>
-                    {match[0]}
-                </span>
-            );
-
-            cursor = match.index + match[0].length;
         }
+
+        elements = newElements;
     }
 
-    // Add any remaining text after the last match
-    if (cursor < incoming.length) {
-        elements.push(<span key={`text-${cursor}`} className={ustyles.hl}>{incoming.slice(cursor)}</span>);
-    }
-
-    return elements;
+    return elements.map((el, index) =>
+        typeof el === "string" ? <span key={`text-${index}`}>{el}</span> : el
+    );
 }
+
 
 export function getLineHeight(element: HTMLElement): number {
     const computedStyle = window.getComputedStyle(element);
@@ -191,14 +255,18 @@ export function getLineHeight(element: HTMLElement): number {
     return parseFloat(lineHeight);
 }
 
+export type SettingUpdateType = 'UserInfo' | 'ServerInfo' | 'ServerInvites' | 'ChannelInfo';
+
 export interface SettingsProps {
     Currents: Currents,
-    updateSettings: (setting: string, data: any) => void;
-
+    updateSettings: (setting: string, data: any, dataType: SettingUpdateType, callbackFn: () => void) => void;
 }
 
 export const componentMap: Map<string, React.FC<SettingsProps>> = new Map([
-    ["Appearance", Appearance]
+    ["Appearance", Appearance],
+    ["Server Information", ServerInformation],
+    ["Invites", ServerInvites],
+    ["Channel Information", ChannelInformation],
 ]);
 
 export function getLocale() {
@@ -279,8 +347,8 @@ export interface MessageInfo {
 }
 
 export const UpdateMessageInfo = (message: Message, key: any, value: any, setMessageInfos: any) => {
-    setMessageInfos((prev: any) =>
-        prev.map((info: any) =>
+    setMessageInfos((prev: MessageInfo[]) =>
+        prev.map((info: MessageInfo) =>
             info.Message.id === message.id
                 ? { ...info, [key]: value } // Update the specific message
                 : info // Keep the rest unchanged
@@ -313,10 +381,40 @@ export const onMouseOverTooltipElement = (ev: React.MouseEvent, text: string, cu
     if (left + tooltipWidth > window.innerWidth) left = window.innerWidth - tooltipWidth - 10; // Prevent right overflow
 
     currents.setTooltipText(text);
+    currents.setTooltipTextColor("#F0F7EE");
     currents.setTooltipPosition(left, top);
     currents.setTooltipV(true);
 }
 
+export const onMouseOverTooltipElementWithColor = (ev: React.MouseEvent, text: string, textColor: string, currents: Currents) => {
+    if (!currents.tooltip.ref) return;
+
+    const rect = ev.currentTarget.getBoundingClientRect();
+    const scrollX = window.scrollX;
+    const scrollY = window.scrollY;
+
+    const tooltipHeight = currents.tooltip.ref.offsetHeight || 30;
+    const tooltipWidth = currents.tooltip.ref.offsetWidth || 100;
+
+    let top = rect.top + scrollY - tooltipHeight - 10; // Default: Above the button
+    let left = rect.left + scrollX + rect.width / 2 - tooltipWidth / 2; // Center horizontally
+
+    // Prevent tooltip from going out of the screen
+    if (top < 0) {
+        top = rect.bottom + scrollY + 10; // Move below if it overflows top
+        //setPlacement("bottom");
+    } else {
+        //setPlacement("top");
+    }
+
+    if (left < 0) left = 10; // Prevent left overflow
+    if (left + tooltipWidth > window.innerWidth) left = window.innerWidth - tooltipWidth - 10; // Prevent right overflow
+
+    currents.setTooltipText(text);
+    currents.setTooltipTextColor(textColor);
+    currents.setTooltipPosition(left, top);
+    currents.setTooltipV(true);
+}
 export const onMouseLeaveTooltipElement = (currents: Currents) => {
     currents.setTooltipV(false);
 }
@@ -386,4 +484,46 @@ export function tempMessageToMessage(recievedMessage: SendMessageI): Message {
     }
 
     return newMessage;
+}
+
+declare global {
+    interface Number {
+        clamp(min: number, max: number): number;
+    }
+}
+
+/**
+ * Returns a number whose value is limited to the given range.
+ *
+ * Example: limit the output of this computation to between 0 and 255
+ * (x * 255).clamp(0, 255)
+ *
+ * @param {Number} min The lower boundary of the output range
+ * @param {Number} max The upper boundary of the output range
+ * @returns A number in the range [min, max]
+ * @type Number
+ */
+Number.prototype.clamp = function (this: number, min: number, max: number): number {
+    return Math.min(Math.max(this, min), max);
+};
+
+export async function copyToClipboard(content: string) {
+    await navigator.clipboard.writeText(content);
+}
+
+export function OpenConfirmationMenu(currents: Currents, question: string, f: (answer: boolean) => void) {
+    console.log("Openning Conf.Menu!");
+
+    currents.setconfirmationMenuCallback(f);
+    currents.setConfirmationMenuText(question);
+    currents.setConfirmationMenu(true);
+}
+
+export function OpenConfirmationMenuWithRetype(currents: Currents, question: string, retypeText: string, f: (answer: boolean) => void) {
+    console.log("Openning Conf.Menu!");
+
+    currents.setconfirmationMenuCallback(f);
+    currents.setConfirmationMenuText(question);
+    currents.setconfirmationMenuRetypeText(retypeText);
+    currents.setConfirmationMenu(true);
 }

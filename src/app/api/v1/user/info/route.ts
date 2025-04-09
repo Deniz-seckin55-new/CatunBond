@@ -1,3 +1,4 @@
+import { UserInfo } from "@/app/app/utils/socket_utils";
 import { db } from "@/lib/prisma";
 import { currentUser } from "@clerk/nextjs/server";
 import { PrismaClient } from "@prisma/client";
@@ -24,14 +25,14 @@ export async function PATCH(request: NextRequest) {
     try {
         const user = await currentUser();
         const data = await request.json();
-        const { bio } = data; // Will be updated soon
+        const userInfo: UserInfo = data; // Will be updated soon
 
         if (!user) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-        if (!bio) return NextResponse.json({ message: "Bio is required" }, { status: 400 });
+        if (!userInfo) return NextResponse.json({ message: "User Info is required" }, { status: 400 });
 
-        await db.userInfo.update({ where: { userId: user.id }, data: { biography: bio, } });
+        await db.userInfo.update({ where: { userId: user.id }, data: { ...userInfo } });
 
-        return NextResponse.json({ message: "Successfully updated bio" }, { status: 200 });
+        return NextResponse.json({ message: "Successfully updated user info" }, { status: 200 });
     } catch (err) {
         if (err instanceof Error)
             console.log(err.stack);

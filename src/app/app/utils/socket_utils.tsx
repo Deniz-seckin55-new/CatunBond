@@ -1,5 +1,7 @@
+import { useUserStore } from "@/store/users";
 import { ViewingFriendsDiv } from "./utils";
 import { FriendRequest as DBFriendRequest, Prisma } from "@prisma/client";
+import axios from "axios";
 
 export type Server = Prisma.ServerGetPayload<{
     include: {
@@ -247,6 +249,31 @@ export type DirectMessage = Prisma.ChannelGetPayload<{
     }
 }>
 
+export type UserInfo = Prisma.UserInfoGetPayload<{}>
+
+export type UserNote = Prisma.UserNoteGetPayload<{}>
+
+export type ServerInfo = Prisma.ServerInfoGetPayload<{}>
+
+export type ChannelInfo = Prisma.ChannelInfoGetPayload<{}>
+
+export interface ServerInvites {
+    serverId: string;
+    invites: string[];
+}
+
+export interface UserNotes {
+    userId: string;
+    notes: UserNote[];
+}
+
+export interface UserRelativeInfo {
+    user: User;
+    mutualFriends: User[];
+    mutualServers: Server[];
+    myNotes: string;
+}
+
 export interface VoiceChatInformation {
     id: string,
     users: User[],
@@ -303,4 +330,23 @@ export interface MessageSocketPacket {
 export interface ClientResponsePacket {
     dataType: AllowedTypes,
     data: any
+}
+
+export const getUserSR = async (userID: string) => {
+    const userStore = useUserStore();
+
+
+    if (userID === "" || !userID) return;
+
+    if (userStore.getExistingUser(userID)) {
+        return userStore.getExistingUser(userID);
+    }
+
+    const resp = await axios.get(`/api/v1/users/${userID}`);
+
+    if (!resp.data.data) return;
+
+    const newUser: User = resp.data.data;
+
+    userStore.addUser(newUser);
 }

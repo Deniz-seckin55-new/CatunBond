@@ -27,6 +27,6 @@ export const useDirectMessageStore = create<DirectMessagesStore>((set, get) => (
     },
     replaceDirectMessage: (oldMessage, newMessage) => {
         const oldState = get().directmessages;
-        set({ directmessages: oldState.map(x => (x === oldMessage) ? newMessage : oldMessage)});
+        set({ directmessages: oldState.map(x => (x === oldMessage) ? newMessage : x)});
     }
 }))

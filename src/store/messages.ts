@@ -4,7 +4,7 @@ import { create } from "zustand";
 interface MessagesStore {
     messages: Message[],
     setMessages: (messages: Message[]) => void;
-    setMessagesLamda: (f: (prevMessages: Message[]) => Message[]) => void;
+    setMessagesLambda: (f: (prevMessages: Message[]) => Message[]) => void;
     addMessage: (message: Message) => void;
     removeMessage: (message: Message) => void;
     replaceMessage: (message: Message, newMessage: Message) => void;
@@ -13,20 +13,22 @@ interface MessagesStore {
 export const useMessagesStore = create<MessagesStore>((set, get) => ({
     messages: [],
     addMessage: (message) => {
-        set(({ messages: [...get().messages, message] }));
+        set((state) => ({ messages: [...state.messages, message] }));
+        console.log("New Message add: ", get());
     },
     removeMessage: (message) => {
-        set(({ messages: get().messages.filter(x => x !== message) }));
+        set((state) => ({ messages: state.messages.filter(x => x !== message) }));
     },
     setMessages: (messages) => {
         set(({ messages }));
     },
-    setMessagesLamda: (f) => {
+    setMessagesLambda: (f) => {
         const prevState = get().messages;
         set({ messages: f(prevState) });
     },
     replaceMessage: (oldMessage, newMessage) => {
-        const oldState = get().messages;
-        set({ messages: oldState.map(x => (x === oldMessage) ? newMessage : oldMessage)});
+        set((state) => ({
+            messages: state.messages.map(x => (x === oldMessage) ? newMessage : x)
+        }));
     }
 }))

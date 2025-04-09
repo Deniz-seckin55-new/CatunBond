@@ -2,14 +2,18 @@ import { PrismaClient } from "@prisma/client";
 
 export async function GenerateUserInfo(db: PrismaClient, userId: string) {
     try {
-        const info = await db.userInfo.create({data: {
-            userId: userId,
-            biography: "",
-        }});
+        const info = await db.userInfo.create({
+            data: {
+                userId: userId,
+                biography: "",
+                mainLink: "",
+                shortDescription: "",
+            }
+        });
 
         return info;
     } catch (err) {
-        if(err instanceof Error)
+        if (err instanceof Error)
             console.log(err.stack);
     }
 }
@@ -26,12 +30,31 @@ export function genInvite(length: number) {
 
 export function UserIDListToSmallUserList(userIds: string[], db: PrismaClient) {
     return userIds.map(async (userId) => {
-        const user = await db.user.findUnique({where: {id: userId}});
-        if(!user) return null;
+        const user = await db.user.findUnique({ where: { id: userId } });
+        if (!user) return null;
         return {
             id: user.id,
             username: user.username,
             avatarUrl: user.avatarUrl,
         }
     });
+}
+
+export const defaultServerGet = {
+    include: {
+        categories: {
+            include: {
+                channels: true,
+            }
+        },
+        members: {
+            select: {
+                id: true,
+                username: true,
+                avatarUrl: true,
+            }
+        }
+    }, omit: {
+        invites: true,
+    }
 }

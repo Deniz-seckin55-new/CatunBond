@@ -2,30 +2,31 @@ import { useEffect, useState } from 'react';
 import styles from '../page.module.css';
 import { Currents } from '../utils/utils';
 import { User } from '../utils/socket_utils';
+import { useCurrents } from '@/store/currents';
 
 interface Props {
-    Currents: Currents,
-    ServerUsersDivV: boolean,
+    
 }
 
-const ServerUsersTab: React.FC<Props> = ({ Currents, ServerUsersDivV }) => {
+const ServerUsersTab: React.FC<Props> = ({ }) => {
     const [users, setusers] = useState<User[]>([]);
+    const currents = useCurrents();
 
     useEffect(() => {
-        if (Currents.server) {
-            const usersData: User[] = Currents.server.members;
+        if (currents.server) {
+            const usersData: User[] = currents.server.members;
             setusers(usersData);
         }
-        if (Currents.channel?.channelType === "DIRECTMESSAGE") {
-            if (Currents.directmessage) {
-                setusers(Currents.directmessage.directMsgFor);
+        if (currents.channel?.channelType === "DIRECTMESSAGE") {
+            if (currents.directmessage) {
+                setusers(currents.directmessage.directMsgFor);
             }
         }
-    }, [Currents.server, Currents.directmessage]);
+    }, [currents.server, currents.directmessage]);
 
     return (
         <>
-            {ServerUsersDivV && (
+            {currents.ServerUsersDivV && (
                 <div className={styles.server_users}>
                     <div className={styles.server_users_content}>
                         <div className={styles.server_users_top}>

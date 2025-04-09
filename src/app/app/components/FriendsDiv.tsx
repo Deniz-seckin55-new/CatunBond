@@ -1,13 +1,15 @@
 import styles from '../page.module.css';
 
 import React, { use, useEffect, useState } from 'react';
-import { Currents, GetUser, ToUserSmall } from '../utils/utils';
+import { Currents, ToUserSmall } from '../utils/utils';
 import { Socket } from 'socket.io-client';
 import { FriendRequest as DBFriendRequest } from '@prisma/client';
 import { AllowedTypes, Friend, FriendRequestAnswer, PendingFriendRequest, SocketData, SocketInformationType, User } from '../utils/socket_utils';
+import { useGetUser } from './common/GetUser';
+import axios from 'axios';
+import { useCurrents } from '@/store/currents';
 
 interface Props {
-    Currents: Currents;
     pendingSentRequests: PendingFriendRequest[];
     setpendingSentRequests: React.Dispatch<React.SetStateAction<PendingFriendRequest[]>>;
     onClickFriendUser: (user: User) => void;
@@ -22,7 +24,9 @@ interface LoadingState {
     blocked: boolean,
 }
 
-const FriendsDiv: React.FC<Props> = ({ Currents, pendingSentRequests, setpendingSentRequests, onClickFriendUser, socket }) => {
+const FriendsDiv: React.FC<Props> = ({ pendingSentRequests, setpendingSentRequests, onClickFriendUser, socket }) => {
+    const currents = useCurrents();
+
     const [friendsList, setfriendsList] = useState<User[]>([]);
     const [friends, setfriends] = useState<Friend[]>([]);
     const [blocked, setblocked] = useState<User[]>([]);
@@ -34,11 +38,14 @@ const FriendsDiv: React.FC<Props> = ({ Currents, pendingSentRequests, setpending
         pendingSent: false,
         pendingRecieved: false,
     });
-    useEffect(() => {
-        if(!Currents.user) { return; }
 
-        if (Currents.friendsdiv.visible) {
-            setfriendsList(Currents.user?.friends as User[]);
+    const GetUser = useGetUser();
+
+    useEffect(() => {
+        if (!currents.user) { return; }
+
+        if (currents.friendsdiv.visible) {
+            setfriendsList(currents.user?.friends as User[]);
             console.log("FriendsList: ", friendsList);
             if (friendsList.length == 0) {
                 setLoadingStates((prevState) => ({
@@ -63,40 +70,42 @@ const FriendsDiv: React.FC<Props> = ({ Currents, pendingSentRequests, setpending
                 });
             })
         }
-    }, [Currents.friendsdiv.visible, Currents.user]);
+    }, [currents.friendsdiv.visible, currents.user]);
 
     useEffect(() => {
-        if (!Currents.user) { return; }
-        if (Currents.friendsdiv.visible) {
-                const sent = Currents.user.sentRequests;
-                const recieved = Currents.user.receivedRequests;
-                if (sent && recieved) {
-                        setpendingSentRequests(sent.filter(x => x.status == "PENDING"));
-                        
-                        setLoadingStates((prevState) => ({
-                            ...prevState,
-                            pendingSent: true,
-                        }));
-                    
-                        setpendingRecievedRequests(recieved.filter(x => x.status == "PENDING"));
-                        setLoadingStates((prevState) => ({
-                            ...prevState,
-                            pendingRecieved: true,
-                        }));
-                    }
-            fetch("/api/v1/user/blocked")
-                .then(res => res.json().then(data => {
-                if (data.data) {
-                    const blockedUsers: User[] = data.data as User[];
-                    setblocked(blockedUsers);
-                    setLoadingStates((prevState) => ({
-                        ...prevState,
-                        blocked: true,
-                    }));
-                }
-            }))
+        if (!currents.user) { return; }
+        if (currents.friendsdiv.visible) {
+            const sent = currents.user.sentRequests;
+            const recieved = currents.user.receivedRequests;
+            if (sent && recieved) {
+                setpendingSentRequests(sent.filter(x => x.status == "PENDING"));
+
+                setLoadingStates((prevState) => ({
+                    ...prevState,
+                    pendingSent: true,
+                }));
+
+                setpendingRecievedRequests(recieved.filter(x => x.status == "PENDING"));
+                setLoadingStates((prevState) => ({
+                    ...prevState,
+                    pendingRecieved: true,
+                }));
+            }
         }
-    }, [Currents.friendsdiv.visible, Currents.user]);
+    }, [currents.friendsdiv.visible, currents.user]);
+
+    useEffect(() => {
+        axios.get("/api/v1/user/blocked").then((data) => {
+            if (data.data.data) {
+                const blockedUsers: User[] = data.data.data as User[];
+                setblocked(blockedUsers);
+                setLoadingStates((prevState) => ({
+                    ...prevState,
+                    blocked: true,
+                }));
+            }
+        })
+    }, [currents.user])
 
     const onClickFriendAction = (request: PendingFriendRequest, answer: string) => {
         fetch(`/api/v1/user/friendrequests/${request.id}`, {
@@ -141,9 +150,9 @@ const FriendsDiv: React.FC<Props> = ({ Currents, pendingSentRequests, setpending
         if (!socket)
             return;
         socket.on("friend_request_send", (friendRequest: PendingFriendRequest) => {
-            if (!Currents.user)
+            if (!currents.user)
                 return;
-            if (friendRequest.sender.id === Currents.user.id) {
+            if (friendRequest.sender.id === currents.user.id) {
                 setpendingSentRequests((prev) => [
                     ...prev,
                     friendRequest,
@@ -159,6 +168,7 @@ const FriendsDiv: React.FC<Props> = ({ Currents, pendingSentRequests, setpending
             const { friendRequest, answer } = data;
             console.log("friend_request_answer", friendRequest, answer);
             GetUser(friendRequest.senderId).then((sender) => {
+                if (!sender) return;
                 switch (answer) {
                     case "accept":
                         setfriendsList((prev) => [
@@ -189,7 +199,7 @@ const FriendsDiv: React.FC<Props> = ({ Currents, pendingSentRequests, setpending
 
     return (
         <div className={styles.friends_box_list_holder}>
-            {Currents.friendsdiv.status == "online" && (
+            {currents.friendsdiv.status == "online" && (
                 <div id="friends-box-list-online" className={styles.friends_box_list_online}>
                     <div className={styles.flex_row}>
                         <p className={styles.friend_bos_list_name}>Online — {friends.filter(x => x.status === 'online').length}</p>
@@ -223,7 +233,7 @@ const FriendsDiv: React.FC<Props> = ({ Currents, pendingSentRequests, setpending
                     })}
                 </div>
             )}
-            {Currents.friendsdiv.status == "offline" && (
+            {currents.friendsdiv.status == "offline" && (
                 <div id="friends-box-list-offline" className={styles.friends_box_list_offline}>
                     <div className={styles.flex_row}>
                         <p className={styles.friend_bos_list_name}>Offline — {friends.filter(x => x.status === 'offline').length}</p>
@@ -257,7 +267,7 @@ const FriendsDiv: React.FC<Props> = ({ Currents, pendingSentRequests, setpending
                     })}
                 </div>
             )}
-            {Currents.friendsdiv.status == "pending" && (
+            {currents.friendsdiv.status == "pending" && (
                 <div id="friends-box-list-pending" className={styles.friends_box_list_pending}>
                     <div className={styles.flex_row}>
                         <p className={styles.friend_bos_list_name}>Recieved — {pendingRecievedRequests.length}</p>
@@ -341,7 +351,7 @@ const FriendsDiv: React.FC<Props> = ({ Currents, pendingSentRequests, setpending
                     })}
                 </div>
             )}
-            {Currents.friendsdiv.status == "blocked" && (
+            {currents.friendsdiv.status == "blocked" && (
                 <div id="friends-box-list-blocked" className={styles.friends_box_list_blocked}>
                     <div className={styles.flex_row}>
                         <p className={styles.friend_bos_list_name}>Blocked — {friends.filter(x => x.status === 'blocked').length}</p>

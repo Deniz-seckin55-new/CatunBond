@@ -17,7 +17,7 @@ interface SocketStore {
 export const useSocketStore = create<SocketStore>((set, get) => ({
     socket: undefined,
     connect: () => {
-        const initSocket = io("http://localhost:3001"); set({ socket: initSocket });
+        const initSocket = io("http://localhost:3001", {query: {id: useCurrents.getState().user?.id}}); set({ socket: initSocket });
     },
     disconnect: () => {
         const { socket } = useSocketStore.getState();
@@ -34,12 +34,15 @@ var awaitingEditionMessages: socketutils.EditContext[] = [];
 export const useSocket = () => {
     const { socket, connect, disconnect } = useSocketStore();
     const { user } = useCurrents();
-    const { setMessages, addMessage, removeMessage, setMessagesLamda, replaceMessage} = useMessagesStore();
+    const { setMessages, addMessage, removeMessage, setMessagesLambda: setMessagesLamda, replaceMessage} = useMessagesStore();
     const currents = useCurrents();
     const writingUsers = useWritingUsers();
 
+    const GetUser = socketutils.getUserSR;
+
     useEffect(() => {
         if (user) {
+            console.log("Connected to socket.");
             connect(); // Connect to the socket when the user is logged in
         }
 
@@ -101,7 +104,8 @@ export const useSocket = () => {
             socket.on("friend_request_answer", (data: socketutils.FriendRequestAnswer) => {
                 const { friendRequest, answer } = data;
                 console.log("friend_request_answer", friendRequest, answer);
-                utils.GetUser(friendRequest.senderId).then((sender) => {
+                GetUser(friendRequest.senderId).then((sender) => {
+                    if(!sender) return;
                     switch (answer) {
                         case "accept":
                             toast(`${sender.username} accepted your friend request`);

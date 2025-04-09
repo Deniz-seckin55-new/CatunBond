@@ -62,18 +62,19 @@ export async function POST(request: NextRequest) {
         if (!inviteLink) return NextResponse.json({ message: "Server ID is required" }, { status: 400 });
 
         const userExists: boolean = await db.user.count({ where: { id: user.id } }) > 0;
-        const serverExists: boolean = await db.server.count({ where: { invites: { has: inviteLink } } }) > 0;
+        const serverExists = await db.server.findFirst({ where: { invites: { has: inviteLink }}, include: { members: { select: { _count: true, }}} });
 
         if (!userExists) return NextResponse.json({ message: "User not found" }, { status: 404 });
         if (!serverExists) return NextResponse.json({ message: "Server not found" }, { status: 404 });
 
-        const getServer = await db.server.findFirst({ where: { invites: { has: inviteLink } } });
-        if (!getServer) return NextResponse.json({ message: "Server not found" }, { status: 404 });
-
-        const userAlreadyJoinedServer: boolean = await db.user.count({ where: { id: user.id, servers: { some: { id: getServer.id } } } }) > 0;
+        const userAlreadyJoinedServer: boolean = await db.user.count({ where: { id: user.id, servers: { some: { id: serverExists.id } } } }) > 0;
         if (userAlreadyJoinedServer) return NextResponse.json({ message: "User already joined this server" }, { status: 400 });
 
-        await db.user.update({ where: { id: user.id }, data: { servers: { connect: { id: getServer.id } } } });
+        const serverInfoMaxUsers = (await db.serverInfo.findUnique({ where: { serverId: serverExists.id }, select: { maxUsers: true } }))?.maxUsers ?? 50; // Default
+
+        if(serverExists.members.length >= serverInfoMaxUsers) return NextResponse.json({ message: "Server is full" }, { status: 400 });
+
+        await db.user.update({ where: { id: user.id }, data: { servers: { connect: { id: serverExists.id } } } });
 
         return NextResponse.json({ message: "Server joined successfully" }, { status: 200 });
     } catch (err) {

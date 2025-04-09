@@ -1,7 +1,6 @@
 import { Message } from "@/app/app/utils/socket_utils";
 import { db } from "@/lib/prisma";
 import { clerkClient, currentUser } from "@clerk/nextjs/server";
-import { useRouter } from "next/router";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(request: NextRequest, { params }: { params: { channelID: string } }) {

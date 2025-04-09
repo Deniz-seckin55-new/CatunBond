@@ -54,6 +54,17 @@ model Server {
   members    User[]     @relation("UserServers")
 }
 
+model ServerInfo {
+  serverId String @id @unique
+  name    String
+  iconUrl String
+  maxUsers Int
+  color String
+  description String
+  slogan String?
+  rules      String[]
+}
+
 enum ChannelType {
   TEXT
   DIRECTMESSAGE
@@ -64,7 +75,7 @@ model Category {
   index    Int       @default(0)
   name     String
   serverId String
-  server   Server    @relation("ServerCategory", fields: [serverId], references: [id])
+  server   Server    @relation("ServerCategory", fields: [serverId], references: [id], onDelete: Cascade)
   channels Channel[] @relation("ChannelCategory")
 }
 
@@ -77,6 +88,17 @@ model Channel {
   messages     Messages[]
   directMsgFor User[]      @relation("UserDirectMsgs")
   channelType  ChannelType @default(TEXT)
+}
+
+model ChannelInfo {
+  channelId String @id @unique
+  name      String
+  type      ChannelType
+  description String
+  slowMode   Int @default(0)
+  readOnly   Boolean @default(false)
+  nsfw       Boolean @default(false)
+  pinnedMessages String[]
 }
 
 model Auth {
@@ -101,8 +123,17 @@ model Messages {
   @@index([timestamp])
 }
 
+model UserNote {
+  userId  String
+  otherUserId String
+  note  String
+  @@unique([userId, otherUserId])
+}
+
 model UserInfo {
   userId        String @id @unique
+  mainLink      String
+  shortDescription  String
   biography     String
   usernameColor String @default("#000D1E")
 }

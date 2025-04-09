@@ -1,6 +1,7 @@
 import { db } from "@/lib/prisma";
 import { currentUser } from "@clerk/nextjs/server";
 import { NextRequest, NextResponse } from "next/server";
+import { defaultServerGet } from "../../utils/utils";
 export async function GET(request: NextRequest, { params }: { params: { serverID: string } }) {
     try {
         const user = await currentUser();
@@ -9,22 +10,7 @@ export async function GET(request: NextRequest, { params }: { params: { serverID
         if (!serverID) return NextResponse.json({ message: "Server ID is required" }, { status: 400 });
 
         const getServer = await db.server.findUnique({
-            where: { id: serverID }, include: {
-                categories: {
-                    include: {
-                        channels: true,
-                    }
-                },
-                members: {
-                    select: {
-                        id: true,
-                        username: true,
-                        avatarUrl: true,
-                    }
-                }
-            }, omit: {
-                invites: true,
-            }
+            where: { id: serverID }, include: defaultServerGet.include, omit: defaultServerGet.omit,
         });
 
         if (!getServer) return NextResponse.json({ message: "Server not found" }, { status: 404 });

@@ -1,58 +1,50 @@
 import { currentUser } from "@clerk/nextjs/server";
 import { PrismaClient } from "@prisma/client";
-import { redirect } from "next/navigation";
+import { permanentRedirect } from "next/navigation";
 
 export default async function Page() {
-    async function create() {
-        'use server';
+    try {
+        currentUser().then(user => {
 
-        const user = await currentUser();
-        if (!user) {
-            console.error("No user found.");
-            return;
-        }
-
-        const db = new PrismaClient();
-
-        // Check if the user exists in the database
-        const userExists = await db.user.findUnique({
-            where: { id: user.id },
-        });
-
-        if (!userExists) {
-            let avatarUrl: string;
-            if(user.hasImage)
-                avatarUrl = user.imageUrl;
-            else {
-                avatarUrl = "https://cat-storage-server.web.app/data/cat1.jpeg";
-                await fetch("/api/v1/user/", {
-                    method: "PUT",
-                    headers: {
-                        "Content-Type": "application/json",
-                    },
-                    body: JSON.stringify({ avatarUrl: avatarUrl }),
-                });
+            if (!user) {
+                console.error("No user found.");
+                return;
             }
 
-            await db.user.create({
-                data: {
-                    id: user.id,
-                    username: user.username || "Default_User",
-                    avatarUrl: avatarUrl,
-                },
+            const db = new PrismaClient();
+
+            // Check if the user exists in the database
+            db.user.findUnique({
+                where: { id: user.id },
+            }).then(userExists => {
+
+                if (!userExists) {
+                    let avatarUrl: string;
+                    if (user.hasImage)
+                        avatarUrl = user.imageUrl;
+                    else {
+                        avatarUrl = "https://cat-storage-server.web.app/data/cat1.jpeg";
+                    }
+
+                    db.user.create({
+                        data: {
+                            id: user.id,
+                            username: user.username || "Default_User",
+                            avatarUrl: avatarUrl,
+                        },
+                    }).then(response => {
+                        console.log("Done!",response);
+                    });
+                } else {
+                    console.log("User already exists.");
+                }
+
+                db.$disconnect();
             });
-        }
-
-        db.$disconnect();
-        //redirect("/app"); Always gives error for some reason
+        });
+    } catch (err) { console.error("Server error ", err) } finally {
+        permanentRedirect('/app');
     }
 
-    try {
-        await create();
-    } catch (err) {
-        if(err instanceof Error)
-            console.error(err.stack);
-    }
-
-    return (<>{redirect('/app')}</>);
+    return (<></>);
 }

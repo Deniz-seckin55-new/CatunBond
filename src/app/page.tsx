@@ -1,95 +1,103 @@
+"use client";
+
 import Image from "next/image";
 import styles from "./page.module.css";
-
+import { redirect } from "next/navigation";
+import useLandingPage from "@/store/landingPage";
+import uuid4 from "uuid4";
+import { useId } from "react";
 export default function Home() {
-  return (
-    <div className={styles.page}>
-      <main className={styles.main}>
-        <Image
-          className={styles.logo}
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol>
-          <li>
-            Get started by editing <code>src/app/page.tsx</code>.
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+  const lpStore = useLandingPage();
 
-        <div className={styles.ctas}>
-          <a
-            className={styles.primary}
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className={styles.logo}
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-            className={styles.secondary}
-          >
-            Read our docs
-          </a>
+  const openWebApp = (fnCallback: () => void) => {
+    redirect("/app");
+
+    fnCallback();
+  }
+
+  const onClickOpenAppOnWeb = (buttonId: string) => {
+    if (lpStore.hasLoadingButton(buttonId)) return;
+
+    lpStore.addLoadingButton(buttonId);
+
+    setTimeout(() => {
+      lpStore.setWaitingTextV(true);
+    }, 3000);
+
+    openWebApp(() => {
+      lpStore.removeLoadingButton(buttonId);
+      lpStore.setWaitingTextV(false);
+    });
+  }
+
+  return (
+    <div className={styles.main}>
+      <div className={styles.main_block_full}>
+        <div className={styles.overlap}>
+          <div className={styles.grid_op}>
+            <div className={styles.background_image_holder}>
+              <img className={styles.background_image} src="niko_pc.png" />
+            </div>
+          </div>
+          <div className={styles.grid_op}>
+            <div className={styles.main_block_left}>
+              <div>
+                <p className={styles.header_text}>Welcome to <i className={styles.highlight_text}>CatunBond</i></p>
+                <p className={styles.subheader_text}>Where we chat, talk play games & have fun.</p>
+              </div>
+              <div className={styles.main_block_buttons}>
+                <button className={styles.main_block_button}>Download for Windows</button>
+                {(() => {
+                  const buttonid = useId();
+                  return (<button className={`${styles.main_block_button_secondary} ${lpStore.hasLoadingButton(buttonid) && styles.loading_notallowed_button}`} disabled={lpStore.hasLoadingButton(buttonid)} id={buttonid} onClick={(ev) => onClickOpenAppOnWeb(ev.currentTarget.id)}>Open app on Web</button>)
+                })()}
+                {lpStore.waitingTextV && <p className={styles.waiting_text}>Taking a bit... Servers might be starting for the first time.</p>}
+              </div>
+            </div>
+            <div className={styles.main_block_right}>
+
+            </div>
+          </div>
         </div>
-      </main>
-      <footer className={styles.footer}>
-        <a
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+      </div>
+      <div className={`${styles.main_block} ${styles.gr_left}`}>
+        {/* Chat with ease. */}
+        <div className={styles.main_block_left}>
+          <p className={styles.block_header_text}>Chat with ease.</p>
+          <p className={styles.block_text}>Chat & talk with your friends in no time. We provide a <i className={styles.text_hl2}>fast and reliable</i> way for you to hang out and have fun. </p>
+        </div>
+      </div>
+      <div className={`${styles.main_block} ${styles.gr_right}`}>
+        {/* Your data is secure.  */}
+        <div className={styles.main_block_right}>
+          <p className={styles.block_header_text}>Your data is secure.</p>
+          <p className={styles.block_text}>We protect your data by adopting a <i className={styles.text_hl2}>zero-trust</i> method in every part of our systems.</p>
+        </div>
+      </div>
+      <div className={`${styles.main_block} ${styles.gr_left}`}>
+        {/* Modern UI. Everywhere. */}
+        <div className={styles.main_block_left}>
+          <p className={styles.block_header_text}>Modern UI. Everywhere. </p>
+          <p className={styles.block_text}>One of the most modern UI designs of all time, built for you. A <i className={styles.text_hl2}>smooth and fast</i> solution for all your needs.</p>
+        </div>
+      </div>
+      <div className={`${styles.main_block} ${styles.gr_right}`}>
+        {/* Stable & Fast */}
+        <div className={styles.main_block_right}>
+          <p className={styles.block_header_text}>Stable & Fast </p>
+          <p className={styles.block_text}>Our product is built to have no errors. Done with <i className={styles.text_hl2}>QOL</i> always in mind</p>
+        </div>
+      </div>
+      <div className={`${styles.main_block} ${styles.gr_left}`}>
+        {/* Do it your style. */}
+        <div className={styles.main_block_left}>
+          <p className={styles.block_header_text}>Do it your style. </p>
+          <p className={styles.block_text}>We allow you to modify and edit our app with ease. <i className={styles.text_hl2}>Custom Styles & Themes</i> ready for you. Of coruse, with a secure system.</p>
+        </div>
+      </div>
+      <div className={styles.footer}>
+        <p>CatunBond</p>
+      </div>
     </div>
   );
 }

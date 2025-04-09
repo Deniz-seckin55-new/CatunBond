@@ -2,6 +2,7 @@ import { db } from "@/lib/prisma";
 import { currentUser } from "@clerk/nextjs/server";
 import { PrismaClient } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
+import { defaultServerGet } from "../utils/utils";
 export async function POST(request: NextRequest) {
     try {
         const user = await currentUser();
@@ -31,14 +32,7 @@ export async function POST(request: NextRequest) {
                         }
                     }
                 }
-            },
-            include: {
-                categories: {
-                    include: {
-                        channels: true,
-                    }
-                }
-            }
+            }, include: defaultServerGet.include, omit: defaultServerGet.omit,
         });
 
         // Auto join server

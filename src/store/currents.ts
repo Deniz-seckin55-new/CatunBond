@@ -1,6 +1,7 @@
 import * as utils from "@/app/app/utils/utils"
 import * as socketutils from "@/app/app/utils/socket_utils"
 import { create } from "zustand"
+import { useMessagesStore } from "./messages"
 
 export const useCurrents = create<utils.Currents>((set) => ({
     channel: null,
@@ -14,8 +15,42 @@ export const useCurrents = create<utils.Currents>((set) => ({
     setting: null,
     vc: null,
     voicechatopen: false,
-    tooltip: { position: { left: 0, top: 0 }, ref: null, text: "", visible: false },
+    tooltip: { position: { left: 0, top: 0 }, ref: null, text: "", textColor: "#F0F7EE", visible: false },
     settingsMode: 'UserApp',
+    userFetching: false,
+    BgBlurV: false,
+    ExploreBoxV: false,
+    confirmationMenu: false,
+    confirmationMenuText: "",
+    confirmationMenuRetypeText: undefined,
+    settingsDivV: false,
+    SideBoxChannelsV: false,
+    Categories: [],
+    ServerUsersDivV: false,
+    settingsObject: null,
+    setSettingsObject: (settingsObject) => { set({ settingsObject }) },
+    setServerUsersDivV: (ServerUsersDivV) => { set({ ServerUsersDivV }) },
+    onClickAppIcon: () => {
+        set((state) => ({
+            SideBoxChannelsV: false, channel: null,
+            server: null, Categories: [],
+            directmessage: null, friendsdiv: { ...state.friendsdiv, visible: true },
+            ServerUsersDivV: false, settingsDivV: false,
+        }));
+
+        useMessagesStore.getState().setMessages([]);
+    },
+    setCategories: (categories => { set({ Categories: categories }) }),
+    setSideBoxChannelsV: (SideBoxChannelsV) => { set({ SideBoxChannelsV }) },
+    setSettingsDivV: (settingDivV) => { set({ settingsDivV: settingDivV }) },
+    setconfirmationMenuRetypeText: (confirmationMenuRetypeText) => { set({ confirmationMenuRetypeText }) },
+    confirmationMenuCallback: (() => { }),
+    setconfirmationMenuCallback: (confirmationMenuCallback) => { set({ confirmationMenuCallback }) },
+    setConfirmationMenuText: (confirmationMenuText) => { set({ confirmationMenuText }) },
+    setConfirmationMenu: (confirmationMenu) => { set({ confirmationMenu }) },
+    setBgBlurV: (BgBlurV) => { set({ BgBlurV }) },
+    setExploreBoxV: (ExploreBoxV) => { set({ ExploreBoxV }) },
+    setUserFetching: (userFetching) => { set({ userFetching }) },
     setChannel: (channel) => { set({ channel }) },
     setServer: (server) => { set({ server }) },
     setExploreBoxMode: (exploreboxmode) => { set({ exploreboxmode }) },
@@ -34,10 +69,11 @@ export const useCurrents = create<utils.Currents>((set) => ({
     setContextMenuMode: (contextmenumode) => { set({ contextmenumode }) },
     setVCUsers: (members) => { set((state) => ({ vc: { ...state.vc, members, channelId: state.vc?.channelId || '', serverId: state.vc?.serverId || null, createdAt: state.vc?.createdAt || new Date() } })) },
     setTooltipText: (text) => { set((state) => ({ tooltip: { ...state.tooltip, text } })) },
+    setTooltipTextColor: (textColor) => { set((state) => ({ tooltip: { ...state.tooltip, textColor } })) },
     setTooltipRef: (ref) => { set((state) => ({ tooltip: { ...state.tooltip, ref } })) },
     setTooltipV: (visible) => { set((state) => ({ tooltip: { ...state.tooltip, visible } })) },
     addUserServer: (server) => { set((state) => { if (state.user) { return ({ ...state, user: { ...state.user, servers: [...state.user.servers, server] } }); } else { console.log("Couldn't set state."); return state; } }) },
-    deleteUserServer: (server) => { set((state) => { if (state.user) { return ({ ...state, user: { ...state.user, servers: state.user.servers.filter(x => x !== server)  } }); } else { console.log("Couldn't set state."); return state; } }) },
+    deleteUserServer: (server) => { set((state) => { if (state.user) { return ({ ...state, user: { ...state.user, servers: state.user.servers.filter(x => x !== server) } }); } else { console.log("Couldn't set state."); return state; } }) },
     setUserServers: (servers) => { set((state) => { if (state.user) { return ({ user: { ...state.user, servers: servers } }); } else { console.log("Couldn't set state."); return state; } }) },
-    setContextMenuObject: (object) => {set((state) => ({contextmenu: {...state.contextmenu, currentObject: object}}))},
+    setContextMenuObject: (object) => { set((state) => ({ contextmenu: { ...state.contextmenu, currentObject: object } })) },
 }))

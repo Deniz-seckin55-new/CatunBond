@@ -1,7 +1,7 @@
 import styles from '../page.module.css';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { GetMessageDateString, Currents, MessageInfo, UpdateMessageInfo, onMouseLeaveTooltipElement, onMouseOverTooltipElement, _arrayBufferToBase64, _base64ToarrayBuffer, ToUserSmall } from '../utils/utils';
+import { GetMessageDateString, Currents, MessageInfo, UpdateMessageInfo, onMouseLeaveTooltipElement, onMouseOverTooltipElement, _arrayBufferToBase64, _base64ToarrayBuffer, ToUserSmall, SyntaxHighlight } from '../utils/utils';
 import { Message, User } from '../utils/socket_utils';
 import interact from 'interactjs';
 import { io, Socket } from 'socket.io-client';
@@ -12,6 +12,12 @@ import { atomDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import Emoji, { toArray as toArrayEmoji } from "react-emoji-render";
 import { useCurrents } from '@/store/currents';
 import { useWritingUsers } from '@/store/writingusers';
+import { useMessagesStore } from '@/store/messages';
+import { useUserInfoStore } from '@/store/userInfos';
+import { useGetUserInfo } from './common/GetUser';
+import { useKBState } from '@/store/kbState';
+import { MessageElement } from './common/MessageElement';
+import { useMessageInfoStore } from '@/store/messageInfos';
 
 interface Props {
     onInputTextarea: (event: React.ChangeEvent<HTMLTextAreaElement>) => void;
@@ -29,8 +35,6 @@ interface Props {
     MessageInfos: MessageInfo[];
     setMessageInfos: React.Dispatch<React.SetStateAction<MessageInfo[]>>;
     replyingTo: Message | null;
-    kbState: String[];
-    messages: Message[];
     voicesocket: Socket | undefined;
     localStream: MediaStream | null;
     userStreams: { [userId: string]: MediaStream };
@@ -60,8 +64,10 @@ var voicesocket: Socket | undefined;
 const ReplyMessageAnimationKeyframes = [{ backgroundColor: 'var(--cb-color-red)' }, { backgroundColor: 'transparent' }];
 const ReplyMessageAnimationOptions: KeyframeAnimationOptions = { duration: 500, easing: 'ease-in-out', iterations: 1, fill: 'none' };
 
-const ChannelBox: React.FC<Props> = ({ onInputTextarea, onLoadTextarea, onMessageReply, onMessageEdit, onMessageDelete, onEditInput, onKeyDownInput, MessageInfos, setMessageInfos, replyingTo, setreplyingTo, onClickUserAvatar, onClickMicrophone, onClickLeaveCall, getMediaStream, kbState, messages, localStream, userStreams, setUserStreams, calls, setcalls, peer, microphoneState }) => {
+const ChannelBox: React.FC<Props> = ({ onInputTextarea, onLoadTextarea, onMessageReply, onMessageEdit, onMessageDelete, onEditInput, onKeyDownInput, MessageInfos, setMessageInfos, replyingTo, setreplyingTo, onClickUserAvatar, onClickMicrophone, onClickLeaveCall, getMediaStream, localStream, userStreams, setUserStreams, calls, setcalls, peer, microphoneState }) => {
     const { writingUsers } = useWritingUsers();
+    const { messages } = useMessagesStore();
+    const { kbState } = useKBState();
 
     const [userScroll, setuserScroll] = useState(0);
     const [hoveredMessageId, setHoveredMessageId] = useState<String | null>(null);
@@ -72,6 +78,21 @@ const ChannelBox: React.FC<Props> = ({ onInputTextarea, onLoadTextarea, onMessag
     const AudioRef = useRef<HTMLAudioElement>(null);
 
     const currents = useCurrents();
+
+    const getUserI = useGetUserInfo();
+
+    useEffect(() => {
+        const fetchUserInfo = async () => {
+            const messageAuthors = new Set(messages.map(m => m.author.id));
+            console.log(messageAuthors);
+            for (const auser of messageAuthors) {
+                if (!useUserInfoStore.getState().getExistingUserInfo(auser)) {
+                    await getUserI(auser);
+                }
+            }
+        };
+        fetchUserInfo();
+    }, [messages]);
 
     useEffect(() => {
         console.log("userScroll: ", userScroll);
@@ -112,15 +133,6 @@ const ChannelBox: React.FC<Props> = ({ onInputTextarea, onLoadTextarea, onMessag
             setwritingUsersText("");
         }
     }, [writingUsers]);
-
-    const onMouseHoverOver = (id: (String | undefined)) => {
-        if (id !== undefined)
-            setHoveredMessageId(id);
-    }
-
-    const onMouseHoverOut = () => {
-        setHoveredMessageId(null);
-    }
 
     const _onMessageReply = (message: Message) => {
         setreplyingTo(message);
@@ -356,137 +368,22 @@ const ChannelBox: React.FC<Props> = ({ onInputTextarea, onLoadTextarea, onMessag
                 )}
                 <div className={`${styles.message_box} ${replyingTo && (styles.message_box_reply)}`} ref={scrollPageRef}>
                     {messages.map((message) => {
-                        const messageinfo: MessageInfo = {
-                            deleteConfirm: false,
-                            editMode: false,
-                            Message: message,
-                            ref: null
-                        };
-                        MessageInfos.push(messageinfo);
-                        return (
-                            <div className={styles.message} onMouseOver={() => onMouseHoverOver(message.id?.toString())} onMouseLeave={onMouseHoverOut} ref={(ref) => { let msgInfo = MessageInfos.find(x => x.Message.id == message.id); if (msgInfo) { msgInfo.ref = ref } }} key={message.id}>
-                                {
-                                    (() => {
-                                        if (message.repliedToId && message.repliedTo) {
-                                            let replyMsg: Message | undefined = messages.find(x => x.id === message.repliedToId);
-                                            if (!replyMsg) replyMsg = {
-                                                ...message.repliedTo,
-                                                repliedTo: null,
-                                            }
-                                            return (<div className={styles.message_reply_inner}>
-                                                <svg xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="x100y54 meet" viewBox="0 0 100 54" width="3em" height="3em">
-                                                    <path d="M 4 54 q 0 -50 50 -50" fill="none" stroke='black' strokeWidth={4} />
-                                                    <path d="M 54 4 l 50 0" fill="none" stroke='black' strokeWidth={4} />
-                                                </svg>
-                                                <div className={styles.message_reply_inner_holder} onClick={(ev: React.MouseEvent<HTMLDivElement, MouseEvent>) => { onClickReplyMessage(ev, messageinfo) }}>
-                                                    <div className={styles.message_reply_useravatar_holder}>
-                                                        <img className={styles.message_useravatar} src={`${replyMsg.author.avatarUrl/*https://cat-storage-server.web.app/data/cat1.jpeg"*/}`} />
-                                                    </div>
-                                                    <p className={styles.message_reply_content} style={{ width: (MessageInfos.find(x => x.Message.id === message.id)!.ref) ? (MessageInfos.find(x => x.Message.id === message.id)!.ref!.clientWidth * 2 / 5) + "px" : "40vw" }}>{replyMsg.content}</p>
-                                                </div>
-                                                <div id="message-actions-holder" className={`${styles.message_actions_holder} ${(hoveredMessageId == message.id?.toString()) ? styles.message_actions_holder_active : ''}`}>
-                                                    <div className={`${styles.message_actions} ${styles.message_actions_holder_reply} `}>
-                                                        <div className={styles.message_action} onClick={() => _onMessageReply(message)}>
-                                                            <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 16 16" id="reply">
-                                                                <path fill="#F0F7EE" d="M3.707,7.99946609 L6.3890873,10.6819805 C6.58434944,10.8772427 6.58434944,11.1938252 6.3890873,11.3890873 C6.21552094,11.5626536 5.94609654,11.5819388 5.7512284,11.4469427 L5.68198052,11.3890873 L2.11603371,7.82029139 L2.11603371,7.82029139 L2.06639375,7.74915207 L2.06639375,7.74915207 L2.03875135,7.69334249 L2.03875135,7.69334249 L2.0159743,7.62570887 L2.0159743,7.62570887 L2.01108568,7.60498705 C2.00382515,7.57130067 2,7.53609704 2,7.5 L2.00546187,7.57391777 L2.00179699,7.5424826 L2.00179699,7.5424826 L2.00179763,7.45747863 L2.00179763,7.45747863 L2.01678848,7.37116919 L2.01678848,7.37116919 L2.03779224,7.30896344 L2.03779224,7.30896344 L2.07718801,7.23298968 L2.07718801,7.23298968 L2.13168953,7.16184291 L2.13168953,7.16184291 L5.68198052,3.6109127 C5.87724266,3.41565056 6.19382515,3.41565056 6.3890873,3.6109127 C6.56265365,3.78447906 6.5819388,4.05390346 6.44694275,4.2487716 L6.3890873,4.31801948 L3.707,6.99946609 L8,7 C11.5217665,7 13.8853902,8.97580254 13.9959473,11.7924218 L14,12 C14,12.2761424 13.7761424,12.5 13.5,12.5 C13.2238576,12.5 13,12.2761424 13,12 C13,9.72683267 11.1925298,8.09541085 8.26151713,8.00404239 L8,8 L3.707,7.99946609 L6.3890873,10.6819805 L3.707,7.99946609 Z"></path>
-                                                            </svg>
-                                                        </div>
-                                                        {message.author.id === currents.user?.id && (
-                                                            <>
-                                                                <div className={styles.vl}> </div>
-                                                                <div className={styles.message_action} onClick={(ev: React.MouseEvent) => { onMessageEdit(messageinfo) }}>
-                                                                    <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24" id="edit">
-                                                                        <path fill="none" d="M0 0h24v24H0V0z"></path>
-                                                                        <path d="M3 17.46v3.04c0 .28.22.5.5.5h3.04c.13 0 .26-.05.35-.15L17.81 9.94l-3.75-3.75L3.15 17.1c-.1.1-.15.22-.15.36zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" fill="#F0F7EE"></path>
-                                                                    </svg>
-                                                                </div></>
-                                                        )}
-                                                        <div className={`${styles.message_action_delete} ${((kbState && (kbState.find(key => key == "Shift"))) && (message.author.id == currents.user?.id)) ? styles.message_action_delete_active : ''}`}>
-                                                            <div className={styles.vl}> </div>
-                                                            <div className={styles.message_action} onClick={() => _onMessageDelete(message)}>
-                                                                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" id="delete">
-                                                                    <path fill="none" d="M0 0h24v24H0V0z"></path>
-                                                                    <path className={styles.icons_delete} d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V9c0-1.1-.9-2-2-2H8c-1.1 0-2 .9-2 2v10zM18 4h-2.5l-.71-.71c-.18-.18-.44-.29-.7-.29H9.91c-.26 0-.52.11-.7.29L8.5 4H6c-.55 0-1 .45-1 1s.45 1 1 1h12c.55 0 1-.45 1-1s-.45-1-1-1z" fill={MessageInfos.find(msg => msg.Message.id === message.id)?.deleteConfirm ? 'var(--cb-color-red)' : 'var(--cb-color-white)'}></path>
-                                                                </svg>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>)
-                                        }
-                                    })()
-                                }
-                                <div className={styles.message_inner}>
-                                    <div className={styles.message_useravatar_holder} onContextMenuCapture={(ev) => { ev.preventDefault(); onClickUserAvatar(message.id, ev) }}>
-                                        <img className={styles.message_useravatar} src={`${message.author.avatarUrl/*https://cat-storage-server.web.app/data/cat1.jpeg"*/}`} onContextMenuCapture={(ev) => { ev.preventDefault(); onClickUserAvatar(message.id, ev) }} />
-                                    </div>
-                                    <div className={styles.message_user_holder}>
-                                        <div className={styles.message_content_holder}>
-                                            <p className={styles.message_username}>{message.author.username}</p>
-                                            <p className={styles.message_timestamp}>{GetMessageDateString(new Date(message.timestamp))}</p>
-                                        </div>
-                                        <div>
-                                            {!(MessageInfos.find(msg => msg.Message.id === message.id)?.editMode) && (
-                                                <div className={styles.message_content} style={{ width: (MessageInfos.find(x => x.Message.id === message.id)!.ref) ? (MessageInfos.find(x => x.Message.id === message.id)!.ref!.clientWidth * 7 / 10) + "px" : "40vw" }}>
-                                                    <ReactMarkdown components={{
-                                                        code(props) {
-                                                            const { children, className, ref, ...rest } = props
-                                                            const match = /language-(\w+)/.exec(className || "");
-                                                            return match ? (
-                                                                <SyntaxHighlighter
-                                                                    PreTag="div"
-                                                                    language={match[1]}
-                                                                    style={atomDark as any}
-                                                                    {...rest}
-                                                                >
-                                                                    {String(children)}
-                                                                </SyntaxHighlighter>
-                                                            ) : (
-                                                                <code {...rest} className={className}>
-                                                                    {children}
-                                                                </code>
-                                                            )
-                                                        }
-                                                    }}>{parseEmojis(message.content)}</ReactMarkdown>
-                                                </div>
-                                            )}
-                                            {(MessageInfos.find(msg => msg.Message.id === message.id)?.editMode) && (
-                                                <>
-                                                    <textarea className={styles.edit_message_textarea} style={{ width: (MessageInfos.find(x => x.Message.id === message.id)!.ref) ? (MessageInfos.find(x => x.Message.id === message.id)!.ref!.clientWidth * 7 / 10) + "px" : "40vw" }} onKeyDown={(ev) => { onEditInput(message, ev) }} defaultValue={message.content}></textarea>
-                                                </>)}
-                                        </div>
-                                    </div>
-                                    {(!message.repliedToId) && (<div id="message-actions-holder" className={`${styles.message_actions_holder} ${(hoveredMessageId == message.id?.toString()) ? styles.message_actions_holder_active : ''}`}>
-                                        <div className={styles.message_actions}>
-                                            <div className={styles.message_action} onClick={() => _onMessageReply(message)}>
-                                                <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 16 16" id="reply">
-                                                    <path fill="#F0F7EE" d="M3.707,7.99946609 L6.3890873,10.6819805 C6.58434944,10.8772427 6.58434944,11.1938252 6.3890873,11.3890873 C6.21552094,11.5626536 5.94609654,11.5819388 5.7512284,11.4469427 L5.68198052,11.3890873 L2.11603371,7.82029139 L2.11603371,7.82029139 L2.06639375,7.74915207 L2.06639375,7.74915207 L2.03875135,7.69334249 L2.03875135,7.69334249 L2.0159743,7.62570887 L2.0159743,7.62570887 L2.01108568,7.60498705 C2.00382515,7.57130067 2,7.53609704 2,7.5 L2.00546187,7.57391777 L2.00179699,7.5424826 L2.00179699,7.5424826 L2.00179763,7.45747863 L2.00179763,7.45747863 L2.01678848,7.37116919 L2.01678848,7.37116919 L2.03779224,7.30896344 L2.03779224,7.30896344 L2.07718801,7.23298968 L2.07718801,7.23298968 L2.13168953,7.16184291 L2.13168953,7.16184291 L5.68198052,3.6109127 C5.87724266,3.41565056 6.19382515,3.41565056 6.3890873,3.6109127 C6.56265365,3.78447906 6.5819388,4.05390346 6.44694275,4.2487716 L6.3890873,4.31801948 L3.707,6.99946609 L8,7 C11.5217665,7 13.8853902,8.97580254 13.9959473,11.7924218 L14,12 C14,12.2761424 13.7761424,12.5 13.5,12.5 C13.2238576,12.5 13,12.2761424 13,12 C13,9.72683267 11.1925298,8.09541085 8.26151713,8.00404239 L8,8 L3.707,7.99946609 L6.3890873,10.6819805 L3.707,7.99946609 Z"></path>
-                                                </svg>
-                                            </div>
-                                            {message.author.id === currents.user?.id && (
-                                                <>
-                                                    <div className={styles.vl}> </div>
-                                                    <div className={styles.message_action} onClick={(ev: React.MouseEvent) => { onMessageEdit(messageinfo) }}>
-                                                        <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24" id="edit">
-                                                            <path fill="none" d="M0 0h24v24H0V0z"></path>
-                                                            <path d="M3 17.46v3.04c0 .28.22.5.5.5h3.04c.13 0 .26-.05.35-.15L17.81 9.94l-3.75-3.75L3.15 17.1c-.1.1-.15.22-.15.36zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" fill="#F0F7EE"></path>
-                                                        </svg>
-                                                    </div></>
-                                            )}
-                                            <div className={`${styles.message_action_delete} ${((kbState && (kbState.find(key => key == "Shift"))) && (message.author.id == currents.user?.id)) ? styles.message_action_delete_active : ''}`}>
-                                                <div className={styles.vl}> </div>
-                                                <div className={styles.message_action} onClick={() => _onMessageDelete(message)}>
-                                                    <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" id="delete">
-                                                        <path fill="none" d="M0 0h24v24H0V0z"></path>
-                                                        <path className={styles.icons_delete} d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V9c0-1.1-.9-2-2-2H8c-1.1 0-2 .9-2 2v10zM18 4h-2.5l-.71-.71c-.18-.18-.44-.29-.7-.29H9.91c-.26 0-.52.11-.7.29L8.5 4H6c-.55 0-1 .45-1 1s.45 1 1 1h12c.55 0 1-.45 1-1s-.45-1-1-1z" fill={MessageInfos.find(msg => msg.Message.id === message.id)?.deleteConfirm ? 'var(--cb-color-red)' : 'var(--cb-color-white)'}></path>
-                                                    </svg>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>)}
-                                </div>
-                            </div>
-                        );
+                        const MessageElementProps = {
+                            message,
+                            MessageInfos: MessageInfos,
+                            setMessageInfos: setMessageInfos,
+                            hoveredMessageId: hoveredMessageId,
+                            _onMessageReply: _onMessageReply,
+                            _onMessageDelete: _onMessageDelete,
+                            setHoveredMessageId: setHoveredMessageId,
+                            onClickReplyMessage: onClickReplyMessage,
+                            onMessageEdit: onMessageEdit,
+                            onMessageDelete: onMessageDelete,
+                            onEditInput: onEditInput,
+                            onClickUserAvatar: onClickUserAvatar,
+                        }
+
+                        return <MessageElement {...MessageElementProps} key={message.id} />
                     })}
                 </div>
                 {replyingTo && (<div className={`${styles.message_reply_box}`}>
@@ -510,7 +407,7 @@ const ChannelBox: React.FC<Props> = ({ onInputTextarea, onLoadTextarea, onMessag
                     </div>
                 </div>)}
                 <div className={`${styles.message_box_wraper} ${replyingTo && (styles.message_box_wraper_reply)}`}>
-                    <textarea className={`${styles.contenteditable} ${styles.msg_typer}`} onKeyDown={onKeyDownInput} />
+                    <textarea className={`${styles.contenteditable} ${styles.msg_typer} ${!currents.channel && styles.msg_disabled}`} disabled={currents.channel === null} onKeyDown={onKeyDownInput} />
                 </div>
                 <div className={styles.writing_users_div}>
                     <p className={styles.writing_users_text}>{writingUsersText}</p>

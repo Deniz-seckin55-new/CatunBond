@@ -6,12 +6,10 @@ import { useDropzone } from 'react-dropzone'
 import { Category, Channel, DetailedDBUser, Server } from '../utils/socket_utils';
 import { toast } from 'react-toastify';
 import { useCurrents } from '@/store/currents';
+import axios from 'axios';
 
 interface Props {
-    ExploreBoxV: boolean;
     createBoxC: Category | null,
-    setExploreBoxV: React.Dispatch<React.SetStateAction<boolean>>;
-    setBgBlurV: React.Dispatch<React.SetStateAction<boolean>>;
     setcreateBoxV: React.Dispatch<React.SetStateAction<boolean>>;
     closeExploreBox: () => void;
     onClickJoinButton: () => void;
@@ -38,7 +36,7 @@ function getFileDataUrl(file: File) {
     });
 }
 
-const ExploreBox: React.FC<Props> = ({ ExploreBoxV, createBoxC, setExploreBoxV, setBgBlurV, setcreateBoxV, closeExploreBox, onClickJoinButton, onClickBackButton, onClickServerJoinButton, onClickSendFriendRequestButton, setLoadingText, LoadingText }) => {
+const ExploreBox: React.FC<Props> = ({ createBoxC, setcreateBoxV, closeExploreBox, onClickJoinButton, onClickBackButton, onClickServerJoinButton, onClickSendFriendRequestButton, setLoadingText, LoadingText }) => {
     const currents = useCurrents();
 
     useEffect(() => {
@@ -96,44 +94,39 @@ const ExploreBox: React.FC<Props> = ({ ExploreBoxV, createBoxC, setExploreBoxV, 
         currents.setExploreBoxMode(4);
     }
 
-    const onClickServerCreateContinueButton = () => {
+    const onClickServerCreateContinueButton = async () => {
         if (serverCreatePageIndex === totalPages) {
             setLoadingText("Creating Server...");
             currents.setExploreBoxMode(2);
 
-            fetch("/api/v1/servers", {
-                method: "POST",
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    name: serverCreateInput,
-                    iconUrl: imageurl,
-                })
-            }).then(res => res.json().then(data => {
-                if (data.data) {
-                    const server: Server = data.data;
-                    currents.addUserServer(server);
+            const resp = await axios.post("/api/v1/servers", {
+                name: serverCreateInput,
+                iconUrl: imageurl,
+            });
 
-                    setLoadingText("Successfully created server!");
-                    setTimeout(() => {
-                        setExploreBoxV(false);
-                        setBgBlurV(false);
+            const server: Server = resp.data.data;
+            if (server) {
+                currents.addUserServer(server);
 
-                        currents.setExploreBoxMode(0);
-                        setLoadingText("Loading...");
-                    }, 1000);
-                } else {
-                    setLoadingText("Couldn't create the server: " + data.message);
-                    setTimeout(() => {
-                        setExploreBoxV(false);
-                        setBgBlurV(false);
+                setLoadingText("Successfully created server!");
+                setTimeout(() => {
+                    currents.setExploreBoxV(false);
+                    currents.setBgBlurV(false);
 
-                        currents.setExploreBoxMode(0);
-                        setLoadingText("Loading...");
-                    }, 1000);
-                }
-            }))
+                    currents.setExploreBoxMode(0);
+                    setLoadingText("Loading...");
+                }, 1000);
+            } else {
+                setLoadingText("Couldn't create the server: " + resp.data.message);
+                setTimeout(() => {
+                    currents.setExploreBoxV(false);
+                    currents.setBgBlurV(false);
+
+                    currents.setExploreBoxMode(0);
+                    setLoadingText("Loading...");
+                }, 1000);
+            }
+
             return;
         }
 
@@ -213,8 +206,8 @@ const ExploreBox: React.FC<Props> = ({ ExploreBoxV, createBoxC, setExploreBoxV, 
 
                 setLoadingText("Successfully created channel!");
                 setTimeout(() => {
-                    setExploreBoxV(false);
-                    setBgBlurV(false);
+                    currents.setExploreBoxV(false);
+                    currents.setBgBlurV(false);
                     setcreateBoxV(false);
 
                     currents.setExploreBoxMode(0);
@@ -223,8 +216,8 @@ const ExploreBox: React.FC<Props> = ({ ExploreBoxV, createBoxC, setExploreBoxV, 
             } else {
                 setLoadingText("Couldn't create the channel: " + data.message);
                 setTimeout(() => {
-                    setExploreBoxV(false);
-                    setBgBlurV(false);
+                    currents.setExploreBoxV(false);
+                    currents.setBgBlurV(false);
                     setcreateBoxV(false);
 
                     currents.setExploreBoxMode(0);
@@ -268,8 +261,8 @@ const ExploreBox: React.FC<Props> = ({ ExploreBoxV, createBoxC, setExploreBoxV, 
 
                 setLoadingText("Successfully created category!");
                 setTimeout(() => {
-                    setExploreBoxV(false);
-                    setBgBlurV(false);
+                    currents.setExploreBoxV(false);
+                    currents.setBgBlurV(false);
                     setcreateBoxV(false);
 
                     currents.setExploreBoxMode(0);
@@ -278,8 +271,8 @@ const ExploreBox: React.FC<Props> = ({ ExploreBoxV, createBoxC, setExploreBoxV, 
             } else {
                 setLoadingText("Couldn't create the category: " + data.message);
                 setTimeout(() => {
-                    setExploreBoxV(false);
-                    setBgBlurV(false);
+                    currents.setExploreBoxV(false);
+                    currents.setBgBlurV(false);
                     setcreateBoxV(false);
 
                     currents.setExploreBoxMode(0);
@@ -308,7 +301,7 @@ const ExploreBox: React.FC<Props> = ({ ExploreBoxV, createBoxC, setExploreBoxV, 
     var [SRRegexError, setSRRegexError] = useState("");
 
     useEffect(() => {
-        if (ExploreBoxV) {
+        if (currents.ExploreBoxV) {
             setserverCreatePageIndex(1);
             setserverCreateButton({ text: "Continue", disabled: false });
             setimageUrl("");
@@ -318,7 +311,7 @@ const ExploreBox: React.FC<Props> = ({ ExploreBoxV, createBoxC, setExploreBoxV, 
                 setshowElement(false);
             }, 200);
         }
-    }, [ExploreBoxV]);
+    }, [currents.ExploreBoxV]);
 
     useEffect(() => {
         if (currents.exploreboxmode == 0) {
@@ -385,7 +378,7 @@ const ExploreBox: React.FC<Props> = ({ ExploreBoxV, createBoxC, setExploreBoxV, 
 
     return (
         <>
-            <div id="explore-box" className={`${styles.explore_box} ${ExploreBoxV ? styles.explore_box_active : ''}`} style={{ visibility: (showElement ? "visible" : "hidden"), height: boxHeight }} onKeyDown={onKeyDownExploreBox} tabIndex={0}>
+            <div id="explore-box" className={`${styles.explore_box} ${currents.ExploreBoxV ? styles.explore_box_active : ''}`} style={{ visibility: (showElement ? "visible" : "hidden"), height: boxHeight }} onKeyDown={onKeyDownExploreBox} tabIndex={0}>
                 {currents.exploreboxmode == 0 && (
                     <>
                         {(SRRegexError != "") && (<p id="regex-error-message" className={styles.regex_error_message}>Regex Error: {SRRegexError}</p>)}
@@ -453,7 +446,7 @@ const ExploreBox: React.FC<Props> = ({ ExploreBoxV, createBoxC, setExploreBoxV, 
                             <div className={styles.pad5} />
                             <p className={styles.fonts3}>Choose your server name</p>
                             <div className={styles.pad2} />
-                            <input type='text' className={styles.setting_field_input_text} style={{ background: 'var(--cb-color-gray)' }} onInput={(ev) => onServerCreateInputInput(ev.currentTarget.value)} />
+                            <input type='text' className={`${styles.setting_field_input_text} ${styles.settings_styles_text_input_one}`} style={{ background: 'var(--cb-color-gray)' }} onInput={(ev) => onServerCreateInputInput(ev.currentTarget.value)} />
                             <div className={styles.pad5} />
                             <p className={styles.image_alt_text}>Server Name</p>
                             <div className={styles.pad2} />

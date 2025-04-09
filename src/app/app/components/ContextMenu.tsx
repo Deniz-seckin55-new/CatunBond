@@ -1,10 +1,11 @@
-import { useEffect } from 'react';
+import { useContext, useEffect, useState } from 'react';
 import styles from '../page.module.css';
 import { Currents, ExploreBoxMode, SettingsMode } from '../utils/utils';
 import { useCurrents } from '@/store/currents';
 import axios from 'axios';
 import { toast } from 'react-toastify';
 import { Server } from '../utils/socket_utils';
+import useUserProfileStore from '@/store/userProfile';
 
 interface Props {
     openExploreBox: (mode: ExploreBoxMode) => void;
@@ -12,9 +13,29 @@ interface Props {
 }
 
 const ContextMenu: React.FC<Props> = (props) => {
-    const currents = useCurrents();
+    const [showElement, setshowElement] = useState<boolean>(false);
 
-    const UserViewProfile = () => { }
+    const currents = useCurrents();
+    const pp = useUserProfileStore();
+
+    useEffect(() => {
+        if (!currents.contextmenu.shown) {
+            setTimeout(() => {
+                setshowElement(false);
+            }, 100);
+        } else {
+            setshowElement(true);
+        }
+    }, [currents.contextmenu.shown]);
+
+    const UserViewProfile = () => {
+        currents.setBgBlurV(true);
+        console.log("openning with ",currents.contextmenu.currentID);
+        pp.setUserProfile(currents.contextmenu.currentID);
+        pp.setisFull(true);
+        pp.setisShown(true);
+        currents.setContextMenuShown(false);
+    }
     const UserCall = () => { }
     const UserBlock = () => { }
     const UserSendFriendRequest = () => { }
@@ -96,64 +117,66 @@ const ContextMenu: React.FC<Props> = (props) => {
 
     return (
         <>
-            <div className={`${styles.context_menu} ${currents.contextmenu.shown ? styles.context_menu_shown : ''}`} style={{ left: currents.contextmenu.x, top: currents.contextmenu.y }}>
-                <>
-                    {currents.contextmenumode === 'User' && (
-                        <div className={styles.context_menu_div}>
-                            {currents.user?.id === currents.server?.id && UserModerationContextMenuButtons.map(button => {
-                                return (
-                                    <button className={styles.context_menu_button} onClick={button.action} key={button.label} onContextMenuCapture={(ev) => ev.preventDefault()}>
-                                        <p className={styles.context_menu_button_text}>{button.label}</p>
-                                    </button>
-                                )
-                            })}
-                            {UserContextMenuButtons.map(button => {
-                                return (
-                                    <button className={styles.context_menu_button} onClick={button.action} key={button.label} onContextMenuCapture={(ev) => ev.preventDefault()}>
-                                        <p className={styles.context_menu_button_text}>{button.label}</p>
-                                    </button>
-                                )
-                            })}
-                        </div>
-                    )}
-                    {currents.contextmenumode === 'Server' && (
-                        <div className={styles.context_menu_div}>
-                            {currents.user?.id === currents.contextmenu.currentID && ServerModerationContextMenuButtons.map(button => {
-                                return (
-                                    <button className={styles.context_menu_button} onClick={button.action} key={button.label} onContextMenuCapture={(ev) => ev.preventDefault()}>
-                                        <p className={styles.context_menu_button_text}>{button.label}</p>
-                                    </button>
-                                )
-                            })}
-                            {ServerContextMenuButtons.map(button => {
-                                return (
-                                    <button className={styles.context_menu_button} onClick={button.action} key={button.label} onContextMenuCapture={(ev) => ev.preventDefault()}>
-                                        <p className={styles.context_menu_button_text}>{button.label}</p>
-                                    </button>
-                                )
-                            })}
-                        </div>
-                    )}
-                    {currents.contextmenumode === 'Channel' && (
-                        <div className={styles.context_menu_div}>
-                            {currents.user?.id === currents.contextmenu.currentID && ChannelModerationContextMenuButtons.map(button => {
-                                return (
-                                    <button className={styles.context_menu_button} onClick={button.action} key={button.label} onContextMenuCapture={(ev) => ev.preventDefault()}>
-                                        <p className={styles.context_menu_button_text}>{button.label}</p>
-                                    </button>
-                                )
-                            })}
-                            {ChannelContextMenuButtons.map(button => {
-                                return (
-                                    <button className={styles.context_menu_button} onClick={button.action} key={button.label} onContextMenuCapture={(ev) => ev.preventDefault()}>
-                                        <p className={styles.context_menu_button_text}>{button.label}</p>
-                                    </button>
-                                )
-                            })}
-                        </div>
-                    )}
-                </>
-            </div>
+            {showElement && (<>
+                <div className={`${styles.context_menu} ${currents.contextmenu.shown ? styles.context_menu_shown : ''}`} style={{ left: currents.contextmenu.x, top: currents.contextmenu.y }}>
+                    <>
+                        {currents.contextmenumode === 'User' && (
+                            <div className={styles.context_menu_div}>
+                                {currents.user?.id === currents.server?.id && UserModerationContextMenuButtons.map(button => {
+                                    return (
+                                        <button className={styles.context_menu_button} onClick={button.action} key={button.label} onContextMenuCapture={(ev) => ev.preventDefault()}>
+                                            <p className={styles.context_menu_button_text}>{button.label}</p>
+                                        </button>
+                                    )
+                                })}
+                                {UserContextMenuButtons.map(button => {
+                                    return (
+                                        <button className={styles.context_menu_button} onClick={button.action} key={button.label} onContextMenuCapture={(ev) => ev.preventDefault()}>
+                                            <p className={styles.context_menu_button_text}>{button.label}</p>
+                                        </button>
+                                    )
+                                })}
+                            </div>
+                        )}
+                        {currents.contextmenumode === 'Server' && (
+                            <div className={styles.context_menu_div}>
+                                {currents.user?.id === currents.contextmenu.currentID && ServerModerationContextMenuButtons.map(button => {
+                                    return (
+                                        <button className={styles.context_menu_button} onClick={button.action} key={button.label} onContextMenuCapture={(ev) => ev.preventDefault()}>
+                                            <p className={styles.context_menu_button_text}>{button.label}</p>
+                                        </button>
+                                    )
+                                })}
+                                {ServerContextMenuButtons.map(button => {
+                                    return (
+                                        <button className={styles.context_menu_button} onClick={button.action} key={button.label} onContextMenuCapture={(ev) => ev.preventDefault()}>
+                                            <p className={styles.context_menu_button_text}>{button.label}</p>
+                                        </button>
+                                    )
+                                })}
+                            </div>
+                        )}
+                        {currents.contextmenumode === 'Channel' && (
+                            <div className={styles.context_menu_div}>
+                                {currents.user?.id === currents.contextmenu.currentID && ChannelModerationContextMenuButtons.map(button => {
+                                    return (
+                                        <button className={styles.context_menu_button} onClick={button.action} key={button.label} onContextMenuCapture={(ev) => ev.preventDefault()}>
+                                            <p className={styles.context_menu_button_text}>{button.label}</p>
+                                        </button>
+                                    )
+                                })}
+                                {ChannelContextMenuButtons.map(button => {
+                                    return (
+                                        <button className={styles.context_menu_button} onClick={button.action} key={button.label} onContextMenuCapture={(ev) => ev.preventDefault()}>
+                                            <p className={styles.context_menu_button_text}>{button.label}</p>
+                                        </button>
+                                    )
+                                })}
+                            </div>
+                        )}
+                    </>
+                </div>
+            </>)}
         </>
     );
 }

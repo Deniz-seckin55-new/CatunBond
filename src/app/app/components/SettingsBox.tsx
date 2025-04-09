@@ -1,16 +1,26 @@
-import { componentMap, Currents } from "../utils/utils";
+import { componentMap, Currents, SettingsProps, SettingUpdateType } from "../utils/utils";
 import styles from "../page.module.css";
 import React, { useEffect, useState } from "react";
 import { ClerkProvider, useClerk } from "@clerk/nextjs"
 import { useCurrents } from "@/store/currents";
+import axios from "axios";
+import { Channel, ChannelInfo, ServerInfo, UserInfo } from "../utils/socket_utils";
+import { useUserInfoStore } from "@/store/userInfos";
+import { useSettings } from "@/store/settings";
+import { useLocalStore } from "@/store/locStore";
+import { useServerInfoStore } from "@/store/serverInfos";
+import { useChannelInfoStore } from "@/store/channelInfos";
 
 interface Props {
-    setsettingsDivV: React.Dispatch<React.SetStateAction<boolean>>;
-    settingsDivV: boolean,
+
 }
 
-const SettingsBox: React.FC<Props> = ({ setsettingsDivV, settingsDivV }) => {
+const SettingsBox: React.FC<Props> = () => {
     const currents = useCurrents();
+    const userInfoStore = useUserInfoStore();
+    const serverInfoStore = useServerInfoStore();
+    const channelInfoStore = useChannelInfoStore();
+    const settings = useSettings();
 
     const [showElement, setshowElement] = useState<boolean>(false);
     const [searchInput, setsearchInput] = useState<string>("");
@@ -34,29 +44,67 @@ const SettingsBox: React.FC<Props> = ({ setsettingsDivV, settingsDivV }) => {
         "Server Information",
         "Channels",
         "Text & Audio",
+        "Invites",
     ]
 
-    const updateSettings = (setting: string, data: any) => {
+    const ChannelSettingOptions = [
+        "Channel Information",
+        "Channel Rules",
+    ]
 
+    const updateSettings = async (setting: string, data: any, dataType: SettingUpdateType, callbackFn: () => void) => {
+        if (!currents.user) return;
+
+        settings.setsaveLoading(true);
+
+        switch (dataType) {
+            case "UserInfo":
+                const userres = await axios.put(`/api/v1/users/${currents.user.id}/info`, data);
+                const newuserInfo: UserInfo = userres.data.data;
+                userInfoStore.replaceUserInfo(currents.user.id, newuserInfo);
+
+                break;
+            case "ServerInfo":
+                if(!currents.server) return;
+                const serverres = await axios.patch(`/api/v1/servers/${currents.server.id}/info`, data);
+                const newserverInfo: ServerInfo = serverres.data.data;
+                serverInfoStore.replaceServerInfo(currents.server.id, newserverInfo);
+
+                break;
+            case "ChannelInfo":
+                if(!currents.settingsObject) return;
+                const channel: Channel = currents.settingsObject;
+                const channelinfores = await axios.patch(`/api/v1/channels/${channel.id}/info`, data);
+                const newchannelinfo: ChannelInfo = channelinfores.data.data;
+                channelInfoStore.replaceInfo(channel.id, newchannelinfo);
+
+            default:
+                break;
+        }
+
+        settings.setsaveLoading(false);
+
+        callbackFn();
     }
 
-    const SettingsProps = {
+    const SettingsProps: SettingsProps = {
         Currents: currents,
         updateSettings: updateSettings,
     };
 
     useEffect(() => {
-        if (settingsDivV) {
+        if (currents.settingsDivV) {
             setshowElement(true);
         } else {
             setTimeout(() => {
                 setshowElement(false);
             }, 200);
         }
-    }, [settingsDivV]);
+    }, [currents.settingsDivV]);
 
     const onClickClose = () => {
-        setsettingsDivV(false);
+        currents.setSettingsObject(null);
+        currents.setSettingsDivV(false);
     }
 
     const Search = async (search: string) => {
@@ -77,7 +125,7 @@ const SettingsBox: React.FC<Props> = ({ setsettingsDivV, settingsDivV }) => {
 
     return (
         <>
-            {(<div className={`${styles.settings_box} ${settingsDivV ? styles.settings_box_active : ''}`} style={{ visibility: showElement ? 'visible' : 'hidden' }}>
+            {(<div className={`${styles.settings_box} ${currents.settingsDivV ? styles.settings_box_active : ''}`} style={{ visibility: showElement ? 'visible' : 'hidden' }}>
                 <div className={styles.settings_box_left}>
                     <textarea className={styles.settings_search} placeholder="Search" onInput={(ev) => setsearchInput(ev.currentTarget.value)} onKeyDown={(ev) => onSearchInput(ev)}></textarea>
                     <div className={styles.pad} />
@@ -98,6 +146,14 @@ const SettingsBox: React.FC<Props> = ({ setsettingsDivV, settingsDivV }) => {
                         <div className={styles.settings_options_container}>
                             <p className={styles.settings_nav_header}>Server Settings</p>
                             {ServerSettingOptions.map((setting) =>
+                                <p className={`${styles.settings_nav_element} ${currents.setting == setting ? (styles.settings_nav_element_active) : ''}`} onClick={() => SelectSetting(setting)} key={setting}>{setting}</p>
+                            )}
+                        </div>
+                    )}
+                    {currents.settingsMode === 'Channel' && (
+                        <div className={styles.settings_options_container}>
+                            <p className={styles.settings_nav_header}>Channel Settings</p>
+                            {ChannelSettingOptions.map((setting) =>
                                 <p className={`${styles.settings_nav_element} ${currents.setting == setting ? (styles.settings_nav_element_active) : ''}`} onClick={() => SelectSetting(setting)} key={setting}>{setting}</p>
                             )}
                         </div>

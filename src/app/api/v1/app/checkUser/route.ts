@@ -4,7 +4,6 @@ import { redirect } from "next/navigation";
 import { NextRequest, NextResponse } from "next/server";
 
 function RedirectToAfterSignUp() {
-    redirect('/aftersignup');
     return NextResponse.json({
         redirect: '/aftersignup'
     }, {
@@ -26,7 +25,7 @@ export async function GET(request: NextRequest) {
 
         if (!cUser) return RedirectToAfterSignUp();
 
-        const user: boolean = await db.user.count({ where: { id: cUser?.id } }) > 0;
+        const user: boolean = await db.user.count({ where: { id: cUser.id } }) > 0;
 
         if (!user) return RedirectToAfterSignUp();
 
