@@ -6,66 +6,61 @@ import http from 'http'
 import { Server } from 'socket.io'
 import { PrismaClient, FriendRequest as DBFriendRequest } from "@prisma/client";
 import * as dotenv from 'dotenv';
-import { AllowedTypes, ClientResponsePacket, EditContext, Message, PendingFriendRequest, SendMessageI, SocketData, SocketInformationType, User, WritingEvent } from "@/app/app/utils/socket_utils";
+import { AllowedTypes, ChannelInfo, ClientResponsePacket, EditContext, Message, PendingFriendRequest, ReconnectData, SendMessageI, SocketData, SocketInformationType, WritingEvent } from "@/app/app/utils/socket_utils";
+import * as schemas from "@/app/app/utils/schemas";
 
 type NextWrapperServer = {
     prepare: () => Promise<void>;
 };
 
-import next from "next";
-import nextConfig from "./next.config";
+import { CreateChannelInfo, CreateMessageI } from "@/app/api/apicallreferences/utils";
 
 dotenv.config({ path: '.env' }); // Change if its .env for you
 
 console.log("REDIS URL: ", process.env.REDIS_URL);
 
-const redisClient = createClient({ url: process.env.REDIS_URL });
-const redisSubClient = redisClient.duplicate();
+const reconnectStrategy = (retries: number): number | Error => {
+    const maxRetries = 10;
+    const baseDelay = 100; // ms
+    const maxDelay = 2000;
 
-await Promise.all([
-    redisClient.connect(),
-    redisSubClient.connect()
-]);
+    if (retries > maxRetries) {
+        return new Error("Too many Redis retry attempts");
+    }
+
+    // exponential backoff with cap
+    const delay = Math.min(baseDelay * 2 ** retries, maxDelay);
+    console.warn(`Redis reconnect attempt ${retries}, waiting ${delay}ms...`);
+    return delay;
+};
+
+const redisClient = createClient({ url: process.env.REDIS_URL, socket: { reconnectStrategy } });
+
+redisClient.on("error", (err) => console.log("*hiss* Redis error:", err));
+
+await redisClient.connect();
+
+const redisSubClient = redisClient.duplicate();
+await redisSubClient.connect();
 
 const httpServer = http.createServer()
 
 const io = new Server(httpServer, {
+    pingInterval: 10000,
+    pingTimeout: 60000,
     cors: {
         origin: 'http://localhost:3000', // Replace with your frontend URL
         methods: ['GET', 'POST'],
         credentials: true,
     },
     adapter: createAdapter(redisClient, redisSubClient)
-})
+});
+
 const db = new PrismaClient({
     datasourceUrl: process.env.DB_URL
 });
 
-var awaitingMessages: SendMessageI[] = [];
-
-function awaitMessageTempDelete(id: string, tries: number) {
-    setTimeout(async () => {
-        const messageExists = await db.messages.count({ where: { id: id } });
-        if (messageExists) {
-            await db.messages.delete({ where: { id: id } });
-        } else {
-            if (tries < 5)   // 5 seconds
-                awaitMessageTempDelete(id, tries++);
-        }
-    }, 1000);
-}
-
-function awaitMessageTempEdit(id: string, newContent: string, tries: number) {
-    setTimeout(async () => {
-        const messageExists = await db.messages.count({ where: { id: id } });
-        if (messageExists) {
-            await db.messages.update({ where: { id: id }, data: { content: newContent, } });
-        } else {
-            if (tries < 5)   // 5 seconds
-                awaitMessageTempEdit(id, newContent, tries++);
-        }
-    }, 1000);
-}
+function isUserOnline(userId: string) { return io.sockets.adapter.rooms.get(`USER_${userId}`) };
 
 try {
     io.on("connection", (socket: Socket) => {
@@ -75,150 +70,27 @@ try {
             return;
         }
 
-        const UserID = socket.handshake.query.id;
+        const UserID = Array.isArray(socket.handshake.query.id) ? socket.handshake.query.id.join("") : socket.handshake.query.id;
+        if (isUserOnline(UserID)) {
+            console.log("Duplicate user ", UserID);
+            socket.disconnect();
+            return;
+        }
         console.log("User connected", socket.id, socket.handshake.query.id);
-        socket.join(socket.handshake.query.id);
-
-        socket.on("message", async (data: SocketData) => {
-            if (data.infoType === SocketInformationType.ClientSendMessage && data.dataType === AllowedTypes.MessageI) {
-                const message: SendMessageI = data.data;
-
-                console.log("User Sent Message ", message);
-
-                const response: ClientResponsePacket = {
-                    dataType: AllowedTypes.MessageI,
-                    data: message,
-                };
-
-                console.log("Sending to ", message.channelId);
-
-                awaitingMessages.push(message);
-
-                io.to(message.channelId).emit("message", response);
-
-                const newMessage = await db.messages.create({
-                    data: {
-                        content: message.content, channelId: message.channelId, authorId: message.author.id,
-                        repliedToId: message.repliedToId,
-                    }
-                    ,
-                    include: {
-                        author: {
-                            select: {
-                                id: true,
-                                username: true,
-                                avatarUrl: true
-                            }
-                        },
-                        channel: {
-                            select: {
-                                id: true,
-                                categoryId: true,
-                                name: true
-                            }
-                        },
-                        repliedTo: {
-                            include: {
-                                author: {
-                                    select: {
-                                        id: true,
-                                        username: true,
-                                        avatarUrl: true
-                                    }
-                                },
-                                channel: {
-                                    select: {
-                                        id: true,
-                                        categoryId: true,
-                                        name: true
-                                    }
-                                },
-                                repliedTo: {
-                                    select: { id: true } // Depth End
-                                }
-                            },
-                        }
-                    },
-                });
-
-                awaitingMessages = awaitingMessages.filter(x => x.tempID !== message.tempID);
-
-                io.to(message.channelId).emit("db_message", message.tempID, newMessage);
-            } else {
-                console.error("InfoType or DataType mismatch.");
-            }
-
-            // switch (data.infoType) {
-            //     case SocketInformationType.ClientSendMessage:
-            //         if (data.dataType === AllowedTypes.Message) {
-            //             try {
-            //                 const message: Message = data.data;
-            //                 console.log("Sent DB message: " + message.author.username );
-            //                 const response: ClientResponsePacket = {
-            //                     dataType: AllowedTypes.Message,
-            //                     data: message,
-            //                 }
-            //                 io.to(message.channel.id).emit("message", response);
-            //                 console.log("Sending message to", message.channel.id, " by ", socket.id);
-            //             } catch (err) {
-            //                 if (err instanceof Error)
-            //                     console.error(err.stack);
-            //             }
-            //         }
-            //         break;
-
-            //     default:
-            //         break;
-            // }
-        });
-
-        socket.on("delete_message", async (data: SocketData) => {
-            const message = data.data as Message;
-            io.to(message.channel.id).emit("delete_message", message);
-            console.log("Delete message " + data.data.id + " by ", socket.id);
-
-            if (!message.id.startsWith("temp_"))
-                await db.messages.delete({ where: { id: message.id } });
-        });
-
-        socket.on("db_delete_message", async (messageID: string, callback) => {
-            await db.messages.delete({ where: { id: messageID } });
-            callback();
-        })
-
-        socket.on("db_edit_message", async (messageID: string, edit: EditContext, callback) => {
-            await db.messages.update({ where: { id: messageID }, data: { content: edit.newContent, } });
-            callback();
-        })
-
-        socket.on("edit_message", async (data: SocketData) => {
-            const edit = data.data as EditContext;
-            io.to(edit.channelId).emit("edit_message", edit);
-
-            if (!edit.messageId.startsWith("temp_"))
-                await db.messages.update({ where: { id: edit.messageId }, data: { content: edit.newContent, } });
-        })
+        socket.join(`USER_${UserID}`);
 
         socket.on("disconnect", async () => {
             console.log("User disconnected", socket.id);
         });
 
-        socket.on("joinChannel", (channelId: any) => {
+        socket.on("joinChannel", (channelId: string) => {
             console.log("User joined channel", channelId, " ", socket.id);
-            socket.join(channelId);
-
-            if (awaitingMessages.length > 0) {
-                const sendWaitingMessages = awaitingMessages.filter(x => x.channelId === channelId);
-
-                if (sendWaitingMessages.length > 0) {
-                    io.to(socket.id).emit("temp_messages", sendWaitingMessages.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime()));
-                }
-            }
+            socket.join(`CHANNEL_${channelId}`);
         });
 
-        socket.on("leaveChannel", (channelId: any) => {
+        socket.on("leaveChannel", (channelId: string) => {
             console.log("User left channel", channelId, " ", socket.id);
-            socket.leave(channelId);
+            socket.leave(`CHANNEL_${channelId}`);
         });
 
         socket.on("friend_request_send", (data: SocketData) => {
@@ -267,6 +139,76 @@ try {
                 io.to(event.channelId).emit("writing_event", event.user, "stop");
             }
         });
+
+        socket.on("category_channel_order_change", async (serverId: string, data: { id: string, channels: string[] }[]) => {
+            console.log("category_channel_order_change ", serverId);
+
+            const onlineUsers = (await db.server.findUnique({ where: { id: serverId }, select: { members: true } }))?.members.filter(member => io.sockets.adapter.rooms.get(member.id) !== undefined);
+            onlineUsers?.forEach((user) => {
+                io.to(user.id).emit("category_channel_order_change", serverId, data);
+            });
+        });
+
+        socket.on("channel_info_update", (data: ChannelInfo) => {
+            io.to(data.channelId)/*.except(UserID)*/.emit("channel_info_update", data);
+        })
+
+        socket.on("client_reconnect", async (data: ClientResponsePacket, callbackFn: (response: { newMessagesSentSince: Message[] }) => void) => {
+            const reconnect = data.data as ReconnectData;
+            const { channelId, lastSeenMessageTimestamp } = reconnect;
+
+            if (!reconnect) return;
+            if (!channelId) return;
+            if (!lastSeenMessageTimestamp) return;
+
+            console.log("User rejoined channel", reconnect.channelId, " ", socket.id);
+            socket.join(channelId);
+
+            const newMessagesSentSince = await db.messages.findMany({
+                where: { timestamp: { gt: lastSeenMessageTimestamp } }, orderBy: { timestamp: "asc" },
+                include: {
+                    author: {
+                        select: {
+                            id: true,
+                            username: true,
+                            avatarUrl: true
+                        }
+                    },
+                    channel: {
+                        select: {
+                            id: true,
+                            categoryId: true,
+                            name: true
+                        }
+                    },
+                    repliedTo: {
+                        include: {
+                            author: {
+                                select: {
+                                    id: true,
+                                    username: true,
+                                    avatarUrl: true
+                                }
+                            },
+                            channel: {
+                                select: {
+                                    id: true,
+                                    categoryId: true,
+                                    name: true
+                                }
+                            },
+                            repliedTo: {
+                                select: { id: true } // Depth End
+                            },
+                            reactions: true,
+                        },
+                    },
+                    reactions: true,
+                },
+            });
+
+            callbackFn({ newMessagesSentSince });
+        });
     });
 
     const PORT = 3001
@@ -284,3 +226,9 @@ try {
         console.log("Stack: \n", err.stack);
     }
 }
+
+process.on('SIGTERM', async () => {
+    console.log('🛑 Shutting down…');
+    await Promise.all([redisClient.disconnect(), redisSubClient.disconnect()]);
+    httpServer.close(() => process.exit(0));
+});

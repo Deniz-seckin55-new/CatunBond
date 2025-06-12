@@ -1,6 +1,7 @@
 import { db } from "@/lib/prisma";
 import { currentUser } from "@clerk/nextjs/server";
 import { NextRequest, NextResponse } from "next/server";
+import { GetUserInfo } from "../utils/utils";
 /// INCOMPLETE:
 // To Do:
 // 1. Add server Join/leave
@@ -18,6 +19,7 @@ export async function GET(request: NextRequest) {
         const DBuser = await db.user.findUnique({
             where: { id: user.id }, select: {
                 id: true,
+                variables: true,
                 friends: {
                     select: {
                         id: true,
@@ -109,15 +111,27 @@ export async function GET(request: NextRequest) {
         if (!DBuser) return NextResponse.json({ message: "User not found" }, { status: 404 });
         // This is a problem.
 
-        return NextResponse.json({ data: DBuser }, { status: 200 });
+        const userInfo = await GetUserInfo(db, user.id);
+
+        if (!userInfo) return NextResponse.json({ message: "User Info not found" }, { status: 404 });
+
+        const orderedServerIds = userInfo.serverListOrder
+            .sort((a, b) => a.index - b.index)
+            .map((entry) => entry.id);
+
+        const orderedServers = orderedServerIds.map((id) =>
+            DBuser.servers.find((server) => server.id === id)
+        );
+
+        console.log(orderedServers.map(s => s?.name));
+
+        return NextResponse.json({ data: {...DBuser, servers: orderedServers} }, { status: 200 });
 
     } catch (err) {
         if (err instanceof Error)
             console.log(err.stack);
         return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
-    } finally {
-        db.$disconnect();
-    }
+    } 
 }
 export async function PUT(request: NextRequest) {
     try {
@@ -134,7 +148,5 @@ export async function PUT(request: NextRequest) {
         if (err instanceof Error)
             console.log(err.stack);
         return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
-    } finally {
-        db.$disconnect();
-    }
+    } 
 }

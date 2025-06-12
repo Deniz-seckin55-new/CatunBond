@@ -1,9 +1,7 @@
 import { ServerInfo } from "@/app/app/utils/socket_utils";
-import { currentUser } from "@clerk/nextjs/server";
-import { PrismaClient } from "@prisma/client";
+import { db } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 
-const db = new PrismaClient();
 export async function GET(request: NextRequest, { params }: { params: { serverID: string } }) {
     try {
         const { serverID } = await params;
@@ -28,7 +26,7 @@ export async function GET(request: NextRequest, { params }: { params: { serverID
                     iconUrl: serverExists.iconUrl,
                 }
             })
-
+            
             return NextResponse.json({ data: newServerInfo }, { status: 200 });
         } else {
             return NextResponse.json({ data: getServerInfo }, { status: 200 });
@@ -38,9 +36,7 @@ export async function GET(request: NextRequest, { params }: { params: { serverID
         if (err instanceof Error)
             console.log(err.stack);
         return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
-    } finally {
-        db.$disconnect();
-    }
+    } 
 }
 
 export async function PATCH(request: NextRequest, { params }: { params: { serverID: string } }) {
@@ -59,12 +55,12 @@ export async function PATCH(request: NextRequest, { params }: { params: { server
 
         if(!patchServerInfo) return NextResponse.json({ message: "Patched Server Info not found"});
 
+        await db.server.update({where: {id: serverID}, data: {name: serverInfo.name, iconUrl: serverInfo.iconUrl, }});
+
         return NextResponse.json({ data: patchServerInfo }, { status: 200 });
     } catch (err) {
         if (err instanceof Error)
             console.log(err.stack);
         return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
-    } finally {
-        db.$disconnect();
-    }
+    } 
 }

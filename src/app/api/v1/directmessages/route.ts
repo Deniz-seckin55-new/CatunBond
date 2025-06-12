@@ -42,7 +42,5 @@ export async function POST(request: NextRequest) {
         if (err instanceof Error)
             console.log(err.stack);
         return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
-    } finally {
-        db.$disconnect();
-    }
+    } 
 }

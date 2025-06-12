@@ -10,7 +10,23 @@ export async function GET(request: NextRequest, { params }: { params: { serverID
         if (!serverID) return NextResponse.json({ message: "Server ID is required" }, { status: 400 });
 
         const getServer = await db.server.findUnique({
-            where: { id: serverID }, include: defaultServerGet.include, omit: defaultServerGet.omit,
+            where: { id: serverID }, include: {
+                categories: {
+                    include: {
+                        channels: {
+                            orderBy: { index: "asc"}
+                        },
+                    },
+                    orderBy: { index: "asc"}
+                },
+                members: {
+                    select: {
+                        id: true,
+                        username: true,
+                        avatarUrl: true,
+                    }
+                }
+            }, omit: defaultServerGet.omit,
         });
 
         if (!getServer) return NextResponse.json({ message: "Server not found" }, { status: 404 });
@@ -20,9 +36,7 @@ export async function GET(request: NextRequest, { params }: { params: { serverID
         if (err instanceof Error)
             console.log(err.stack);
         return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
-    } finally {
-        db.$disconnect();
-    }
+    } 
 }
 export async function DELETE(request: NextRequest, { params }: { params: { serverID: string } }) {
     try {
@@ -45,9 +59,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { serve
         if (err instanceof Error)
             console.log(err.stack);
         return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
-    } finally {
-        db.$disconnect();
-    }
+    } 
 }
 export async function PUT(request: NextRequest, { params }: { params: { serverID: string } }) {
     try {
@@ -78,7 +90,5 @@ export async function PUT(request: NextRequest, { params }: { params: { serverID
         if (err instanceof Error)
             console.log(err.stack);
         return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
-    } finally {
-        db.$disconnect();
-    }
+    } 
 }

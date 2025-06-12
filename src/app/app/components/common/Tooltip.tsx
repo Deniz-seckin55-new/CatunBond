@@ -1,5 +1,4 @@
 import styles from '../../page.module.css';
-import { Currents } from '../../utils/utils';
 
 interface Props {
     tooltipText: string;

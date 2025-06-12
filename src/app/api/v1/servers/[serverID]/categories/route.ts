@@ -1,8 +1,7 @@
 import { currentUser } from "@clerk/nextjs/server";
-import { PrismaClient } from "@prisma/client";
+import { db } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 
-const db = new PrismaClient();
 export async function GET(request: NextRequest, { params }: { params: { serverID: string } }) {
     try {
         const user = await currentUser();
@@ -24,6 +23,9 @@ export async function GET(request: NextRequest, { params }: { params: { serverID
                                 channelType: true,
                             }
                         },
+                    },
+                    orderBy: {
+                        index: "asc",
                     }
                 },
             }
@@ -36,9 +38,7 @@ export async function GET(request: NextRequest, { params }: { params: { serverID
         if (err instanceof Error)
             console.log(err.stack);
         return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
-    } finally {
-        db.$disconnect();
-    }
+    } 
 }
 
 export async function POST(request: NextRequest, { params }: { params: { serverID: string } }) {
@@ -75,7 +75,5 @@ export async function POST(request: NextRequest, { params }: { params: { serverI
         if (err instanceof Error)
             console.log(err.stack);
         return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
-    } finally {
-        db.$disconnect();
-    }
+    } 
 }

@@ -1,7 +1,7 @@
-import { ChannelInfo, DirectMessage, Message, ServerInfo, User, UserInfo } from "@/app/app/utils/socket_utils";
+import { ChannelInfo } from "@/app/app/utils/socket_utils";
 import { create } from "zustand";
 
-interface ChannelInfosStore {
+export interface ChannelInfosStore {
     infos: ChannelInfo[];
     fetching: string[],
     setInfos: (infos: ChannelInfo[]) => void;

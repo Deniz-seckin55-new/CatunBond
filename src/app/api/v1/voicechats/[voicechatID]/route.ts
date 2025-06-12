@@ -1,7 +1,6 @@
 import { DBVoiceChatWithMembers } from "@/app/app/utils/utils";
 import { db } from "@/lib/prisma";
 import { currentUser } from "@clerk/nextjs/server";
-import { PrismaClient } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 export async function GET(request: NextRequest, { params }: { params: { voicechatID: string } }) {
     try {
@@ -17,9 +16,7 @@ export async function GET(request: NextRequest, { params }: { params: { voicecha
         if (err instanceof Error)
             console.log(err.stack);
         return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
-    } finally {
-        db.$disconnect();
-    }
+    } 
 }
 
 export async function PATCH(request: NextRequest, { params }: { params: { voicechatID: string } }) {
@@ -69,7 +66,5 @@ export async function PATCH(request: NextRequest, { params }: { params: { voicec
         if (err instanceof Error)
             console.log(err.stack);
         return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
-    } finally {
-        db.$disconnect();
-    }
+    } 
 }

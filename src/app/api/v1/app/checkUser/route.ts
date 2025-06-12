@@ -1,7 +1,6 @@
 import { db } from "@/lib/prisma";
 import { currentUser } from "@clerk/nextjs/server";
-import { redirect } from "next/navigation";
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 
 function RedirectToAfterSignUp() {
     return NextResponse.json({
@@ -19,7 +18,7 @@ function RetrunNull() {
     })
 }
 
-export async function GET(request: NextRequest) {
+export async function GET() {
     try {
         const cUser = await currentUser();
 
@@ -33,7 +32,5 @@ export async function GET(request: NextRequest) {
     } catch (err) {
         if (err instanceof Error)
             console.log(err.stack);
-    } finally {
-        db.$disconnect();
-    }
+    } 
 } 

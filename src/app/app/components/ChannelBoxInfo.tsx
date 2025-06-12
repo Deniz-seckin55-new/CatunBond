@@ -1,4 +1,4 @@
-import { Currents, onMouseLeaveTooltipElement, onMouseOverTooltipElement, ViewingFriendsDiv } from "../utils/utils";
+import { onMouseLeaveTooltipElement, onMouseOverTooltipElement, ViewingFriendsDiv } from "../utils/utils";
 import styles from "../page.module.css";
 import { useCurrents } from "@/store/currents";
 

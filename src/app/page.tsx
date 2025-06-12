@@ -1,11 +1,10 @@
 "use client";
 
-import Image from "next/image";
 import styles from "./page.module.css";
 import { redirect } from "next/navigation";
 import useLandingPage from "@/store/landingPage";
-import uuid4 from "uuid4";
-import { useId } from "react";
+import { useEffect, useId, useLayoutEffect } from "react";
+import Image from "next/image";
 export default function Home() {
   const lpStore = useLandingPage();
 
@@ -22,7 +21,7 @@ export default function Home() {
 
     setTimeout(() => {
       lpStore.setWaitingTextV(true);
-    }, 3000);
+    }, 12000);
 
     openWebApp(() => {
       lpStore.removeLoadingButton(buttonId);
@@ -30,13 +29,61 @@ export default function Home() {
     });
   }
 
+  useEffect(() => {
+    // Observer for .main_block_left elements
+    const observerLeft = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add(styles.observing_left);
+        } else {
+          entry.target.classList.remove(styles.observing_left);
+        }
+      });
+    }, {
+      threshold: 0.1,
+      rootMargin: "0px",
+    });
+
+    // Observer for .main_block_right elements
+    const observerRight = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add(styles.observing_right);
+        } else {
+          entry.target.classList.remove(styles.observing_right);
+        }
+      });
+    }, {
+      threshold: 0.1,
+      rootMargin: "0px",
+    });
+
+    // Select elements to observe
+    const leftElements = document.querySelectorAll(`.${styles.main_block_left}`);
+    const rightElements = document.querySelectorAll(`.${styles.main_block_right}`);
+
+    leftElements.forEach(el => observerLeft.observe(el));
+    rightElements.forEach(el => observerRight.observe(el));
+
+    // Cleanup on unmount
+    return () => {
+      leftElements.forEach(el => observerLeft.unobserve(el));
+      rightElements.forEach(el => observerRight.unobserve(el));
+      observerLeft.disconnect();
+      observerRight.disconnect();
+    };
+  }, []);
+
+
+  const buttonid = useId();
+
   return (
     <div className={styles.main}>
       <div className={styles.main_block_full}>
         <div className={styles.overlap}>
           <div className={styles.grid_op}>
             <div className={styles.background_image_holder}>
-              <img className={styles.background_image} src="niko_pc.png" />
+              <img className={styles.background_image} src="/niko_pc.png" />
             </div>
           </div>
           <div className={styles.grid_op}>
@@ -48,7 +95,6 @@ export default function Home() {
               <div className={styles.main_block_buttons}>
                 <button className={styles.main_block_button}>Download for Windows</button>
                 {(() => {
-                  const buttonid = useId();
                   return (<button className={`${styles.main_block_button_secondary} ${lpStore.hasLoadingButton(buttonid) && styles.loading_notallowed_button}`} disabled={lpStore.hasLoadingButton(buttonid)} id={buttonid} onClick={(ev) => onClickOpenAppOnWeb(ev.currentTarget.id)}>Open app on Web</button>)
                 })()}
                 {lpStore.waitingTextV && <p className={styles.waiting_text}>Taking a bit... Servers might be starting for the first time.</p>}

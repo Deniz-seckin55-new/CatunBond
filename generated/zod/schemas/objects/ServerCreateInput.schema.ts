@@ -1,0 +1,29 @@
+import { z } from 'zod';
+import { ServerCreateinvitesInputObjectSchema } from './ServerCreateinvitesInput.schema';
+import { CategoryCreateNestedManyWithoutServerInputObjectSchema } from './CategoryCreateNestedManyWithoutServerInput.schema';
+import { UserCreateNestedManyWithoutServersInputObjectSchema } from './UserCreateNestedManyWithoutServersInput.schema';
+
+import type { Prisma } from '@prisma/client';
+
+const Schema: z.ZodType<Prisma.ServerCreateInput> = z
+  .object({
+    id: z.string().optional(),
+    iconUrl: z.string(),
+    name: z.string(),
+    ownerId: z.string(),
+    invites: z
+      .union([
+        z.lazy(() => ServerCreateinvitesInputObjectSchema),
+        z.string().array(),
+      ])
+      .optional(),
+    categories: z
+      .lazy(() => CategoryCreateNestedManyWithoutServerInputObjectSchema)
+      .optional(),
+    members: z
+      .lazy(() => UserCreateNestedManyWithoutServersInputObjectSchema)
+      .optional(),
+  })
+  .strict();
+
+export const ServerCreateInputObjectSchema = Schema;

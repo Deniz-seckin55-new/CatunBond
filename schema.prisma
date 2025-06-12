@@ -2,26 +2,41 @@ generator client {
   provider = "prisma-client-js"
 }
 
+generator zod {
+  provider = "prisma-zod-generator"
+  output   = "./generated/zod"
+}
+
 datasource db {
   provider = "cockroachdb"
   url      = env("DB_URL")
 }
 
 model User {
-  id                 String          @id @unique
-  username           String          @unique
+  id                 String           @id @unique
+  username           String           @unique
   avatarUrl          String?
-  friends            User[]          @relation("UserFriends")
-  directMsgs         Channel[]       @relation("UserDirectMsgs")
-  friendOf           User[]          @relation("UserFriends")
   blocked            String[]
-  sentRequests       FriendRequest[] @relation("SentRequests")
-  receivedRequests   FriendRequest[] @relation("ReceivedRequests")
-  auth               Auth?
-  messages           Messages[]
-  servers            Server[]        @relation("UserServers")
-  VoiceChat          VoiceChat?      @relation(fields: [voiceChatChannelId], references: [channelId])
   voiceChatChannelId String?
+  auth               Auth?
+  receivedRequests   FriendRequest[]  @relation("ReceivedRequests")
+  sentRequests       FriendRequest[]  @relation("SentRequests")
+  messages           Messages[]
+  VoiceChat          VoiceChat?       @relation(fields: [voiceChatChannelId], references: [channelId])
+  directMsgs         Channel[]        @relation("UserDirectMsgs")
+  friends            User[]           @relation("UserFriends")
+  friendOf           User[]           @relation("UserFriends")
+  servers            Server[]         @relation("UserServers")
+  variables          Json             @default("{\"channelFontSize\": 16, \"appFontSize\": 36, \"defaultZoomFactor\": 2, \"magnifyingGlassOnPreviews\": true}")
+}
+
+model Reaction {
+  id        String @id // UserId + MessageId + EmojiName
+  userId    String
+  emojiName String
+  messageId String
+  channelId String
+  message Messages @relation("MessageReactions", fields: [messageId], references: [id])
 }
 
 model FriendRequest {
@@ -31,17 +46,8 @@ model FriendRequest {
   status     FriendRequestStatus @default(PENDING)
   createdAt  DateTime            @default(now())
   updatedAt  DateTime            @updatedAt
-
-  sender   User @relation("SentRequests", fields: [senderId], references: [id])
-  receiver User @relation("ReceivedRequests", fields: [receiverId], references: [id])
-}
-
-enum FriendRequestStatus {
-  PENDING
-  ACCEPTED
-  DECLINED
-  CANCELED
-  BLOCKED
+  receiver   User                @relation("ReceivedRequests", fields: [receiverId], references: [id])
+  sender     User                @relation("SentRequests", fields: [senderId], references: [id])
 }
 
 model Server {
@@ -55,49 +61,44 @@ model Server {
 }
 
 model ServerInfo {
-  serverId String @id @unique
-  name    String
-  iconUrl String
-  maxUsers Int
-  color String
+  serverId    String   @id @unique
+  name        String
+  iconUrl     String
+  maxUsers    Int
+  color       String
   description String
-  slogan String?
-  rules      String[]
-}
-
-enum ChannelType {
-  TEXT
-  DIRECTMESSAGE
+  slogan      String?
+  rules       String[]
 }
 
 model Category {
   id       String    @id @unique @default(uuid())
-  index    Int       @default(0)
   name     String
   serverId String
+  index    Int       @default(0)
   server   Server    @relation("ServerCategory", fields: [serverId], references: [id], onDelete: Cascade)
   channels Channel[] @relation("ChannelCategory")
 }
 
 model Channel {
   id           String      @id @unique @default(uuid())
-  index        Int         @default(0)
   name         String
+  channelType  ChannelType @default(TEXT)
   categoryId   String?
+  index        Int         @default(0)
   category     Category?   @relation("ChannelCategory", fields: [categoryId], references: [id])
   messages     Messages[]
   directMsgFor User[]      @relation("UserDirectMsgs")
-  channelType  ChannelType @default(TEXT)
 }
 
 model ChannelInfo {
-  channelId String @id @unique
-  name      String
-  type      ChannelType
-  description String
-  slowMode   Int @default(0)
-  readOnly   Boolean @default(false)
-  nsfw       Boolean @default(false)
+  channelId      String      @id @unique
+  name           String
+  type           ChannelType
+  description    String
+  slowMode       Int         @default(0)
+  readOnly       Boolean     @default(false)
+  nsfw           Boolean     @default(false)
   pinnedMessages String[]
 }
 
@@ -115,34 +116,68 @@ model Messages {
   authorId    String
   channelId   String
   repliedToId String?
-  repliedTo   Messages?  @relation("MessageReplyTo", fields: [repliedToId], references: [id])
-  replies     Messages[] @relation("MessageReplyTo")
   author      User       @relation(fields: [authorId], references: [id])
   channel     Channel    @relation(fields: [channelId], references: [id])
+  repliedTo   Messages?  @relation("MessageReplyTo", fields: [repliedToId], references: [id])
+  replies     Messages[] @relation("MessageReplyTo")
+  reactions   Reaction[] @relation("MessageReactions")
+  attachments Json?
+  mentions    String[]
 
   @@index([timestamp])
 }
 
 model UserNote {
-  userId  String
+  userId      String
   otherUserId String
-  note  String
+  note        String
+
   @@unique([userId, otherUserId])
 }
 
 model UserInfo {
-  userId        String @id @unique
-  mainLink      String
-  shortDescription  String
-  biography     String
-  usernameColor String @default("#000D1E")
+  userId           String                   @id @unique
+  biography        String
+  usernameColor    String                   @default("#000D1E")
+  mainLink         String
+  shortDescription String
+  serverListOrder  ServerListOrderElement[]
+}
+
+model ServerListOrderElement {
+  id             String    @id
+  index          Int
+  userInfoUserId String?
+  UserInfo       UserInfo? @relation(fields: [userInfoUserId], references: [userId])
 }
 
 model VoiceChat {
   channelId String   @id @unique
   serverId  String?
-  members   User[]
   createdAt DateTime @default(now())
+  members   User[]
+}
+
+model UserMute {
+  userId      String      @id @unique
+  startedAt   DateTime    @default(now())
+  endsAt      DateTime
+  mutedIn     String
+  mutedInType MutedInType
+  muteType    MuteType
+}
+
+enum FriendRequestStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  CANCELED
+  BLOCKED
+}
+
+enum ChannelType {
+  TEXT
+  DIRECTMESSAGE
 }
 
 enum MutedInType {
@@ -153,13 +188,4 @@ enum MutedInType {
 enum MuteType {
   FINITE
   INFINITE
-}
-
-model UserMute {
-  userId      String      @id @unique
-  startedAt   DateTime    @default(now())
-  endsAt      DateTime
-  mutedIn     String
-  mutedInType MutedInType
-  muteType    MuteType
 }

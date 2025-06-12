@@ -1,12 +1,10 @@
 import styles from "@/app/app/page.module.css";
 import { useCurrents } from "@/store/currents";
 import useUserProfileStore from "@/store/userProfile";
-import Image from "next/image";
 import React, { createContext, useEffect, useRef, useState } from "react";
-import { useGetUser, useGetUserByUsername, useGetUserInfo, useGetUserNotes } from "./common/GetUser";
-import { User, UserInfo } from "../utils/socket_utils";
-import { useUserInfoStore } from "@/store/userInfos";
-import axios, { AxiosResponse } from "axios";
+import { useGetUser, useGetUserInfo, useGetUserNotes } from "./common/GetUser";
+import { User } from "../utils/socket_utils";
+import axios from "axios";
 import { useUserNotesStore } from "@/store/userNotes";
 
 interface ContextProps {
@@ -27,7 +25,6 @@ export const UserProfileContext = createContext<ContextProps | null>(null);
 
 export const UserProfile: React.FC<Props> = (props) => {
     const currents = useCurrents();
-    if (!currents.user) return (<></>);
     const profile = useUserProfileStore();
     const getUser = useGetUser();
     const getUserInfo = useGetUserInfo();
@@ -38,7 +35,7 @@ export const UserProfile: React.FC<Props> = (props) => {
     const [initalNote, setinitalNote] = useState<string>("");
     const [initalNoteReady, setinitalNoteReady] = useState<boolean>(false);
 
-    var updated = false;
+    let updated = false;
 
     const onClickSendMessage = (withUser: User) => {
         props.onClickDirectMessage(withUser);
@@ -141,6 +138,8 @@ export const UserProfile: React.FC<Props> = (props) => {
     if (!profile.renderingUser) return LoadingJSX;
     if (!initalNoteReady) return LoadingJSX;
 
+    if (!currents.user) return (<></>);
+    
     return (
         <>
             {profile.isFull && (<div className={styles.user_profile_holder}>

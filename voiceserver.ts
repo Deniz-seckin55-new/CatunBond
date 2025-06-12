@@ -4,9 +4,9 @@ import { createAdapter } from "@socket.io/redis-adapter";
 
 import http from 'http'
 import { Server } from 'socket.io'
-import { PrismaClient, FriendRequest as DBFriendRequest } from "@prisma/client";
 import * as dotenv from 'dotenv';
-import { User, VoiceChatInformation } from "@/app/app/utils/socket_utils";
+import { User } from "@/app/app/utils/socket_utils";
+import { PrismaClient } from "@prisma/client";
 
 dotenv.config({ path: '.env.local' }); // Change if its .env for you
 
@@ -60,8 +60,8 @@ try {
         const voiceChannelID = socket.handshake.query.vc;
         socket.join(voiceChannelID);
 
-        socket.on("vc_join", (vc: VoiceChatInformation, user: User) => { io.to(voiceChannelID).emit("vc_update", "join", userUSER); console.log("vc_update join ", userUSER); });
-        socket.on("vc_leave", (vc: VoiceChatInformation, user: User) => { io.to(voiceChannelID).emit("vc_update", "leave", userUSER); console.log("vc_update leave ", userUSER); });
+        socket.on("vc_join", () => { io.to(voiceChannelID).emit("vc_update", "join", userUSER); console.log("vc_update join ", userUSER); });
+        socket.on("vc_leave", () => { io.to(voiceChannelID).emit("vc_update", "leave", userUSER); console.log("vc_update leave ", userUSER); });
 
         socket.on("disconnect", async () => {
             console.log("User disconnected", socket.id);
@@ -79,7 +79,7 @@ try {
                         }
                     }
                 });
-            } catch (err) { }
+            } catch (err) { console.log(err); }
             io.to(voiceChannelID).emit("vc_update", "leave", userUSER);
         });
     });

@@ -1,0 +1,23 @@
+import { z } from 'zod';
+import { ChannelTypeSchema } from '../enums/ChannelType.schema';
+import { MessagesCreateNestedManyWithoutChannelInputObjectSchema } from './MessagesCreateNestedManyWithoutChannelInput.schema';
+import { UserCreateNestedManyWithoutDirectMsgsInputObjectSchema } from './UserCreateNestedManyWithoutDirectMsgsInput.schema';
+
+import type { Prisma } from '@prisma/client';
+
+const Schema: z.ZodType<Prisma.ChannelCreateWithoutCategoryInput> = z
+  .object({
+    id: z.string().optional(),
+    name: z.string(),
+    channelType: z.lazy(() => ChannelTypeSchema).optional(),
+    index: z.number().optional(),
+    messages: z
+      .lazy(() => MessagesCreateNestedManyWithoutChannelInputObjectSchema)
+      .optional(),
+    directMsgFor: z
+      .lazy(() => UserCreateNestedManyWithoutDirectMsgsInputObjectSchema)
+      .optional(),
+  })
+  .strict();
+
+export const ChannelCreateWithoutCategoryInputObjectSchema = Schema;

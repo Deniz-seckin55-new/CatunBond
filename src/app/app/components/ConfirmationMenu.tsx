@@ -2,7 +2,7 @@ import { useCurrents } from '@/store/currents';
 import styles from '../page.module.css';
 import { useEffect, useState } from 'react';
 
-export const ConfirmationMenu: React.FC = (props) => {
+export const ConfirmationMenu: React.FC = () => {
     const currents = useCurrents();
     const [showElement, setshowElement] = useState<boolean>(false);
     const [retypeInputText, setretypeInputText] = useState<string>("");
@@ -63,7 +63,7 @@ export const ConfirmationMenu: React.FC = (props) => {
                     <p className={styles.confirmation_menu_question}>{currents.confirmationMenuText}</p>
                     {currents.confirmationMenuRetypeText && (
                         <div>
-                            <p className={styles.confirmation_menu_retype_text}>Please type <span style={{color: "var(--cb-color-gray)"}}>"</span><span className={styles.confirmation_menu_retype_text_hl}>{currents.confirmationMenuRetypeText}</span><span style={{color: "var(--cb-color-gray)"}}>"</span> in the text field below to confirm action.</p>
+                            <p className={styles.confirmation_menu_retype_text}>Please type <span style={{color: "var(--cb-color-gray)"}}>&quot;</span><span className={styles.confirmation_menu_retype_text_hl}>{currents.confirmationMenuRetypeText}</span><span style={{color: "var(--cb-color-gray)"}}>&quot;</span> in the text field below to confirm action.</p>
                             <textarea className={`${styles.setting_field_input_text} ${styles.settings_styles_text_input_one}`} style={{fontSize: "1em", backgroundColor: "var(--cb-color-gray)"}} placeholder={currents.confirmationMenuRetypeText} onInput={(ev) => onInputRetype(ev.currentTarget.value)} />
                             {(notmatch) && (
                                 <div>

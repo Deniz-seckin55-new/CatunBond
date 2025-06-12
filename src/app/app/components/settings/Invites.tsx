@@ -2,16 +2,14 @@ import React, { useEffect, useState } from "react";
 import styles from "../../page.module.css";
 import { copyToClipboard, onMouseLeaveTooltipElement, onMouseOverTooltipElement, SettingsProps } from "../../utils/utils";
 import { useCurrents } from "@/store/currents";
-import { useSettings } from "@/store/settings";
-import equal from "fast-deep-equal";
 import { useServerInvitesStore } from "@/store/serverInvites";
 import axios from "axios";
 import { toast } from "react-toastify";
 
-const currentSetting = "Server Invites";
-const ServerInvites: React.FC<SettingsProps> = ({ updateSettings }) => {
+// const currentSetting = "Server Invites";
+const ServerInvites: React.FC<SettingsProps> = ({ }) => {
     const currents = useCurrents();
-    const settings = useSettings();
+    // const settings = useSettings();
 
     const [serverInvites, setServerInvites] = useState<string[]>([]);
     const [oldServerInvites, setOldServerInvites] = useState<string[] | null>(null);
@@ -47,11 +45,12 @@ const ServerInvites: React.FC<SettingsProps> = ({ updateSettings }) => {
             if (!currents.server) return;
             const response = await axios.delete(`/api/v1/servers/${currents.server.id}/invites/${invite}`); // Adjust API endpoint
             if (response.data.message === "Invite deleted") {
+                const sv = serverInvites;
                 setServerInvites((state) => state.filter(x => x !== invite));
 
                 serverInvitesStore.replaceServerInvites(currents.server.id, {
                     serverId: currents.server.id,
-                    invites: serverInvites,
+                    invites: sv.filter(x => x !== invite),
                 });
             } else {
                 toast("Something went wrong while deleting the server invite");
@@ -67,11 +66,12 @@ const ServerInvites: React.FC<SettingsProps> = ({ updateSettings }) => {
         const createInvite = async () => {
             if (!currents.server) return;
             const response = await axios.post(`/api/v1/servers/${currents.server.id}/invites`); // Adjust API endpoint
+            const sv = serverInvites;
             setServerInvites((state) => [...state, response.data.data]);
 
             serverInvitesStore.replaceServerInvites(currents.server.id, {
                 serverId: currents.server.id,
-                invites: serverInvites,
+                invites: [...sv, response.data.data],
             })
 
             setcreateServerInviteLoading(false);
@@ -92,10 +92,10 @@ const ServerInvites: React.FC<SettingsProps> = ({ updateSettings }) => {
                     <div className={styles.flex_rowa}>
                         <p style={{ userSelect: "text" }}>{invite}</p>
                         <div className={styles.lpad5} />
-                        <button className={`${styles.normal_icon_black}`} onMouseOver={(ev) => onMouseOverTooltipElement(ev, "Copy To Clipboard", currents)} onMouseLeave={(ev) => onMouseLeaveTooltipElement(currents)} disabled={loadingDeleteList.includes(invite)} style={{ width: "2em", height: "2em" }} onClick={() => {copyToClipboard(invite); toast("Copied invite to clipboard!")}}>
+                        <button className={`${styles.normal_icon_black}`} onMouseOver={(ev) => onMouseOverTooltipElement(ev, "Copy To Clipboard", currents)} onMouseLeave={() => onMouseLeaveTooltipElement(currents)} disabled={loadingDeleteList.includes(invite)} style={{ width: "2em", height: "2em" }} onClick={() => {copyToClipboard(invite); toast("Copied invite to clipboard!")}}>
                             <img className={`${styles.image_render_one}`} src="pastewhite.svg" />
                         </button>
-                        <button className={`${styles.normal_icon_black} ${loadingDeleteList.includes(invite) && styles.normal_disabled_button}`} onMouseOver={(ev) => onMouseOverTooltipElement(ev, "Delete Invite", currents)} onMouseLeave={(ev) => onMouseLeaveTooltipElement(currents)} disabled={loadingDeleteList.includes(invite)} style={{ width: "2em", height: "2em" }} onClick={() => handleDeleteInvite(invite)}>
+                        <button className={`${styles.normal_icon_black} ${loadingDeleteList.includes(invite) && styles.normal_disabled_button}`} onMouseOver={(ev) => onMouseOverTooltipElement(ev, "Delete Invite", currents)} onMouseLeave={() => onMouseLeaveTooltipElement(currents)} disabled={loadingDeleteList.includes(invite)} style={{ width: "2em", height: "2em" }} onClick={() => handleDeleteInvite(invite)}>
                             <img className={`${styles.image_render_one} ${loadingDeleteList.includes(invite) && styles.normal_disabled_button}`} src="deletewhite.svg" />
                         </button>
                     </div>

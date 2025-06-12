@@ -16,7 +16,7 @@ interface UserProfileStore {
     setnotesText: (newText: string) => void;
 }
 
-const useUserProfileStore = create<UserProfileStore>((set, get) => ({
+const useUserProfileStore = create<UserProfileStore>((set) => ({
     userProfile: null,
     isShown: false,
     isFull: false,

@@ -1,25 +1,60 @@
-import { Message } from "@/app/app/utils/socket_utils";
+import { CreateChannelInfo } from "@/app/api/apicallreferences/utils";
+import { Channel, JsonAttachments, MessageCreate, User } from "@/app/app/utils/socket_utils";
+import { getEmitter } from "@/lib/emitter";
 import { db } from "@/lib/prisma";
-import { clerkClient, currentUser } from "@clerk/nextjs/server";
+import redis from "@/lib/redis";
+import { currentUser } from "@clerk/nextjs/server";
 import { NextRequest, NextResponse } from "next/server";
+import { extractMentions } from "../../../utils/utils";
 
 export async function POST(request: NextRequest, { params }: { params: { channelID: string } }) {
     try {
         const data = await request.json();
-        const { content, tempID } = data;
+        const MessageCreate: MessageCreate = data;
         const { channelID } = await params;
 
         const user = await currentUser();
 
         if (!user) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
-        if (!content) return NextResponse.json({ message: "Content is required" }, { status: 400 });
+        const dbUser = await db.user.findUnique({where: {id: user.id}});
+
+        if (!dbUser) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+        
+        if (!MessageCreate) return NextResponse.json({ message: "MessageCreate is required" }, { status: 400 });
         if (!channelID) return NextResponse.json({ message: "Channel ID is required" }, { status: 400 });
-        if (!tempID) return NextResponse.json({ message: "Temp ID is required" }, { status: 400 });
+
+        const channelExists = await db.channel.findUnique({ where: { id: channelID }, include: { category: { select: { serverId: true } } } });
+
+        if (!channelExists) return NextResponse.json({ message: "Channel not found" }, { status: 404 });
+
+        let getChannelInfo = await db.channelInfo.findUnique({ where: { channelId: channelID } });
+        let skipPermCheck = false;
+
+        if (!getChannelInfo) {
+            getChannelInfo = await CreateChannelInfo(db, channelExists);
+            skipPermCheck = true;
+        }
+
+        const User_LastMessageSend = await redis.get(`USER_${user.id}_CHANNEL_${channelID}_LASTMESSAGESEND`);
+
+        if (User_LastMessageSend && typeof User_LastMessageSend === "string" && getChannelInfo && !skipPermCheck) {
+            if (getChannelInfo.slowMode !== 0) {
+                const timePast = (new Date().getTime() - Number(User_LastMessageSend));
+                if (timePast <= getChannelInfo.slowMode * 1000) {
+                    return NextResponse.json({ message: "Not allowed to send message. Slow mode" }, { status: 400 });
+                }
+            }
+        }
+
+        if (getChannelInfo?.readOnly && !skipPermCheck) {
+            return NextResponse.json({ message: "Not allowed to send message. Read-only" }, { status: 400 });
+        }
+
+        const messageMentions = extractMentions(MessageCreate.content);
 
         const newMessage = await db.messages.create({
-            data: { content: content, channelId: channelID, authorId: user.id }
-            ,
+            data: { ...MessageCreate, channelId: channelID, authorId: user.id, attachments: MessageCreate.attachments ?? undefined, mentions: messageMentions ?? [] },
             include: {
                 author: {
                     select: {
@@ -53,27 +88,36 @@ export async function POST(request: NextRequest, { params }: { params: { channel
                         },
                         repliedTo: {
                             select: { id: true } // Depth End
-                        }
+                        },
+                        reactions: true,
                     },
-                }
+                },
+                reactions: true,
             },
         });
 
-        // io.to(channelID).emit("db_message", tempID, newMessage);
+        await redis.set(`USER_${user.id}_CHANNEL_${channelID}_LASTMESSAGESEND`, newMessage.timestamp.getTime() + "");
+
+        const io = await getEmitter();
+        io.to(`CHANNEL_${channelID}`).emit("message", newMessage);
+        await Promise.all(messageMentions.map(async (mentionedUserName) => {
+            const mentionedUser = await db.user.findFirst({ where: { username: mentionedUserName } });
+            if (mentionedUser)
+                io.to(`USER_${mentionedUser.id}`).emit("user_mentioned", channelExists.category?.serverId ?? "", channelExists as Channel, dbUser as User);
+        }));
 
         return NextResponse.json({ data: newMessage }, { status: 200 });
     } catch (err) {
         if (err instanceof Error)
             console.log(err.stack);
         return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
-    } finally {
-        db.$disconnect();
-    }
+    } 
 }
 
 export async function GET(request: NextRequest, { params }: { params: { channelID: string } }) {
     try {
         const { channelID } = await params;
+        const maxLimit = Number(request.nextUrl.searchParams.get("limit"));
 
         if (!channelID) return NextResponse.json({ message: "Channel ID is required" }, { status: 400 });
 
@@ -86,18 +130,18 @@ export async function GET(request: NextRequest, { params }: { params: { channelI
 
         if (!getOldMessages) return NextResponse.json({ message: "Messages not found" });
 
-        const clerk = await clerkClient();
-        getOldMessages.forEach(async message => {
-            const clerkUser = await clerk.users.getUser(message.author.id);
-            if (clerkUser.hasImage) {
-                await db.user.update({ where: { id: message.author.id }, data: { avatarUrl: clerkUser.imageUrl } });
-            } else {
-                clerk.users.updateUserProfileImage(message.author.id, {
-                    file: await ((await fetch("https://cat-storage-server.web.app/data/cat1.jpeg")).blob())
-                })
-                await db.user.update({ where: { id: message.author.id }, data: { avatarUrl: "https://cat-storage-server.web.app/data/cat1.jpeg" } });
-            }
-        });
+        // const clerk = await clerkClient();
+        // getOldMessages.forEach(async message => {
+        //     const clerkUser = await clerk.users.getUser(message.author.id);
+        //     if (clerkUser.hasImage) {
+        //         await db.user.update({ where: { id: message.author.id }, data: { avatarUrl: clerkUser.imageUrl } });
+        //     } else {
+        //         clerk.users.updateUserProfileImage(message.author.id, {
+        //             file: await ((await fetch("https://cat-storage-server.web.app/data/cat1.jpeg")).blob())
+        //         })
+        //         await db.user.update({ where: { id: message.author.id }, data: { avatarUrl: "https://cat-storage-server.web.app/data/cat1.jpeg" } });
+        //     }
+        // });
         // End
 
         const getMessages = await db.messages.findMany({
@@ -133,19 +177,20 @@ export async function GET(request: NextRequest, { params }: { params: { channelI
                         },
                         repliedTo: {
                             select: { id: true } // Depth End
-                        }
+                        },
+                        reactions: true,
                     },
-                }
+                },
+                reactions: true,
             },
-            orderBy: { timestamp:  'asc'}
+            orderBy: { timestamp: 'desc' },
+            take: Math.min(maxLimit, 250) ?? 50, // Max 250, default 50
         });
 
-        return NextResponse.json({ data: getMessages }, { status: 200 });
+        return NextResponse.json({ data: getMessages.toReversed() }, { status: 200 });
     } catch (err) {
         if (err instanceof Error)
             console.log(err.stack);
         return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
-    } finally {
-        db.$disconnect();
-    }
+    } 
 }

@@ -1,11 +1,10 @@
 import { useUserStore } from "@/store/users";
 import axios from "axios";
 import { useCallback } from "react";
-import { User, UserInfo, UserNote, UserNotes, UserRelativeInfo } from "../../utils/socket_utils";
+import { User, UserInfo, UserNote, UserRelativeInfo } from "../../utils/socket_utils";
 import { useUserInfoStore } from "@/store/userInfos";
 import { useUserRelativeInfoStore } from "@/store/userRelativeInfo";
 import { useUserNotesStore } from "@/store/userNotes";
-import { useUser } from "@clerk/nextjs";
 
 export const useGetUser = () => {
     const userStore = useUserStore();
@@ -65,19 +64,19 @@ export const useGetUserNotes = (userId: string) => {
         console.log("Getting user note: " + otherUserId);
         if (otherUserId === "" || !otherUserId) return;
 
-        if(!userNotesStore.userNotes) {
-            userNotesStore.setUserNotes({userId, notes: []});
+        if (!userNotesStore.userNotes) {
+            userNotesStore.setUserNotes({ userId, notes: [] });
         }
 
         const userExists = userNotesStore.getExistingUserNote(otherUserId);
         if (userExists) {
-            console.log("exists, ",userExists);
+            console.log("exists, ", userExists);
             return userExists;
         }
 
         const resp = await axios.get(`/api/v1/user/${otherUserId}/note`);
 
-        if (!resp.data.data) {console.warn("No data from resp.", resp.data); return;}
+        if (!resp.data.data) { console.warn("No data from resp.", resp.data); return; }
 
         const newNote: UserNote = resp.data.data;
 
@@ -108,6 +107,28 @@ export const useGetUserByUsername = () => {
         userStore.addUser(newUser);
 
         return newUser;
+    }, [userStore.users]);
+}
+
+export const useGetUserByUsernameSync = () => {
+    const userStore = useUserStore();
+
+    return useCallback((userName: string): User | undefined => {
+        if (userName === "" || !userName) return;
+
+        if (userStore.users.find(x => x.username === userName)) {
+            return userStore.users.find(x => x.username === userName);
+        }
+
+        axios.get(`/api/v1/users/withName/${userName}`).then(resp => {
+            if (!resp.data.data) return;
+
+            const newUser: User = resp.data.data;
+
+            userStore.addUser(newUser);
+
+            return newUser;
+        });
     }, [userStore.users]);
 }
 

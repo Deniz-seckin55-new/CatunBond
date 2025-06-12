@@ -1,14 +1,14 @@
-import React, { useEffect, useState } from "react";
-import axios from "axios";
-import styles from "../../page.module.css";
-import { OpenConfirmationMenu, OpenConfirmationMenuWithRetype, SettingsProps } from "../../utils/utils";
-import { HexColorPicker } from "react-colorful";
 import { useCurrents } from "@/store/currents";
-import { useSettings } from "@/store/settings";
-import equal from "fast-deep-equal";
-import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
-import { DetailedDBUser, ServerInfo } from "../../utils/socket_utils";
 import { useServerInfoStore } from "@/store/serverInfos";
+import { useSettings } from "@/store/settings";
+import { DragDropContext, Draggable, Droppable } from "@hello-pangea/dnd";
+import axios from "axios";
+import equal from "fast-deep-equal";
+import React, { useEffect, useState } from "react";
+import { HexColorPicker } from "react-colorful";
+import styles from "../../page.module.css";
+import { DetailedDBUser, ServerInfo } from "../../utils/socket_utils";
+import { isObjectNotNull, OpenConfirmationMenuWithRetype, SettingsProps } from "../../utils/utils";
 
 const currentSetting = "Server Information";
 
@@ -33,7 +33,6 @@ const ServerInformation: React.FC<SettingsProps> = ({ updateSettings }) => {
 
     const [hexpickerV, sethexpickerV] = useState<boolean>(false);
     const [oldServerInfo, setOldServerInfo] = useState<ServerInfo | null>(null);
-    const [colorPickerVisible, setColorPickerVisible] = useState<boolean>(false);
 
     // Fetch server information
     useEffect(() => {
@@ -60,7 +59,7 @@ const ServerInformation: React.FC<SettingsProps> = ({ updateSettings }) => {
         };
 
         fetchServerInfo();
-    }, []);
+    });
 
     // Detect unsaved changes
     useEffect(() => {
@@ -73,7 +72,7 @@ const ServerInformation: React.FC<SettingsProps> = ({ updateSettings }) => {
         setrulesHeight(serverInfo.rules.length * 1.75 + "em");
     }, [serverInfo.rules]);
 
-    const onClickColorButton = (ev: React.MouseEvent) => {
+    const onClickColorButton = () => {
         sethexpickerV(!hexpickerV);
     };
 
@@ -81,7 +80,7 @@ const ServerInformation: React.FC<SettingsProps> = ({ updateSettings }) => {
         setServerInfo((state) => ({ ...state, color: color }));
     };
 
-    const handleInputChange = (field: keyof ServerInfo, value: any) => {
+    const handleInputChange = (field: keyof ServerInfo, value: string[] | string | number | null) => {
         setServerInfo((prev) => ({ ...prev, [field]: value }));
     };
 
@@ -115,7 +114,12 @@ const ServerInformation: React.FC<SettingsProps> = ({ updateSettings }) => {
         setServerInfo((prev) => ({ ...prev, rules: updatedRules }));
     };
 
-    const handleDragEnd = (result: any) => {
+    const handleDragEnd = (result: unknown) => {
+        if(!isObjectNotNull(result)) return;
+        if(!("source" in result && "destination" in result &&
+            isObjectNotNull(result.source) && "index" in result.source && typeof result.source.index === "number" &&
+            isObjectNotNull(result.destination) && "index" in result.destination && typeof result.destination.index === "number")) return;
+            // Man Why just why TypeScript (type "any" isnt allowed)
         if (!result.destination) return;
 
         const reorderedRules = Array.from(serverInfo.rules);
@@ -157,7 +161,7 @@ const ServerInformation: React.FC<SettingsProps> = ({ updateSettings }) => {
             <div className={styles.flex_rowa}>
                 <img src={serverInfo.iconUrl || ''} className={styles.appearance_userimage} />
                 <p className={styles.appearance_username} style={{ color: serverInfo.color }}>{serverInfo.name}</p>
-                <button className={styles.setting_field_input_color_button} onClick={(ev) => onClickColorButton(ev)}>
+                <button className={styles.setting_field_input_color_button} onClick={onClickColorButton}>
                     <svg className={styles.setting_field_input_color_button_image} xmlns="http://www.w3.org/2000/svg" width="10vh" height="10vh" viewBox="0 0 24 24" id="palette">
                         <path fill="none" d="M0 0h24v24H0V0z"></path>
                         <path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9c.83 0 1.5-.67 1.5-1.5 0-.39-.15-.74-.39-1.01-.23-.26-.38-.61-.38-.99 0-.83.67-1.5 1.5-1.5H16c2.76 0 5-2.24 5-5 0-4.42-4.03-8-9-8zm-5.5 9c-.83 0-1.5-.67-1.5-1.5S5.67 9 6.5 9 8 9.67 8 10.5 7.33 12 6.5 12zm3-4C8.67 8 8 7.33 8 6.5S8.67 5 9.5 5s1.5.67 1.5 1.5S10.33 8 9.5 8zm5 0c-.83 0-1.5-.67-1.5-1.5S13.67 5 14.5 5s1.5.67 1.5 1.5S15.33 8 14.5 8zm3 4c-.83 0-1.5-.67-1.5-1.5S16.67 9 17.5 9s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z" fill={`${serverInfo.color}`}></path>

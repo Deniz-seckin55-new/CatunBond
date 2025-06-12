@@ -1,9 +1,7 @@
 import React, { SetStateAction, useEffect, useState } from 'react';
 import styles from '../page.module.css';
-import Image from 'next/image';
-import { Currents, ExploreBoxMode } from '../utils/utils';
 import { useDropzone } from 'react-dropzone'
-import { Category, Channel, DetailedDBUser, Server } from '../utils/socket_utils';
+import { Category, Channel, Server } from '../utils/socket_utils';
 import { toast } from 'react-toastify';
 import { useCurrents } from '@/store/currents';
 import axios from 'axios';
@@ -68,7 +66,7 @@ const ExploreBox: React.FC<Props> = ({ createBoxC, setcreateBoxV, closeExploreBo
         }
     });
 
-    const files = acceptedFiles.map(file => (
+    /*const files = */ acceptedFiles.map(file => (
         <li key={file.path}>
             {file.path} - {file.size} bytes
         </li>
@@ -167,7 +165,7 @@ const ExploreBox: React.FC<Props> = ({ createBoxC, setcreateBoxV, closeExploreBo
             return;
         }
 
-        var currentServer = currents.server;
+        const currentServer = currents.server;
 
         setLoadingText("Creating Channel...");
 
@@ -239,7 +237,7 @@ const ExploreBox: React.FC<Props> = ({ createBoxC, setcreateBoxV, closeExploreBo
             return;
         }
 
-        var currentServer = currents.server;
+        const currentServer = currents.server;
 
         setLoadingText("Creating Channel...");
 
@@ -296,9 +294,9 @@ const ExploreBox: React.FC<Props> = ({ createBoxC, setcreateBoxV, closeExploreBo
         return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // $& means the whole matched string
     }
 
-    var [showElement, setshowElement] = useState(false);
-    var [FilteredPSList, setFilteredPSList] = useState(PSList);
-    var [SRRegexError, setSRRegexError] = useState("");
+    const [showElement, setshowElement] = useState(false);
+    const [FilteredPSList, setFilteredPSList] = useState(PSList);
+    const [SRRegexError, setSRRegexError] = useState("");
 
     useEffect(() => {
         if (currents.ExploreBoxV) {
@@ -334,14 +332,14 @@ const ExploreBox: React.FC<Props> = ({ createBoxC, setcreateBoxV, closeExploreBo
     const onInputSearch = (event: React.ChangeEvent<HTMLInputElement>) => {
         setSRRegexError("")
 
-        let Search = event.target.value;
-        var SearchRegex: RegExp = new RegExp("");
+        const Search = event.target.value;
+        let SearchRegex: RegExp = new RegExp("");
         if (!Search.startsWith("/r")) {
             SearchRegex = new RegExp(`(?=${escapeRegExp(event.target.value)})`, "gmi")
         } else {
             try {
                 SearchRegex = new RegExp(Search.substring(2), "gmi")
-            } catch (e: any) {
+            } catch (e) {
                 if (e instanceof SyntaxError) {
                     setSRRegexError(e.message)
                     console.log("error!", e)
@@ -350,7 +348,7 @@ const ExploreBox: React.FC<Props> = ({ createBoxC, setcreateBoxV, closeExploreBo
         }
 
         if (SearchRegex != new RegExp("")) {
-            let NewPSList: SetStateAction<{ name: string; id: string; }[]> = [];
+            const NewPSList: SetStateAction<{ name: string; id: string; }[]> = [];
 
             PSList.forEach((server) => {
                 if (SearchRegex.test(server.name))
@@ -463,7 +461,7 @@ const ExploreBox: React.FC<Props> = ({ createBoxC, setcreateBoxV, closeExploreBo
                             <div className={styles.pad5} />
                             <p className={styles.fonts3}>Choose your channel name</p>
                             <div className={styles.pad2} />
-                            <input type='text' className={styles.setting_field_input_text} style={{ background: 'var(--cb-color-gray)' }} onInput={(ev) => onChannelCreateInputInput(ev.currentTarget.value)} />
+                            <input type='text' className={`${styles.setting_field_input_text} ${styles.settings_styles_text_input_one}`} style={{ background: 'var(--cb-color-gray)' }} onInput={(ev) => onChannelCreateInputInput(ev.currentTarget.value)} />
                             <div className={styles.pad5} />
                             <p className={styles.image_alt_text}>Channel Name</p>
                             <div className={styles.pad2} />
@@ -480,7 +478,7 @@ const ExploreBox: React.FC<Props> = ({ createBoxC, setcreateBoxV, closeExploreBo
                             <div className={styles.pad5} />
                             <p className={styles.fonts3}>Choose your category name</p>
                             <div className={styles.pad2} />
-                            <input type='text' className={styles.setting_field_input_text} style={{ background: 'var(--cb-color-gray)' }} onInput={(ev) => onCategoryCreateInputInput(ev.currentTarget.value)} />
+                            <input type='text' className={`${styles.setting_field_input_text} ${styles.settings_styles_text_input_one}`} style={{ background: 'var(--cb-color-gray)' }} onInput={(ev) => onCategoryCreateInputInput(ev.currentTarget.value)} />
                             <div className={styles.pad5} />
                             <p className={styles.image_alt_text}>Category Name</p>
                             <div className={styles.pad2} />

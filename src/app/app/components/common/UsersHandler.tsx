@@ -1,7 +1,5 @@
 import { useUserStore } from "@/store/users";
-import axios from "axios";
-import { useCallback, useEffect } from "react";
-import { User } from "../../utils/socket_utils";
+import { useEffect } from "react";
 import { useCurrents } from "@/store/currents";
 
 const UsersHandler: React.FC = () => {

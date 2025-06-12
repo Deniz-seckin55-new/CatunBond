@@ -5,7 +5,7 @@ interface SettingsStore {
     setsaveLoading: (saveLoading: boolean) => void;
 }
 
-export const useSettings = create<SettingsStore>((set, get) => ({
+export const useSettings = create<SettingsStore>((set) => ({
     saveLoading: false,
     setsaveLoading: (saveLoading) => { set({ saveLoading }); }
 }))

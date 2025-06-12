@@ -1,5 +1,5 @@
 import { currentUser } from "@clerk/nextjs/server";
-import { PrismaClient } from "@prisma/client";
+import { db } from "@/lib/prisma";
 import { permanentRedirect } from "next/navigation";
 
 export default async function Page() {
@@ -10,8 +10,6 @@ export default async function Page() {
                 console.error("No user found.");
                 return;
             }
-
-            const db = new PrismaClient();
 
             // Check if the user exists in the database
             db.user.findUnique({

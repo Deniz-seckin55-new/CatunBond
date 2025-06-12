@@ -1,15 +1,14 @@
-import React, { useEffect, useState } from "react";
-import axios from "axios";
-import styles from "../../page.module.css";
-import { OpenConfirmationMenu, OpenConfirmationMenuWithRetype, SettingsProps } from "../../utils/utils";
-import { HexColorPicker } from "react-colorful";
+import { useChannelInfoStore } from "@/store/channelInfos";
 import { useCurrents } from "@/store/currents";
 import { useSettings } from "@/store/settings";
+import axios from "axios";
 import equal from "fast-deep-equal";
-import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
-import { Channel, ChannelInfo, DetailedDBUser, ServerInfo } from "../../utils/socket_utils";
-import { useChannelInfoStore } from "@/store/channelInfos";
+import React, { useEffect, useState } from "react";
 import Switch from "react-switch";
+import styles from "../../page.module.css";
+import { channelParse } from "../../utils/schemas";
+import { Channel, ChannelInfo, DetailedDBUser } from "../../utils/socket_utils";
+import { OpenConfirmationMenu, SettingsProps } from "../../utils/utils";
 
 const currentSetting = "Channel Information";
 
@@ -20,7 +19,6 @@ const ChannelInformation: React.FC<SettingsProps> = ({ updateSettings }) => {
 
     const [loading, setLoading] = useState<boolean>(true);
     const [unsavedChanges, setUnsavedChanges] = useState<boolean>(false);
-    const [rulesHeight, setrulesHeight] = useState<string>("0px");
     const [channelInfo, setChannelInfo] = useState<ChannelInfo>({
         channelId: "",
         name: "",
@@ -32,28 +30,34 @@ const ChannelInformation: React.FC<SettingsProps> = ({ updateSettings }) => {
         type: "TEXT",
     });
 
-    const [hexpickerV, sethexpickerV] = useState<boolean>(false);
     const [oldChannelInfo, setOldChannelInfo] = useState<ChannelInfo | null>(null);
-    const [colorPickerVisible, setColorPickerVisible] = useState<boolean>(false);
 
-    // Fetch server information
+    // Fetch channel information
     useEffect(() => {
         const fetchChannelInfo = async () => {
             try {
                 if (!currents.settingsObject) return;
 
-                const channel: Channel = currents.settingsObject;
+                const parse = channelParse(currents.settingsObject);
+
+                if(!parse.success) return;
+
+                const channel: Channel = parse.data;
 
                 const channelInfoExists = channelInfoStore.getExistingInfo(channel.id);
                 if (channelInfoExists) {
                     setOldChannelInfo(channelInfoExists);
                     setChannelInfo(channelInfoExists);
                 } else {
+                    if(channelInfoStore.fetching.includes(channel.id)) return;
+
+                    channelInfoStore.addfetchingInfo(channel.id);
                     const response = await axios.get(`/api/v1/channels/${channel.id}/info`); // Adjust API endpoint
                     setOldChannelInfo(response.data.data);
                     setChannelInfo(response.data.data);
 
                     channelInfoStore.addInfo(response.data.data);
+                    channelInfoStore.removefetchingInfo(channel.id);
                 }
             } catch (error) {
                 console.error("Error fetching server info:", error);
@@ -70,7 +74,7 @@ const ChannelInformation: React.FC<SettingsProps> = ({ updateSettings }) => {
         setUnsavedChanges(!equal(channelInfo, oldChannelInfo));
     }, [channelInfo]);
 
-    const handleInputChange = (field: keyof ChannelInfo, value: any) => {
+    const handleInputChange = (field: keyof ChannelInfo, value: string | boolean) => {
         setChannelInfo((prev) => ({ ...prev, [field]: value }));
     };
 

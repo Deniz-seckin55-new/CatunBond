@@ -1,4 +1,4 @@
-import { DirectMessage, Message } from "@/app/app/utils/socket_utils";
+import { DirectMessage } from "@/app/app/utils/socket_utils";
 import { create } from "zustand";
 
 interface DirectMessagesStore {

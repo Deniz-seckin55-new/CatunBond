@@ -17,11 +17,24 @@
   --cb-color-gray-dark: #30323d;
   --cb-color-cyan: #65AFFF;
   --cb-color-blue: #1E2EDE;
+  --cb-color-blue-transparent: rgba(30, 46, 222, 0.8);
+  --cb-color-blue-dark: rgb(0, 16, 192);
+  --cb-color-mention: rgba(255, 204, 0, 0.4);
+  --cb-color-mention-soft: rgba(255, 204, 0, 0.2);
+  --cb-color-gold: rgb(255, 205, 0);
   --cb-color-red: #FF3A20;
   --cb-color-red-dark: #ff3a20dd;
   --cb-color-green: #17B890;
   --cb-color-green-transparent: rgba(23, 184, 144, 0.5);
   --cb-color-green-transparent-soft: rgba(23, 184, 144, 0.2);
+}
+
+@font-face {
+  font-family: "Wingdings";
+  src: url("/fonts/wingding.ttf") format("ttf");
+  font-weight: 400;
+  font-style: normal;
+
 }
 
 @media (prefers-color-scheme: dark) {

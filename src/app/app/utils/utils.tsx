@@ -1,15 +1,18 @@
-import { JSX, ReactNode, RefObject } from "react";
-import { FriendRequest as DBFriendRequest, VoiceChat as DBVoiceChat, Prisma } from '@prisma/client';
+import React, { JSX } from "react";
+import { Prisma } from '@prisma/client';
 import Appearance from "../components/settings/Appearance";
-import { Category, Channel, DirectMessage, Message, SendMessageI, Server, User, VoiceChatInformation } from "./socket_utils";
+import { Category, Channel, ChannelInfo, DirectMessage, Message, SendMessageI, Server, ServerInfo, ServerInvites as SI, User, UserInfo, VoiceChatInformation } from "./socket_utils";
 import { DetailedDBUser } from "./socket_utils";
 import emojiNames from "@/data/emojiList.json";
 import { genInvite } from "@/app/api/v1/utils/utils";
-import { useCurrents } from "@/store/currents";
-import { ColorfulText, GlitchText, SpoilerText } from "../components/common/StyleTexts";
+import { BacktickText, CodeText, CodeTextWithStyle, ColoredText, ColoredTextName, ColoredTextRGB, ColorfulText, DoubleBacktickText, EscapedChar, GlitchText, GradientText, LinkText, MentionText, SpoilerText, TextShadowText, UnimportantText, WDText } from "../components/common/StyleTexts";
 import ServerInformation from "../components/settings/ServerInformation";
-import ServerInvites from "../components/settings/Invites";
 import ChannelInformation from "../components/settings/ChannelInformation";
+import ChannelRules from "../components/settings/ChannelRules";
+import { ChannelInfosStore } from "@/store/channelInfos";
+import axios from "axios";
+import ServerInvites from "../components/settings/Invites";
+import emojiData from "@/data/emojiData.json";
 
 export type DBVoiceChatWithMembers = Prisma.VoiceChatGetPayload<{
     include: {
@@ -47,7 +50,8 @@ export interface ContextMenu {
     y: number;
     shown: boolean;
     currentID: string;
-    currentObject: any;
+    currentObject: unknown;
+    includes: { label: string, action: (() => void) }[],
 }
 
 export enum ExploreBoxMode {
@@ -95,8 +99,10 @@ export interface Currents {
     SideBoxChannelsV: boolean;
     Categories: Category[];
     ServerUsersDivV: boolean;
-    settingsObject: any;
-    setSettingsObject: (settingsObject: any) => void;
+    settingsObject: unknown;
+    userVariables: UserVariables | null;
+    setUserVariables: (userVariables: UserVariables | null) => void;
+    setSettingsObject: (settingsObject: unknown) => void;
     setServerUsersDivV: (ServerUsersDivV: boolean) => void;
     onClickAppIcon: () => void;
     setCategories: (categories: Category[]) => void;
@@ -117,7 +123,8 @@ export interface Currents {
     setContextMenuShown: (shown: boolean) => void;
     setContextMenuXY: (x: number, y: number) => void;
     setContextMenuID: (currentID: string) => void;
-    setContextMenuObject: (object: any) => void;
+    setContextMenuObject: (object: unknown) => void;
+    setContextMenuIncludes: (includes: { label: string, action: (() => void) }[]) => void;
     setFriendsDivV: (visible: boolean) => void;
     setFriendsDivState: (status: ViewingFriendsDiv) => void;
     setDirectMessage: (directmessage: DirectMessage | null) => void;
@@ -139,7 +146,7 @@ export interface Currents {
 
 export type SettingsMode = 'UserApp' | 'Server' | 'Channel' | 'Direct Message';
 
-export type ContextMenuMode = 'User' | 'Channel' | 'Server' | 'Direct Message' | 'UserProfileView';
+export type ContextMenuMode = 'User' | 'Channel' | 'Server' | 'Direct Message' | 'UserProfileView' | 'Message';
 
 export interface FriendsDivStatus {
     visible: boolean,
@@ -170,35 +177,130 @@ export function ToVCInfo(dbvc: DBVoiceChatWithMembers): VoiceChatInformation {
     }
 }
 
+import { toArray as toArrayEmoji } from "react-emoji-render";
+const isAsciiEmoji = (text: string) => {
+    return /^[:;xX=8B][\-^]?[)(DPpOo3@$/|\\]+$/i.test(text.trim());
+};
+
+export const parseEmojis = (value: string) => {
+    const emojisArray = toArrayEmoji(value);
+
+    const newValue = emojisArray.reduce((previous: string, current: any) => {
+        if (typeof current === "string") {
+            return previous + current;
+        }
+
+        const original = current.props.children;
+
+        // If it's an ASCII emoticon like ":D", ":p", don't convert
+        if (typeof original === "string" && isAsciiEmoji(original)) {
+            return previous + original;
+        }
+
+        return previous + original;
+    }, "");
+
+    return newValue;
+};
+
 export type ViewingFriendsDiv = 'online' | 'offline' | 'blocked' | 'pending';
 
-function renderMatchContent(className: string, match: RegExpMatchArray): JSX.Element | string {
+import ustyles from "@/app/app/page.module.css";
+import { UserVariables } from "@/store/variablesStore";
+import AppLayout from "../components/settings/AppLayout";
+export function renderMatchContent(
+    className: string,
+    match: RegExpMatchArray,
+    children?: React.ReactNode,  // Single ReactNode instead of array
+    markersEnabled?: boolean,
+): React.ReactElement {  // Always return a ReactElement
+    // Wrap all returns in React.createElement or JSX
     switch (className) {
         case "hackTextStyle":
-            return <GlitchText text={match[1]} />;
+            return <GlitchText markersEnabled={markersEnabled}>{children ?? match[1]}</GlitchText>;
+        case "coolTextStyle":
+            return <GradientText markersEnabled={markersEnabled}>{children ?? match[1]}</GradientText>;
         case "colorfulTextStyle":
-            return <ColorfulText text={match[1]} time="10s" />;
+            return <ColorfulText markersEnabled={markersEnabled} time="10s">{children ?? match[1]}</ColorfulText>;
         case "colorfulfastTextStyle":
-            return <ColorfulText text={match[1]} time="5s" />;
+            return <ColorfulText markersEnabled={markersEnabled} time="5s">{children ?? match[1]}</ColorfulText>;
         case "spoilerTextStyle":
-            return <SpoilerText text={match[1]} />;
+            return <SpoilerText markersEnabled={markersEnabled}>{children ?? match[1]}</SpoilerText>;
+        case "linkTextStyle":
+            return <LinkText markersEnabled={markersEnabled} url={match[2]}>{match[1]}</LinkText>;
+        case "linkTextStyleRev":
+            return <LinkText markersEnabled={markersEnabled} isReversed={true} url={match[1]}>{match[2]}</LinkText>;
+        case "coloredTextStyle":
+            return <ColoredText markersEnabled={markersEnabled} color={match[1]} >{children ?? match[2]}</ColoredText>;
+        case "coloredTextNameStyle":
+            return <ColoredTextName markersEnabled={markersEnabled} color={match[1]}>{children ?? match[2]}</ColoredTextName>;
+        case "coloredTextStyleRGB":
+            return (
+                <ColoredTextRGB markersEnabled={markersEnabled} colorR={match[1]} colorG={match[2]} colorB={match[3]}>
+                    {children ?? match[4]}
+                </ColoredTextRGB>
+            );
+        case "backtickTextStyle":
+            return <BacktickText markersEnabled={markersEnabled}>{children ?? match[1]}</BacktickText>;
+        case "doubleBacktickTextStyle":
+            return <DoubleBacktickText markersEnabled={markersEnabled}>{children ?? match[1]}</DoubleBacktickText>;
+        case "codeTextStyle":
+            return <CodeText markersEnabled={markersEnabled} codeLanguage={match[1]}>{match[2]}</CodeText>;
+        case "codeTextWithStyleStyle":
+            return (
+                <CodeTextWithStyle markersEnabled={markersEnabled} codeLanguage={match[1]} style={match[2]}>
+                    {match[3]}
+                </CodeTextWithStyle>
+            );
+        case "textShadowTextStyle":
+            return <TextShadowText markersEnabled={markersEnabled}>{children ?? match[1]}</TextShadowText>;
+        case "unimportantTextStyle":
+            return <UnimportantText markersEnabled={markersEnabled}>{children ?? match[1]}</UnimportantText>
+        case "emojiTextStyle":
+            const parsed = parseEmojis(`:${match[1]}:`);
+            return <span>{parsed}</span>;
+        case "md_italic":
+            if (markersEnabled)
+                return <><span className={ustyles.markerTextStyle}>{"*"}</span><span className={ustyles[className]}>{children ?? match[1]}</span><span className={ustyles.markerTextStyle}>{"*"}</span></>;
+            else
+                return <span className={ustyles[className]}>{children ?? match[1]}</span>;
+        case "md_bold":
+            if (markersEnabled)
+                return <><span className={ustyles.markerTextStyle}>{"**"}</span><span className={ustyles[className]}>{children ?? match[1]}</span><span className={ustyles.markerTextStyle}>{"**"}</span></>;
+            else
+                return <span className={ustyles[className]}>{children ?? match[1]}</span>;
+        case "md_italicbold":
+            if (markersEnabled)
+                return <><span className={ustyles.markerTextStyle}>{"***"}</span><span className={ustyles[className]}>{children ?? match[1]}</span><span className={ustyles.markerTextStyle}>{"***"}</span></>;
+            else
+                return <span className={ustyles[className]}>{children ?? match[1]}</span>;
+        case "rainbowTextStyle":
+            if (markersEnabled)
+                return <><span className={ustyles.markerTextStyle}>{"<<<rainbow>>"}</span><span className={ustyles[className]}>{children ?? match[1]}</span><span className={ustyles.markerTextStyle}>{"</ >"}</span></>;
+            else
+                return <span className={ustyles[className]}>{children ?? match[1]}</span>;
+        case "wdTextStyle":
+            return <WDText markersEnabled={markersEnabled}>{children ?? match[1]}</WDText>;
+        case "escapedCharTextStyle":
+            return <EscapedChar markersEnabled={markersEnabled}>{match[1]}</EscapedChar>;
+        case "newLineTextStyle":
+            return <br />
+        case "mentionTextStyle":
+            return <MentionText markersEnabled={markersEnabled}>{match[1]}</MentionText>
         default:
-            return match[1];
+            return <span className={ustyles[className]}>{children ?? match[1]}</span>; // Wrap in fragment to ensure ReactElement return
     }
 }
-
-export function SyntaxHighlight(
+export function OLDSyntaxHighlight(
     patterns: SyntaxPattern[],
     incoming: string,
     styles: Record<string, string>
 ): JSX.Element[] {
-    const ustyles = require("./util.module.css");
-
     let elements: (string | JSX.Element)[] = [incoming]; // Start with the full text
     let lastIndex = 0;
 
     for (const pattern of patterns) {
-        let newElements: (string | JSX.Element)[] = [];
+        const newElements: (string | JSX.Element)[] = [];
 
         for (const el of elements) {
             if (typeof el === "string") {
@@ -255,11 +357,11 @@ export function getLineHeight(element: HTMLElement): number {
     return parseFloat(lineHeight);
 }
 
-export type SettingUpdateType = 'UserInfo' | 'ServerInfo' | 'ServerInvites' | 'ChannelInfo';
+export type SettingUpdateType = 'UserInfo' | 'UserVariables' | 'ServerInfo' | 'ServerInvites' | 'ChannelInfo';
 
 export interface SettingsProps {
     Currents: Currents,
-    updateSettings: (setting: string, data: any, dataType: SettingUpdateType, callbackFn: () => void) => void;
+    updateSettings: (setting: string, data: UserInfo | UserVariables | ServerInfo | ChannelInfo | SI, dataType: SettingUpdateType, callbackFn: () => void) => void;
 }
 
 export const componentMap: Map<string, React.FC<SettingsProps>> = new Map([
@@ -267,6 +369,8 @@ export const componentMap: Map<string, React.FC<SettingsProps>> = new Map([
     ["Server Information", ServerInformation],
     ["Invites", ServerInvites],
     ["Channel Information", ChannelInformation],
+    ["Channel Rules", ChannelRules],
+    ["App Appearance", AppLayout],
 ]);
 
 export function getLocale() {
@@ -302,7 +406,7 @@ export function GetTodayNameLocale() {
     } else if (getLocale().startsWith("de")) {
         return GermanTYT[0] + ' um';
     } else {
-        return TurkishTYT[0] + ' at';
+        return EnglishTYT[0] + ' at';
     }
 }
 
@@ -346,7 +450,7 @@ export interface MessageInfo {
     ref: HTMLDivElement | null,
 }
 
-export const UpdateMessageInfo = (message: Message, key: any, value: any, setMessageInfos: any) => {
+export const UpdateMessageInfo = (message: Message, key: string | number | symbol, value: unknown, setMessageInfos: (f: ((messagesList: MessageInfo[]) => MessageInfo[])) => void) => {
     setMessageInfos((prev: MessageInfo[]) =>
         prev.map((info: MessageInfo) =>
             info.Message.id === message.id
@@ -420,19 +524,19 @@ export const onMouseLeaveTooltipElement = (currents: Currents) => {
 }
 
 export function _arrayBufferToBase64(buffer: ArrayBuffer) {
-    var binary = '';
-    var bytes = new Uint8Array(buffer);
-    var len = bytes.byteLength;
-    for (var i = 0; i < len; i++) {
+    let binary = '';
+    const bytes = new Uint8Array(buffer);
+    const len = bytes.byteLength;
+    for (let i = 0; i < len; i++) {
         binary += String.fromCharCode(bytes[i]);
     }
     return window.btoa(binary);
 }
 
 export function _base64ToarrayBuffer(base64: string) {
-    var binaryString = atob(base64);
-    var bytes = new Uint8Array(binaryString.length);
-    for (var i = 0; i < binaryString.length; i++) {
+    const binaryString = atob(base64);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
         bytes[i] = binaryString.charCodeAt(i);
     }
     return bytes.buffer;
@@ -450,40 +554,6 @@ export function AutocompleteEmojiName(text: string): string[] | null {
 
 export function genTempID(): string {
     return "temp_" + genInvite(4) + Date.now().toString().slice(-2);
-}
-
-export function tempMessageToMessage(recievedMessage: SendMessageI): Message {
-    var newMessage: Message = {
-        author: recievedMessage.author,
-        authorId: recievedMessage.author.id,
-        channel: {
-            id: recievedMessage.channelId,
-            name: '',
-            categoryId: '',
-        },
-        channelId: recievedMessage.channelId,
-        content: recievedMessage.content,
-        id: recievedMessage.tempID,
-        timestamp: recievedMessage.timestamp,
-        repliedToId: null,
-        repliedTo: null,
-    };
-
-    if (recievedMessage.repliedToId && recievedMessage.repliedToAuthor) {
-        newMessage.repliedToId = recievedMessage.repliedToId;
-        newMessage.repliedTo = {
-            author: {
-                id: recievedMessage.repliedToAuthor.id,
-                username: recievedMessage.repliedToAuthor.username,
-                avatarUrl: recievedMessage.repliedToAuthor.avatarUrl,
-            },
-            authorId: recievedMessage.repliedToAuthor.id,
-            channel: { id: '', name: '', categoryId: null },
-            channelId: '', content: recievedMessage.repliedToContent!, id: '', repliedTo: null, repliedToId: null, timestamp: new Date(),
-        }
-    }
-
-    return newMessage;
 }
 
 declare global {
@@ -527,3 +597,145 @@ export function OpenConfirmationMenuWithRetype(currents: Currents, question: str
     currents.setconfirmationMenuRetypeText(retypeText);
     currents.setConfirmationMenu(true);
 }
+
+export const AllMessageSyntaxHighlights = [
+    {
+        className: "mentionTextStyle",
+        pattern: /(?<!\\)\@([^ ]+)( |$)/g
+    },
+    {
+        className: "newLineTextStyle",
+        pattern: /\n$/g
+    }, {
+        className: "wdTextStyle",
+        pattern: /<<<wd>>(.+?)(?<!\\)<\/İ>/gmi,
+    }, {
+        className: "emojiTextStyle",
+        pattern: /(?<!\\):(.+?)(?<!\\):/gi
+    }, {
+        className: "unimportantTextStyle",
+        pattern: /(?<!\\)\/\/(.+?)(?<!\\)\/\//gmi
+    }, {
+        className: "textShadowTextStyle",
+        pattern: /(?<!\\)~~(.+?)(?<!\\)~~/gmi
+    }, {
+        className: "codeTextWithStyleStyle",
+        pattern: /(?<!\\)```(.+?):(.+?)\n((.|\n)+)\n?(?<!\\)```/gmi,
+    }, {
+        className: "codeTextStyle",
+        pattern: /(?<!\\)```(.+?)\n((.|\n)+)\n?(?<!\\)```/gmi,
+    }, {
+        className: "codeTextWithStyleStyle",
+        pattern: /(?<!\\)!<(.+?):(.+?)\/(.+?)>/gmi,
+    }, {
+        className: "codeTextStyle",
+        pattern: /(?<!\\)!<(.+?)\/(.+?)>/gmi,
+    }, {
+        className: "doubleBacktickTextStyle",
+        pattern: /(?<!\\)``(.+?)(?<!\\)``/g,
+    }, {
+        className: "backtickTextStyle",
+        pattern: /(?<!\\)`(.+?)(?<!\\)`/g,
+    }, {
+        className: "coloredTextNameStyle",
+        pattern: /(?<!\\)\%([A-Z]+)\"(.+?)\"/gmi,
+    }, {
+        className: "coloredTextStyleRGB",
+        pattern: /(?<!\\)\%([0-9]+),([0-9]+),([0-9]+)\"(.+?)\"/gm,
+    }, {
+        className: "coloredTextStyle",
+        pattern: /(?<!\\)\%(.+?)\"(.+?)\"/gm,
+    }, {
+        className: "linkTextStyleRev",
+        pattern: /(?<!\\)\((.+?)\)\[(.+?)\]/g,
+    }, {
+        className: "linkTextStyle",
+        pattern: /(?<!\\)\[(.+?)\]\((.+?)\)/g,
+    }, {
+        className: "spoilerTextStyle",
+        pattern: /(?<!\\)\|\|(.+?)(?<!\\)\|\|/gm
+    }, {
+        className: "colorfulfastTextStyle",
+        pattern: /<<<colorfulfast>>(.+?)(?<!\\)<\/İ>/gm
+    }, {
+        className: "colorfulTextStyle",
+        pattern: /<<<colorful>>(.+?)(?<!\\)<\/İ>/gm
+    }, {
+        className: "hackTextStyle",
+        pattern: /<<<hack>>(.+?)(?<!\\)<\/İ>/gm
+    }, {
+        className: "coolTextStyle",
+        pattern: /<<<cool>>(.+?)(?<!\\)<\/İ>/gm
+    }, {
+        className: "rainbowTextStyle",
+        pattern: /<<<rainbow>>(.+?)(?<!\\)<\/İ>/gm
+    }, {
+        className: "md_italicbold",
+        pattern: /(?<!\\)\*{3}(.+?)(?<!\\)\*{3}/gm
+    }, {
+        className: "md_bold",
+        pattern: /(?<!\\)\*{2}(.+?)(?<!\\)\*{2}/gm
+    }, {
+        className: "md_italic",
+        pattern: /(?<!\\)\*(.+?)(?<!\\)\*/gm
+    }, {
+        className: "escapedCharTextStyle",
+        pattern: /\\(.)/g
+    }];
+
+export const fetchChannelInfo = async (channelId: string, channelInfoStore: ChannelInfosStore) => {
+    try {
+        const channelInfoExists = channelInfoStore.getExistingInfo(channelId);
+        if (channelInfoExists) {
+            return channelInfoExists;
+        } else {
+            if (channelInfoStore.fetching.includes(channelId)) {
+                const waitForFetching = async (): Promise<unknown> => {
+                    if (channelInfoStore.fetching.includes(channelId)) {
+                        return new Promise(resolve => {
+                            setTimeout(async () => {
+                                resolve(await waitForFetching());
+                            }, 250);
+                        });
+                    } else {
+                        return channelInfoStore.getExistingInfo(channelId);
+                    }
+                }
+
+                return await waitForFetching();
+            };
+
+            channelInfoStore.addfetchingInfo(channelId);
+            const response = await axios.get(`/api/v1/channels/${channelId}/info`)
+            channelInfoStore.addInfo(response.data.data);
+            channelInfoStore.removefetchingInfo(channelId);
+
+            return response.data.data;
+
+
+        }
+    } catch (error) {
+        console.error("Error fetching server info:", error);
+    } finally {
+
+    }
+};
+
+export const isObjectNotNull = (value: unknown) => {
+    return (typeof value === 'object') && value !== null
+}
+
+export const allEmojiDataList = emojiData.emojis;
+export const getNameOfEmoji = (emoji: string) => {
+    return allEmojiDataList.find(e => e.emoji === emoji)?.name.replace(' ', '_') ?? emoji;
+}
+export const getEmojiOfName = (name: string) => {
+    return allEmojiDataList.find(e => e.name === name)?.emoji ?? name;
+}
+
+export const getIconOfFileExtension = (fileExtension: string): string | undefined => { // Not implemented yet: Missing file icon packs
+    return "file2";
+}
+
+export const showAutoCompleteMentionRegex = /(?<!\\)\@([^ ]+)( |$)/gmi;
+export const showAutoCompleteMentionRegexTrue = /(?<!\\)\@([^ \n]+)( |$)/gi;

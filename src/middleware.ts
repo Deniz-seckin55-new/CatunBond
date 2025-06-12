@@ -1,9 +1,7 @@
-import { clerkMiddleware, createRouteMatcher, currentUser } from '@clerk/nextjs/server'
-import { PrismaClient } from '@prisma/client'
-import { NextRequest, NextResponse } from 'next/server';
+import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
+import { NextResponse } from 'next/server';
 
 const isPublicRoute = createRouteMatcher(['/sign-in(.*)', '/sign-up(.*)', '/'])
-const db = new PrismaClient();
 
 const BLACKLIST_API_URL = "https://api.abuseipdb.com/api/v2/blacklist";
 const API_KEY = "db478cdf11657f460ea9a7c4ef0c33435cdfdb1a18bb43115d02ca29cbcd97f4c7fb5f655e99c24e";
@@ -61,8 +59,8 @@ const cspHeader = `
   upgrade-insecure-requests;
 `;
 
-export async function custommiddleware(req: any) {
-  const clientIp = req.ip ?? (req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+export async function custommiddleware(req: NextResponse) {
+  const clientIp = (req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
     req.headers.get('cf-connecting-ip') ||
     req.headers.get('true-client-ip')) ?? 'unknown';
   const currentTime = Date.now();

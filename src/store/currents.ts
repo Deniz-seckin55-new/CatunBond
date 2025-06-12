@@ -1,14 +1,14 @@
 import * as utils from "@/app/app/utils/utils"
-import * as socketutils from "@/app/app/utils/socket_utils"
 import { create } from "zustand"
 import { useMessagesStore } from "./messages"
+import { UserVariables } from './variablesStore';
 
 export const useCurrents = create<utils.Currents>((set) => ({
     channel: null,
     server: null,
     exploreboxmode: null,
     user: null,
-    contextmenu: { shown: false, x: 0, y: 0, currentID: '', currentObject: null },
+    contextmenu: { shown: false, x: 0, y: 0, currentID: '', currentObject: null, includes: [], },
     contextmenumode: null,
     friendsdiv: { status: "online", visible: true },
     directmessage: null,
@@ -28,6 +28,9 @@ export const useCurrents = create<utils.Currents>((set) => ({
     Categories: [],
     ServerUsersDivV: false,
     settingsObject: null,
+    userVariables: null,
+    setUserVariables: (userVariables) => { set({ userVariables }) },
+    setContextMenuIncludes: (includes) => { set((state) => ({contextmenu: { ...state.contextmenu, includes}}))},
     setSettingsObject: (settingsObject) => { set({ settingsObject }) },
     setServerUsersDivV: (ServerUsersDivV) => { set({ ServerUsersDivV }) },
     onClickAppIcon: () => {

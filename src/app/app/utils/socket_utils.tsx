@@ -1,7 +1,10 @@
 import { useUserStore } from "@/store/users";
-import { ViewingFriendsDiv } from "./utils";
 import { FriendRequest as DBFriendRequest, Prisma } from "@prisma/client";
 import axios from "axios";
+import { ViewingFriendsDiv } from "./utils";
+import { SendMessageISchema } from "./schemas";
+import { z } from "zod";
+
 
 export type Server = Prisma.ServerGetPayload<{
     include: {
@@ -64,30 +67,15 @@ export type Message = Prisma.MessagesGetPayload<{
                 },
                 repliedTo: {
                     select: { id: true } // Depth End
-                }
+                },
+                reactions: true,
             },
-        }
+        },
+        reactions: true,
     },
 }>
 
-export interface SendMessageI {
-    tempID: string;
-    content: string;
-    channelId: string;
-    author: {
-        id: string;
-        username: string;
-        avatarUrl: string | null;
-    }
-    repliedToId?: string;
-    repliedToAuthor?: {
-        id: string;
-        username: string;
-        avatarUrl: string | null;
-    };
-    repliedToContent?: string;
-    timestamp: Date;
-}
+export type SendMessageI = z.infer<typeof SendMessageISchema>;
 
 export type Channel = Prisma.ChannelGetPayload<{
     select: {
@@ -122,6 +110,7 @@ export type User = Prisma.UserGetPayload<{
 export type DetailedDBUser = Prisma.UserGetPayload<{
     select: {
         id: true,
+        variables: true,
         friends: {
             select: {
                 id: true,
@@ -249,13 +238,13 @@ export type DirectMessage = Prisma.ChannelGetPayload<{
     }
 }>
 
-export type UserInfo = Prisma.UserInfoGetPayload<{}>
+export type UserInfo = Prisma.UserInfoGetPayload<{ include: { serverListOrder: true } }>
 
-export type UserNote = Prisma.UserNoteGetPayload<{}>
+export type UserNote = Prisma.UserNoteGetPayload<true>
 
-export type ServerInfo = Prisma.ServerInfoGetPayload<{}>
+export type ServerInfo = Prisma.ServerInfoGetPayload<true>
 
-export type ChannelInfo = Prisma.ChannelInfoGetPayload<{}>
+export type ChannelInfo = Prisma.ChannelInfoGetPayload<true>
 
 export interface ServerInvites {
     serverId: string;
@@ -296,6 +285,9 @@ export enum SocketInformationType {
     ClientBlockFriendRequest,
     ClientStartWritingMessage,
     ClientStopWritingMessage,
+    ClientReconnectEvent,
+    ClientAddReactionEvent,
+    CleintRemoveReactionEvent,
 }
 
 export interface EditContext {
@@ -309,18 +301,31 @@ export interface WritingEvent {
     channelId: string,
 }
 
+export interface ReconnectData {
+    channelId?: string;
+    lastSeenMessageTimestamp?: Date;
+}
+
+export interface ReactionRemoveData {
+    messageId: string;
+    reactionEmojiName: string;
+}
+
 export enum AllowedTypes {
     Message,
     MessageI,
     EditContext,
     FriendRequest,
     WritingEvent,
+    ReconnectData,
+    Reaction,
+    ReactionRemoveData,
 }
 
 export interface SocketData {
     infoType: SocketInformationType,
     dataType: AllowedTypes,
-    data: any
+    data: unknown
 }
 
 export interface MessageSocketPacket {
@@ -329,10 +334,10 @@ export interface MessageSocketPacket {
 
 export interface ClientResponsePacket {
     dataType: AllowedTypes,
-    data: any
+    data: unknown
 }
 
-export const getUserSR = async (userID: string) => {
+export const usegetUserSR = async (userID: string) => {
     const userStore = useUserStore();
 
 
@@ -350,3 +355,39 @@ export const getUserSR = async (userID: string) => {
 
     userStore.addUser(newUser);
 }
+export const SortByDate = <T extends { timestamp: Date }>(array: T[]) => {
+    return array.toSorted((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+}
+
+export type MessageUpdate = Prisma.MessagesGetPayload<{
+    omit: {
+        id: true,
+        authorId: true,
+        channelId: true,
+        repliedToId: true,
+        timestamp: true,
+    }
+}>;
+
+export type MessageReactionUpdate = Prisma.MessagesGetPayload<{
+    select: {
+        reactions: true,
+    }
+}>;
+
+export type MessageCreate = Prisma.MessagesGetPayload<{
+    omit: {
+        id: true,
+        authorId: true,
+        channelId: true,
+        timestamp: true,
+        mentions: true,
+    },
+}>
+
+export interface Attachment {
+    filename: string;
+    publicUrl: string;
+}
+
+export type JsonAttachments = Attachment[];

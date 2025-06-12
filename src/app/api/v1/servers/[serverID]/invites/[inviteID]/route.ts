@@ -1,6 +1,5 @@
 import { db } from "@/lib/prisma";
 import { currentUser } from "@clerk/nextjs/server";
-import { PrismaClient } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 export async function GET(request: NextRequest, { params }: { params: { serverID: string; inviteID: string } }) {
     try {
@@ -17,9 +16,7 @@ export async function GET(request: NextRequest, { params }: { params: { serverID
         if (err instanceof Error)
             console.log(err.stack);
         return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
-    } finally {
-        db.$disconnect();
-    }
+    } 
 }
 
 /// Note! InviteID is same as Invite itself.
@@ -56,9 +53,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { serve
         if (err instanceof Error)
             console.log(err.stack);
         return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
-    } finally {
-        db.$disconnect();
-    }
+    } 
 }
 
 // You cannot modify (PUT/PATCH) an invite. 

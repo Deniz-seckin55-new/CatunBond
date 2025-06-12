@@ -1,4 +1,4 @@
-import { DirectMessage, Message, User, UserInfo } from "@/app/app/utils/socket_utils";
+import { UserInfo } from "@/app/app/utils/socket_utils";
 import { create } from "zustand";
 
 interface UserInfosStore {

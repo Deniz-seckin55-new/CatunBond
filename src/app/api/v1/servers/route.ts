@@ -1,6 +1,5 @@
 import { db } from "@/lib/prisma";
 import { currentUser } from "@clerk/nextjs/server";
-import { PrismaClient } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { defaultServerGet } from "../utils/utils";
 export async function POST(request: NextRequest) {
@@ -32,7 +31,23 @@ export async function POST(request: NextRequest) {
                         }
                     }
                 }
-            }, include: defaultServerGet.include, omit: defaultServerGet.omit,
+            }, include: {
+                categories: {
+                    include: {
+                        channels: {
+                            orderBy: { index: "asc"}
+                        },
+                    },
+                    orderBy: { index: "asc" }
+                },
+                members: {
+                    select: {
+                        id: true,
+                        username: true,
+                        avatarUrl: true,
+                    }
+                }
+            }, omit: defaultServerGet.omit,
         });
 
         // Auto join server
@@ -49,7 +64,5 @@ export async function POST(request: NextRequest) {
         if (err instanceof Error)
             console.log(err.stack);
         return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
-    } finally {
-        db.$disconnect();
-    }
+    } 
 }

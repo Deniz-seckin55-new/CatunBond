@@ -10,7 +10,7 @@ interface Props {
 const BackgroundBlur: React.FC<Props> = ({ onClickBgBlur }) => {
     const currents = useCurrents();
 
-    var [showElement, setshowElement] = useState(false);
+    const [showElement, setshowElement] = useState(false);
 
     useEffect(() => {
         if (currents.BgBlurV) {

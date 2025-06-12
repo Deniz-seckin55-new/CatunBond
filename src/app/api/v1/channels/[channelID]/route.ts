@@ -1,5 +1,4 @@
 import { db } from "@/lib/prisma";
-import { useRouter } from "next/router";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(request: NextRequest, { params }: {params: {channelID: string}}) {
@@ -18,9 +17,7 @@ export async function GET(request: NextRequest, { params }: {params: {channelID:
         if (err instanceof Error)
             console.log(err.stack);
         return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
-    } finally {
-        db.$disconnect();
-    }
+    } 
 }
 
 export async function DELETE(request: NextRequest, { params }: {params: {channelID: string}}) {
@@ -36,9 +33,7 @@ export async function DELETE(request: NextRequest, { params }: {params: {channel
         if(err instanceof Error)
             console.log(err.stack);
         return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
-    } finally {
-        db.$disconnect();
-    }
+    } 
 }
 
 export async function PATCH(request: NextRequest, { params }: {params: {channelID: string}}) {
@@ -62,7 +57,5 @@ export async function PATCH(request: NextRequest, { params }: {params: {channelI
     } catch (err) {
         if(err instanceof Error)
             console.log(err.stack);
-    } finally {
-        db.$disconnect();
-    }
+    } 
 }

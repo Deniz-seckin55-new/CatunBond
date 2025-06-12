@@ -64,9 +64,7 @@ export async function GET(request: NextRequest, { params }: { params: { withUser
         if (err instanceof Error)
             console.log(err.stack);
         return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
-    } finally {
-        db.$disconnect();
-    }
+    } 
 }
 export async function DELETE(request: NextRequest, { params }: { params: { withUserID: string } }) {
     try {
@@ -102,7 +100,5 @@ export async function DELETE(request: NextRequest, { params }: { params: { withU
         if (err instanceof Error)
             console.log(err.stack);
         return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
-    } finally {
-        db.$disconnect();
-    }
+    } 
 }

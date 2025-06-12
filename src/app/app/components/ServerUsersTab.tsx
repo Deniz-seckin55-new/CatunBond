@@ -1,14 +1,9 @@
 import { useEffect, useState } from 'react';
 import styles from '../page.module.css';
-import { Currents } from '../utils/utils';
 import { User } from '../utils/socket_utils';
 import { useCurrents } from '@/store/currents';
 
-interface Props {
-    
-}
-
-const ServerUsersTab: React.FC<Props> = ({ }) => {
+const ServerUsersTab: React.FC = () => {
     const [users, setusers] = useState<User[]>([]);
     const currents = useCurrents();
 

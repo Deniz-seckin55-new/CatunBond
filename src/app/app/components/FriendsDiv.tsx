@@ -1,13 +1,12 @@
 import styles from '../page.module.css';
 
-import React, { use, useEffect, useState } from 'react';
-import { Currents, ToUserSmall } from '../utils/utils';
+import React, { useEffect, useState } from 'react';
 import { Socket } from 'socket.io-client';
-import { FriendRequest as DBFriendRequest } from '@prisma/client';
 import { AllowedTypes, Friend, FriendRequestAnswer, PendingFriendRequest, SocketData, SocketInformationType, User } from '../utils/socket_utils';
 import { useGetUser } from './common/GetUser';
 import axios from 'axios';
 import { useCurrents } from '@/store/currents';
+import { ViewingFriendsDiv } from '../utils/utils';
 
 interface Props {
     pendingSentRequests: PendingFriendRequest[];
@@ -55,7 +54,7 @@ const FriendsDiv: React.FC<Props> = ({ pendingSentRequests, setpendingSentReques
                 }));
             }
             friendsList.forEach((friend) => {
-                socket?.emit("get_status", friend.id, function (data: any) {
+                socket?.emit("get_status", friend.id, function (data: "online" | "offline") {
                     const friendStatus: Friend = {
                         user: friend,
                         status: data,

@@ -17,9 +17,7 @@ export async function GET(request: NextRequest, { params }: { params: { userID: 
         if(err instanceof Error)
             console.log(err.stack);
         return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
-    } finally {
-        db.$disconnect();
-    }
+    } 
 }
 
 // Can't DELETE/PUT/PATCH a user

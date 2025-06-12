@@ -1,13 +1,14 @@
+import { getEmitter } from "@/lib/emitter";
 import { db } from "@/lib/prisma";
 import { clerkClient, currentUser } from "@clerk/nextjs/server";
 import { NextRequest, NextResponse } from "next/server";
 export async function GET(request: NextRequest) {
     try {
-        const user = await currentUser();
-        if (!user) {
-            db.$disconnect();
-            return;
-        }
+        // const user = await currentUser();
+        // if (!user) {
+        //     db.$disconnect();
+        //     return;
+        // }
 
         /*if(user) {
             (await clerkClient()).users.updateUserMetadata(user.id, {
@@ -37,21 +38,21 @@ export async function GET(request: NextRequest) {
          await db.channel.deleteMany({ where: { serverId } });
          await db.server.delete({ where: { id: serverId } });*/
 
-        const server = await db.server.findFirst({
-            where: {
-                id: "ee481f36-7871-4fab-8f56-9881eeb7743b"
-            }
-        });
+        // const server = await db.server.findFirst({
+        //     where: {
+        //         id: "ee481f36-7871-4fab-8f56-9881eeb7743b"
+        //     }
+        // });
 
-        const messages = await db.messages.findMany();
+        // const messages = await db.messages.findMany();
 
-        const cl = await clerkClient();
+        // const cl = await clerkClient();
         /*const users = await cl.users.getUserList();
         users.data.forEach(async (user) => {
             await cl.users.deleteUser(user.id);
         });*/
 
-        const servercodes = (await db.server.findMany({ where: {id: {not: "h"}}})).map((s) => s.invites);
+        // const servercodes = (await db.server.findMany({ where: {id: {not: "h"}}})).map((s) => s.invites);
         
         /*await db.messages.deleteMany({ where: { authorId: { not: ";" } } });*/
         /*await db.auth.deleteMany({ where: { userId: { not: { contains: ";" } } } });
@@ -65,13 +66,19 @@ export async function GET(request: NextRequest) {
 
         const dmChannel = await db.channel.delete({where: {id: dms![0].id}});
 */
-        const e = await db.voiceChat.findMany({include: {members: true}});
+        // const e = await db.voiceChat.findMany({include: {members: true}});
 
         //await db.voiceChat.deleteMany({});
 
-        await db.$disconnect();
+        // const io = await getEmitter();
+        // io.emit("nya", "Hell nyea",new Date().getMinutes());
+
+        // await db.$disconnect();
+        
+        // const n = await db.user.updateMany({where: { id: { not: { contains: ";" } } }, data: { variables: {channelFontSize: 16, appFontSize: 16} } });
+
         return NextResponse.json({
-            message: e,
+            message: ["Emitted"],
         }, { status: 200 })
     } catch (err) {
         if (err instanceof Error)

@@ -1,5 +1,4 @@
 import { db } from "@/lib/prisma";
-import { PrismaClient } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 export async function GET(request: NextRequest, { params }: { params: { directmessageID: string } }) {
     try {
@@ -31,9 +30,7 @@ export async function GET(request: NextRequest, { params }: { params: { directme
         if (err instanceof Error)
             console.log(err.stack);
         return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
-    } finally {
-        db.$disconnect();
-    }
+    } 
 }
 
 export async function DELETE(request: NextRequest, { params }: { params: { directmessageID: string } }) {
@@ -53,9 +50,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { direc
         if (err instanceof Error)
             console.log(err.stack);
         return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
-    } finally {
-        db.$disconnect();
-    }
+    } 
 }
 
 // Direct Messages cannot be updated since the only parameter is the withUser and it should not be changed.

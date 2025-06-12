@@ -3,75 +3,82 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import styles from '../page.module.css';
 
-import BackgroundBlur from './BackgroundBlur'
-import ExploreBox from "./ExploreBox";
-import MainBox from "./MainBox";
-import UserBox from "./UserBox";
-import SideBox from "./SideBox";
-import FriendsDiv from "./FriendsDiv";
-import ChannelBox from "./ChannelBox";
-import { ViewingFriendsDiv, Currents, UpdateMessageInfo, ToUserSmall, MessageInfo, ToVCInfo, DBVoiceChatWithMembers, DBuserToUser, SettingsMode, ExploreBoxMode, genTempID, tempMessageToMessage, ContextMenuMode } from "../utils/utils";
-import { useUser } from "@clerk/nextjs";
-import { io, Socket } from 'socket.io-client';
-import ContextMenu from "./ContextMenu";
-import SettingsBox from "./SettingsBox";
-import ChannelBoxInfo from "./ChannelBoxInfo";
-import ServerUsersTab from "./ServerUsersTab";
-import { toast } from "react-toastify";
-import { AllowedTypes, Category, Channel, ClientResponsePacket, DetailedDBUser, DirectMessage, EditContext, FriendRequestAnswer, Message, PendingFriendRequest, SendMessageI, Server, SocketData, SocketInformationType, User, VoiceChatInformation, WritingEvent } from "../utils/socket_utils";
-import Tooltip from "./common/Tooltip";
-import Peer, { MediaConnection } from "peerjs";
-import LoadingPage from "./LoadingPage";
+import { useChannelInfoStore } from "@/store/channelInfos";
 import { useCurrents } from "@/store/currents";
-import { useSocket, useSocketStore } from "@/store/socket";
-import { useAwaiting } from "@/store/awaiting";
-import axios, { AxiosError } from "axios";
-import { useQuery } from "@tanstack/react-query";
 import { useDirectMessageStore } from "@/store/directmessages";
-import { useMessagesStore } from "@/store/messages";
-import usersHandler from "./common/UsersHandler";
-import { useGetUser } from "./common/GetUser";
-import UsersHandler from "./common/UsersHandler";
-import { UserProfile } from "./UserProfile";
-import useUserProfileStore from "@/store/userProfile";
-import { useRouter } from "next/navigation";
-import { useLocalStore } from "@/store/locStore";
 import { useKBState } from "@/store/kbState";
+import { useMessageInfoStore } from "@/store/messageInfos";
+import { useMessagesStore } from "@/store/messages";
+import { useSocket, useSocketStore } from "@/store/socket";
+import useUserProfileStore from "@/store/userProfile";
+import { useUser } from "@clerk/nextjs";
+import axios, { AxiosError } from "axios";
+import { useRouter } from "next/navigation";
+import Peer, { MediaConnection } from "peerjs";
+import { toast } from "react-toastify";
+import { Socket } from 'socket.io-client';
+import { MESSAGES_FIRST_LOAD_MAX_AMOUNT } from "../utils/constants";
+import { AllowedTypes, Category, Channel, ChannelInfo, DetailedDBUser, DirectMessage, EditContext, JsonAttachments, Message, MessageCreate, MessageUpdate, PendingFriendRequest, SendMessageI, Server, SocketData, SocketInformationType, User, VoiceChatInformation, WritingEvent } from "../utils/socket_utils";
+import { DBVoiceChatWithMembers, ExploreBoxMode, fetchChannelInfo, MessageInfo, SettingsMode, ToUserSmall, ToVCInfo, UpdateMessageInfo, ViewingFriendsDiv } from "../utils/utils";
+import BackgroundBlur from './BackgroundBlur';
+import ChannelBox from "./ChannelBox";
+import ChannelBoxInfo from "./ChannelBoxInfo";
+import Tooltip from "./common/Tooltip";
+import UsersHandler from "./common/UsersHandler";
 import { ConfirmationMenu } from "./ConfirmationMenu";
+import ContextMenu from "./ContextMenu";
+import ExploreBox from "./ExploreBox";
+import FriendsDiv from "./FriendsDiv";
+import LoadingPage from "./LoadingPage";
+import MainBox from "./MainBox";
+import ServerUsersTab from "./ServerUsersTab";
+import SettingsBox from "./SettingsBox";
+import SideBox from "./SideBox";
+import UserBox from "./UserBox";
+import { UserProfile } from "./UserProfile";
+import useChannelBoxStore from "@/store/channelBoxStore";
+import ReactionMenu from "./ReactionMenu";
+import useReactionMenuStore from "@/store/reactionMenu";
+import { Reaction } from "@prisma/client";
+import { useVariablesStore } from "@/store/variablesStore";
+import { ImagePreview } from "./common/ImagePreviewFull";
+import { useImagePreviewStore } from "@/store/imagepreviewstore";
 
-const fetchLocalUser = async () => {
-    const data = await axios.get("/api/v1/user");
+// const fetchLocalUser = async () => {
+//     const data = await axios.get("/api/v1/user");
 
-    console.log("Got data as ", data);
-    return data.data.data as DetailedDBUser; // Funny
-}
+//     console.log("Got data as ", data);
+//     return data.data.data as DetailedDBUser; // Funny
+// }
 
 let voicesocket: Socket | undefined;
 
 const MainLayout: React.FC = () => {
-    const { socket, connect } = useSocketStore();
-    const awaiting = useAwaiting();
+    const { socket } = useSocketStore();
     const { directmessages, setDirectMessages } = useDirectMessageStore();
     const messageStore = useMessagesStore();
     const userProfileStore = useUserProfileStore();
-    const ls = useLocalStore();
+    // const ls = useLocalStore();
     const kb = useKBState();
+    const channelInfoStore = useChannelInfoStore();
+    const [lastMessageSentDate, setlastMessageSentDate] = useState<number>(0);
 
     const currents = useCurrents();
-    const [inputTextRows, setinputTextRows] = useState(1);
     const [LoadingText, setLoadingText] = useState("Loading..."); // Replace with loading gif
-    const [replyingTo, setreplyingTo] = useState<Message | null>(null);
-    const [MessageInfos, setMessageInfos] = useState<MessageInfo[]>([]);
-    const [appGridRows, setappGridRows] = useState<string>(`repeat(32, 1fr)`);
+    const { MessageInfos, setMessageInfos } = useMessageInfoStore();
+    // const [appGridRows, setappGridRows] = useState<string>(`repeat(32, 1fr)`);
     const [appGridColumns, setappGridColumns] = useState<string>(`repeat(32, 1fr)`);
     const [pendingSentRequests, setpendingSentRequests] = useState<PendingFriendRequest[]>([]);
     const [userStreams, setUserStreams] = useState<{ [userId: string]: MediaStream }>({});
     const [peer, setpeer] = useState<Peer | null>(null);
     const [calls, setcalls] = useState<Record<string, MediaConnection>>({});
-    const [microphoneState, setmicrophoneState] = useState<Boolean>(true);
-    const [appLoaded, setappLoaded] = useState<Boolean>(false);
+    const [microphoneState, setmicrophoneState] = useState<boolean>(true);
+    const [appLoaded, setappLoaded] = useState<boolean>(false);
     const [createBoxC, setcreateBoxC] = useState<Category | null>(null);
     const [createBoxV, setcreateBoxV] = useState<boolean>(false);
+    const chStore = useChannelBoxStore();
+    const reactionMenuStore = useReactionMenuStore();
+    const userVariablesStore = useVariablesStore();
 
     const router = useRouter();
 
@@ -97,9 +104,6 @@ const MainLayout: React.FC = () => {
     //     queryFn: fetchLocalUser,
     // });
 
-    const SocketURL = "http://localhost:3001";
-    const VoiceSocketURL = "http://localhost:3002";
-
     const [TextareaInitalConstNumber, setTextareaInitalConstNumber] = useState(0);
 
     const [localStream, setlocalStream] = useState<MediaStream | null>(null);
@@ -108,8 +112,8 @@ const MainLayout: React.FC = () => {
         if (localStream) return localStream;
 
         try {
-            const devices = await navigator.mediaDevices.enumerateDevices();
-            const audioDevices = devices.filter(x => x.kind === "audioinput");
+            // const devices = await navigator.mediaDevices.enumerateDevices();
+            // const audioDevices = devices.filter(x => x.kind === "audioinput");
 
             const stream = await navigator.mediaDevices.getUserMedia({
                 audio: {
@@ -127,9 +131,9 @@ const MainLayout: React.FC = () => {
         }
     }, []);
 
-    const toggleFriendsDivVisibility = () => {
-        currents.setFriendsDivV(!currents.friendsdiv.visible);
-    }
+    // const toggleFriendsDivVisibility = () => {
+    //     currents.setFriendsDivV(!currents.friendsdiv.visible);
+    // }
 
     const openExploreBox = (mode: ExploreBoxMode) => {
         currents.setExploreBoxMode(mode);
@@ -172,6 +176,8 @@ const MainLayout: React.FC = () => {
 
     const onRightClickServer = (server: Server, ct: React.MouseEvent<HTMLDivElement, MouseEvent>) => {
         currents.setContextMenuXY(ct.pageX.clamp(10, window.innerWidth - ct.currentTarget.getBoundingClientRect().width - 150), ct.pageY.clamp(10, window.innerHeight - ct.currentTarget.getBoundingClientRect().height - 150));
+        currents.setContextMenuObject(server);
+        currents.setContextMenuIncludes([]);
         currents.setContextMenuID(server.id);
         currents.setContextMenuMode("Server");
         currents.setContextMenuShown(true);
@@ -181,6 +187,8 @@ const MainLayout: React.FC = () => {
 
     const onRightClickChannel = (channel: Channel, ct: React.MouseEvent<HTMLDivElement, MouseEvent>) => {
         currents.setContextMenuXY(ct.pageX.clamp(10, window.innerWidth - ct.currentTarget.getBoundingClientRect().width - 150), ct.pageY.clamp(10, window.innerHeight - ct.currentTarget.getBoundingClientRect().height - 150));
+        currents.setContextMenuObject(channel);
+        currents.setContextMenuIncludes([]);
         currents.setContextMenuID(channel.id);
         currents.setContextMenuMode("Channel");
         currents.setContextMenuShown(true);
@@ -190,14 +198,29 @@ const MainLayout: React.FC = () => {
 
     const onClickChannel = useCallback((channel: Channel) => {
         try {
-            fetch(`api/v1/channels/${channel.id}/messages/`).then((res) => {
+            fetch(`api/v1/channels/${channel.id}/messages?limit=${MESSAGES_FIRST_LOAD_MAX_AMOUNT}`).then((res) => {
                 if (res.status != 200) {
                     console.log("Error fetching messages for channel " + channel.id);
                     return;
                 }
                 res.json().then((data) => {
+                    console.log("Got all messages", data);
+                    const blocked = currents.user?.blocked;
+
                     const messageList: Message[] = data.data;
-                    messageStore.setMessages(messageList);
+
+                    if (blocked) {
+                        const FilteredMessages = messageList.filter(x => !(blocked.includes(x.authorId)));
+
+                        if (FilteredMessages.length > 0)
+                            chStore.setendMessageId(FilteredMessages[FilteredMessages.length - 1].id);
+
+                        messageStore.setMessages(FilteredMessages);
+                    } else {
+                        if (messageList.length > 0)
+                            chStore.setendMessageId(messageList[messageList.length - 1].id);
+                        messageStore.setMessages(messageList);
+                    }
 
                     // console.log("Channel loaded ", channel);
                     // console.log("Messages: ", messageList);
@@ -303,10 +326,56 @@ const MainLayout: React.FC = () => {
         })
     }
 
+    const sendFriendRequestWithId = (friendId: string) => {
+        fetch("/api/v1/user/friendrequests", {
+            method: "POST",
+            body: JSON.stringify({
+                friendId: friendId,
+            }),
+        }).then(res => res.json().then(data => {
+            if (data.data) {
+                const FriendRequest: PendingFriendRequest = data.data;
+                const socketData: SocketData = {
+                    infoType: SocketInformationType.ClientSendFriendRequest,
+                    dataType: AllowedTypes.FriendRequest,
+                    data: FriendRequest
+                }
+                socket?.emit("friend_request_send", socketData);
+                setpendingSentRequests((prev) => [...prev, FriendRequest]);
+
+                toast("Friend request sent");
+            } else {
+                toast(data.message ?? "Error while sending friend request");
+            }
+        }))
+    }
+
+    const addReactionToMessage = async (messageId: string, channelId: string, emojiName: string) => {
+        const userId = currents.user?.id;
+        if (!userId) return;
+
+        const resp = await axios.patch(`api/v1/channels/${channelId}/messages/${messageId}/reactions`, {
+            emojiName,
+        });
+
+        if (resp.status === 200) {
+            const message = messageStore.messages.find(x => x.id === messageId);
+
+            if (!message) {
+                toast((<span style={{ color: "var(--cb-color-red)" }}>Warning, message not found while re-writing reactions</span>)); return;
+            }
+
+            const reactionState = resp.data.data.state;
+            const newReaction = resp.data.data.reaction as Reaction;
+
+            console.log(reactionState, newReaction);
+        }
+    }
+
     const onClickMicrophone = () => {
         if (!localStream) return;
 
-        let currentMic = !microphoneState;
+        const currentMic = !microphoneState;
 
         setmicrophoneState(currentMic);
 
@@ -321,9 +390,8 @@ const MainLayout: React.FC = () => {
         currents.setBgBlurV(false);
     }
 
-    const onInputTextarea = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
-        const textarea = event.target;
-
+    const onInputTextarea = () => {
+        // const textarea = event.target;
     }
 
     const onLoadTextarea = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -336,82 +404,210 @@ const MainLayout: React.FC = () => {
         console.log("Inital constant: " + height);
     }
 
-    const onKeyDownInput = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    const sendMessageWithoutTextarea = async (messageText: string, channel: Channel, user: DetailedDBUser) => {
         const sentDateTime = new Date();
 
-        if (!currents.channel) {
-            return;
+        if (messageText.trimEnd() === "") return;
+
+        const ReplyingToMessage = messageStore.replyingTo;
+
+        const chInfo = await fetchChannelInfo(channel.id, channelInfoStore);
+
+        const chCheck = okdi_handleSendMessage_chInfoCheck(chInfo, sentDateTime);
+
+        if (!chCheck) return;
+
+        const message: MessageCreate = {
+            content: messageText,
+            attachments: chStore.acceptedFiles.map(x => x.name),
+            repliedToId: ReplyingToMessage?.id ?? null,
         }
 
-        if (!user.isLoaded || !user.isSignedIn) {
-            return;
+        const acceptedFiles = chStore.acceptedFiles;
+
+        // okdi_handleSendMessage_clearData(textarea, sentDateTime);
+
+        const post = await okdi_handleSendMessage_post(channel.id, message);
+
+        if (post.success) {
+            await okdi_handleSendMessage_submitFiles(channel.id, post.data.id as string, acceptedFiles);
         }
 
-        if (!user.user.username) {
-            return;
+        return post;
+    }
+
+    const sendMessageWithTextarea = async (messageText: string, channel: Channel, user: DetailedDBUser, textarea: HTMLTextAreaElement) => {
+        const sentDateTime = new Date();
+
+        if (messageText.trimEnd() === "") return;
+
+        const ReplyingToMessage = messageStore.replyingTo;
+
+        const chInfo = await fetchChannelInfo(channel.id, channelInfoStore);
+
+        const chCheck = okdi_handleSendMessage_chInfoCheck(chInfo, sentDateTime);
+
+        if (!chCheck) return;
+
+        const message: MessageCreate = {
+            content: messageText,
+            attachments: chStore.acceptedFiles.map(x => x.name),
+            repliedToId: ReplyingToMessage?.id ?? null,
         }
 
-        if (!currents.user) return;
+        const acceptedFiles = chStore.acceptedFiles;
 
-        const textarea = event.target as HTMLTextAreaElement;
-        const message = textarea.value;
+        okdi_handleSendMessage_clearData(textarea, sentDateTime);
 
-        if (message == "" || !message) {
-            return;
+        const post = await okdi_handleSendMessage_post(channel.id, message);
+
+        if (post.success) {
+            await okdi_handleSendMessage_submitFiles(channel.id, post.data.id as string, acceptedFiles);
         }
 
-        const isReplying = !!replyingTo;
-        const ReplyingToMessage = replyingTo;
+        return post;
+    }
 
-        if (event.key == "Enter" && !event.shiftKey) {
-            event.preventDefault();
-            var messageI: SendMessageI = {
-                content: message,
-                channelId: currents.channel.id,
-                tempID: genTempID(),
-                author: {
-                    id: currents.user.id,
-                    username: currents.user.username,
-                    avatarUrl: currents.user.avatarUrl,
-                },
-                timestamp: sentDateTime,
+    const okdi_handleWriting = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+        if (event.key != "Enter") {
+            const handleTimeoutOut = async () => {
+                if (timeout) { sendStartWritingEvent(); }
+                resetTimeout();
             }
-
-            if (isReplying) {
-                messageI.repliedToId = ReplyingToMessage?.id;
-                messageI.repliedToAuthor = {
-                    id: ReplyingToMessage!.author.id,
-                    username: ReplyingToMessage!.author.username,
-                    avatarUrl: ReplyingToMessage!.author.avatarUrl,
-                }
-                messageI.repliedToContent = ReplyingToMessage!.content;
-            }
-
-            sendMessage(messageI);
-            setreplyingTo(null);
-            textarea.value = "";
+            handleTimeoutOut();
         } else {
             if (timeout) {
                 sendStartWritingEvent();
+            } resetTimeout();
+        }
+    }
+
+    const okdi_handleSendMessage_chInfoCheck = (chInfo: ChannelInfo, sentDateTime: Date) => {
+        if (chInfo.slowMode !== 0) {
+            console.log((sentDateTime.getTime() - (lastMessageSentDate + 200)) / 1000);
+            if (sentDateTime.getTime() - lastMessageSentDate <= chInfo.slowMode * 1000) {
+                toast(`Slow down! You need to wait ${Math.round(((chInfo.slowMode * 1000 - (sentDateTime.getTime() - lastMessageSentDate)) / 1000))} seconds`)
+                return false;
+            }
+        }
+
+        if (chInfo.readOnly) {
+            toast("You are not allowed to send messages to this channel.");
+            return false;
+        }
+
+        return true;
+    }
+
+    const okdi_handleSendMessage_post = async (channelId: string, message: MessageCreate) => {
+        const resp = await axios.post(`api/v1/channels/${channelId}/messages/`, message);
+
+        if (resp.status === 200) {
+            return { success: true, data: resp.data.data, message: resp.data.message };
+        } else {
+            return { success: false, message: resp.data.message };
+        }
+    }
+
+    const okdi_handleSendMessage_clearData = (textarea: HTMLTextAreaElement, sentDateTime: Date) => {
+        setlastMessageSentDate(sentDateTime.getTime());
+        messageStore.setreplyingTo(null);
+        textarea.value = "";
+        chStore.setacceptedFiles([]);
+    }
+
+    const okdi_handleSendMessage_submitFiles = async (channelId: string, messageId: string, files: File[]) => {
+        if (files.length <= 0) return;
+
+        const formData = new FormData();
+        files.forEach(file => {
+            formData.append('files', file);
+        });
+
+        const resp = await axios.post(`api/v1/channels/${channelId}/messages/${messageId}/attachments`, formData);
+
+        if (resp.status === 200) {
+            return { success: true, data: resp.data.data, message: resp.data.message };
+        } else {
+            return { success: false, message: resp.data.message };
+        }
+    }
+
+    const okdi_handleSendMessage = async (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+        if (!currents.channel) return;
+        if (!currents.user) return;
+
+        const sentDateTime = new Date();
+        const channel = currents.channel;
+        const user = currents.user;
+
+        if (event.key === "Enter" && !event.shiftKey) {
+            event.preventDefault();
+
+            const textarea = event.target as HTMLTextAreaElement;
+            const messageText = textarea.value;
+
+            if (messageText.trimEnd() === "") return;
+
+            const ReplyingToMessage = messageStore.replyingTo;
+
+            const acceptedFiles = chStore.acceptedFiles;
+
+            const chInfo = await fetchChannelInfo(currents.channel.id, channelInfoStore);
+
+            const chCheck = okdi_handleSendMessage_chInfoCheck(chInfo, sentDateTime);
+
+            if (!chCheck) return;
+
+            const attachments: JsonAttachments = acceptedFiles.map(x => {
+                return {
+                    filename: x.name,
+                    publicUrl: "",
+                }
+            });
+
+            const message: MessageCreate = {
+                content: messageText,
+                attachments: JSON.stringify(attachments),
+                repliedToId: ReplyingToMessage?.id ?? null,
             }
 
-            resetTimeout();
+            okdi_handleSendMessage_clearData(textarea, sentDateTime);
+
+            const post = await okdi_handleSendMessage_post(channel.id, message);
+
+            if (post.success) {
+                await okdi_handleSendMessage_submitFiles(channel.id, post.data.id as string, acceptedFiles);
+            }
+
+            return post;
         }
+    }
+
+    const onKeyDownInput = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+        okdi_handleWriting(event);
+
+        okdi_handleSendMessage(event);
     }
 
     const onMouseDown = (event: MouseEvent) => {
         const target = event.target as HTMLElement;
-        if (!target) {
-            return;
-        }
+        console.log(target.classList);
+
         if (target.id != "context-menu") {
-            currents.setContextMenuShown(false);
+            if (event.button === 0)
+                currents.setContextMenuShown(false);
+        }
+        if (target.id != "reaction-menu" && target.id != "reaction-menu-button" && !target.classList.values().some(x => x.startsWith("epr"))) {
+            if (event.button === 0) {
+                reactionMenuStore.setShown(false);
+            }
         }
     }
 
-    const onMessageReply = (message: Message) => {
+    // const onMessageReply = (message: Message) => {
 
-    }
+    // }
 
     const onMessageEdit = (message: MessageInfo) => {
         /*if (message.editRef) {
@@ -427,11 +623,45 @@ const MainLayout: React.FC = () => {
             return;
         }
 
-        if (message?.editMode === true)
+        const currentMessageInfo = MessageInfos.find(x => x.Message.id === message.Message.id);
+
+        const messageExists = MessageInfos.find(x => x.editMode === true);
+        if (messageExists) {
+            if (messageExists.Message.id !== currentMessageInfo?.Message.id) {
+                UpdateMessageInfo(messageExists.Message, "editMode", false, setMessageInfos);
+            }
+        }
+
+        if (currentMessageInfo?.editMode === true)
             UpdateMessageInfo(message.Message, "editMode", false, setMessageInfos);
-        else
+        else {
             UpdateMessageInfo(message.Message, "editMode", true, setMessageInfos);
+
+            requestAnimationFrame(() => {
+                const messageref = MessageInfos.find(x => x.Message.id === message.Message.id)?.ref;
+
+                if (messageref) {
+                    const textarea = messageref.querySelector("textarea");
+
+                    if (textarea) {
+                        textarea.focus();
+
+                        textarea.selectionEnd = textarea.value.length;
+
+                        console.log(kb.kbState);
+
+                        textarea.selectionStart = kb.kbState.includes("Control") ? 0 : textarea.selectionEnd;
+                    }
+                } else {
+                    console.log("no messageref");
+                }
+            });
+        }
         console.log(message);
+    }
+
+    const onMessageReact = (message: Message) => {
+
     }
 
     const onMessageDelete = (message: Message) => {
@@ -461,26 +691,45 @@ const MainLayout: React.FC = () => {
         if (messageInfo) {
             console.log("Open user context menu: ");
             console.log(messageInfo);
-            OpenUserContextMenu(messageInfo.Message.author.id, ev);
-        } else {console.warn("No message info for ",messageId)}
+            currents.setBgBlurV(true);
+            userProfileStore.setisFull(true);
+            userProfileStore.setUserProfile(messageInfo.Message.authorId);
+            userProfileStore.setisShown(true);
+        } else { console.warn("No message info for ", messageId) }
     }
 
-    const onClickUserAvatar = (userId: string, ev: React.MouseEvent) => {
+
+    const _onClickUserAvatar = (userId: string | null, ev: React.MouseEvent) => {
+        if (!userId) { console.warn("_onClickUserAvatar: userId == null"); return; }
+
         console.log("Open user context menu: ");
         console.log(userId);
         OpenUserContextMenu(userId, ev);
     }
 
+    const onClickUserAvatarWithUserId = (userId: string | null, ev: React.MouseEvent) => {
+        if (userId) {
+            console.log("Open user context menu: ", userId);
+            currents.setBgBlurV(true);
+            userProfileStore.setisFull(true);
+            userProfileStore.setUserProfile(userId);
+            userProfileStore.setisShown(true);
+        } else { console.warn("No user id found", ev); }
+    };
+
+    // const onClickUserAvatarWithUserIdVoiceChatInclude = ...
+
     const onClickSettings = (mode: SettingsMode) => {
         currents.setSetting(null);
         currents.setSettingsMode(mode);
         currents.setSettingsDivV(true);
-        console.log("Opened sestting ", mode, );
+        console.log("Opened sestting ", mode,);
     }
 
-    const openSettings = (mode: SettingsMode) => {
+    const openSettings = (mode: SettingsMode, object: unknown) => {
         currents.setSetting(null);
         currents.setSettingsMode(mode);
+        currents.setSettingsObject(object);
         currents.setSettingsDivV(true);
     }
 
@@ -492,6 +741,11 @@ const MainLayout: React.FC = () => {
 
     const onClickDirectMessage = (user: User) => {
         openDirectMessage(user);
+    }
+
+    const onClickDirectMessageWithCallback = (user: User, fn: Function) => {
+        openDirectMessage(user);
+        fn();
     }
 
     const onClickCall = () => {
@@ -557,6 +811,7 @@ const MainLayout: React.FC = () => {
     const OpenUserContextMenu = (userId: string, ev: React.MouseEvent) => {
         currents.setContextMenuXY(ev.pageX.clamp(10, window.innerWidth - ev.currentTarget.getBoundingClientRect().width - 150), ev.pageY.clamp(10, window.innerHeight - ev.currentTarget.getBoundingClientRect().height - 150));
         currents.setContextMenuID(userId);
+        currents.setContextMenuIncludes([]);
         currents.setContextMenuShown(true);
         currents.setContextMenuMode("User");
 
@@ -620,7 +875,7 @@ const MainLayout: React.FC = () => {
                     currents.setVC(newVC);
                     currents.setVCOpen(true);
 
-                    voicesocket?.emit("vc_join", vc, ToUserSmall(currents.user!));
+                    voicesocket?.emit("vc_join");
                 }).catch(err => { console.error("Failed to get media stream", err) });
             } else {
                 toast("Couldn't join vc " + data.message);
@@ -641,7 +896,7 @@ const MainLayout: React.FC = () => {
         }).then(res => res.json().then(data => {
             if (data.message === "Successfully left voice chat") {
                 console.log("Leave call: ", data);
-                voicesocket?.emit("vc_leave", vc, ToUserSmall(currents.user!));
+                voicesocket?.emit("vc_leave");
 
                 currents.setVC(null);
                 currents.setVCOpen(false);
@@ -651,48 +906,22 @@ const MainLayout: React.FC = () => {
         }));
     }
 
-    const sendMessage = (message: SendMessageI,) => {
-        console.log("Sending message: ", message);
-
-        const socketData: SocketData = {
-            infoType: SocketInformationType.ClientSendMessage,
-            dataType: AllowedTypes.MessageI,
-            data: message
-        }
-        socket?.emit("message", socketData);
-
-
-        /*setMessages((prevMessages: Message[]) => [...prevMessages, message]);*/
-    }
-
-    const deleteMessage = (message: Message) => {
-        const socketData: SocketData = {
-            infoType: SocketInformationType.ClientDeleteMessage,
-            dataType: AllowedTypes.Message,
-            data: message
-        }
-        socket?.emit("delete_message", socketData);
-
-        if (message.id.startsWith("temp_")) {
-            awaiting.addAwaitingDeletionMessages(message.id);
+    const deleteMessage = async (message: Message) => {
+        const resp = await axios.delete(`api/v1/channels/${message.channelId}/messages/${message.id}`);
+        if (resp.status === 200) {
+            return { success: true, message: resp.data.message };
+        } else {
+            return { success: false, message: resp.data.message };
         }
     }
 
-    const editMessage = (newMessage: Message, message: Message) => {
-        const context: EditContext = {
-            messageId: message.id,
-            channelId: message.channelId,
-            newContent: newMessage.content,
-        }
-        const socketData: SocketData = {
-            infoType: SocketInformationType.ClientEditMessage,
-            dataType: AllowedTypes.EditContext,
-            data: context
-        }
-        socket?.emit("edit_message", socketData);
-
-        if (message.id.startsWith("temp_")) {
-            awaiting.addAwaitingEditionMessages(context);
+    const editMessage = async (newMessage: Message, message: Message) => {
+        const data: MessageUpdate = newMessage;
+        const resp = await axios.patch(`/api/v1/channels/${message.channelId}/messages/${message.id}`, data);
+        if (resp.status === 200) {
+            return { success: true, message: resp.data.message };
+        } else {
+            return { success: false, message: resp.data.message };
         }
     }
 
@@ -815,18 +1044,18 @@ const MainLayout: React.FC = () => {
     }
 
     const ChannelBoxProps = {
-        rows: inputTextRows,
         onInputTextarea: onInputTextarea,
         onLoadTextarea: onLoadTextarea,
         onKeyDownInput: onKeyDownInput,
-        onMessageReply: onMessageReply,
+        onMessageReply: () => { },
+        onMessageReact: onMessageReact,
         onMessageEdit: onMessageEdit,
         onMessageDelete: onMessageDelete,
         onEditInput: onEditInput,
         onClickUserAvatar: onClickUserAvatarWithMesssageId,
-        replyingTo: replyingTo,
-        setreplyingTo: setreplyingTo,
-        MessageInfos: MessageInfos,
+        onClickUserAvatarWithUserId: onClickUserAvatarWithUserId,
+        addReactionToMessage: addReactionToMessage,
+        sendMessageWithTextarea: sendMessageWithTextarea,
         onClickMicrophone: onClickMicrophone,
         onClickLeaveCall: onClickLeaveCall,
         setMessageInfos: setMessageInfos,
@@ -848,12 +1077,15 @@ const MainLayout: React.FC = () => {
     }
 
     const ContextMenuProps = {
+        onClickDirectMessageWithCallback: onClickDirectMessageWithCallback,
+        sendFriendRequestWithId: sendFriendRequestWithId,
+        onClickCall: onClickCall,
         openExploreBox: openExploreBox,
         openSettings: openSettings,
     }
 
     const SettingsBoxProps = {
-        
+
     }
 
     const UserBoxProps = {
@@ -868,11 +1100,6 @@ const MainLayout: React.FC = () => {
 
     const ServerUsersTabProps = {
 
-    }
-
-    const VoiceChatProps = {
-        Currents: currents,
-        voicesocket: voicesocket,
     }
 
     const TooltipProps = {
@@ -891,7 +1118,11 @@ const MainLayout: React.FC = () => {
         kb.setkbStateLambda((prev) => prev.filter((key) => key !== event.key));
     }
 
-    const onKeyDown = (event: KeyboardEvent) => {
+    const ips = useImagePreviewStore();
+
+    const onKeyDown = useCallback((event: KeyboardEvent) => {
+        console.log("keydown ", event.key, event.code);
+
         kb.setkbStateLambda((prev) => [...prev, event.key]);
         if (event.ctrlKey && event.key == 'f') {
             event.preventDefault();
@@ -900,7 +1131,37 @@ const MainLayout: React.FC = () => {
             else
                 closeExploreBox();
         }
-    }
+        if (event.key == 'Escape') {
+            closeExploreBox();
+            currents.setContextMenuShown(false);
+            setcreateBoxV(false);
+
+            ips.setShown(false);
+        }
+
+        if (event.code == "Space") {
+            console.log(ips.shown);
+            if (ips.shown) {
+                ips.setZoomFactor(1);
+                ips.setPos({ x: 0, y: 0 });
+            
+                event.preventDefault();
+            }
+        }
+    }, [ips.shown]);
+
+    useEffect(() => {
+        const fn = async () => {
+            if (!currents.user) return;
+            if (currents.userVariables) return;
+
+            const uw = await userVariablesStore.getVariables();
+
+            currents.setUserVariables(uw);
+        }
+
+        fn();
+    }, [currents.user]);
 
     useEffect(() => {
         if (currents.channel)
@@ -1061,15 +1322,17 @@ const MainLayout: React.FC = () => {
         <div>
             {/*<VoiceChat {...VoiceChatProps} />*/}
             {/*(<TransComp />)*/}
+            <ReactionMenu />
             <ConfirmationMenu />
             <UsersHandler />
+            <ImagePreview />
             <UserProfile {...UserProfileProps} />
             <ContextMenu {...ContextMenuProps} />
             <Tooltip {...TooltipProps} />
             <div className={styles.body}>
                 <div className={styles.main_container}>
                     <BackgroundBlur onClickBgBlur={onClickBgBlur} />
-                    <div className={styles.app_box} style={{ gridTemplateRows: `${appGridRows}`, gridTemplateColumns: `${appGridColumns}` }}>
+                    <div className={styles.app_box} style={{ gridTemplateRows: `${'repeat(32, 1fr)'}`, gridTemplateColumns: `${appGridColumns}` }}>
                         <ExploreBox {...ExploreBoxProps} />
                         <SettingsBox {...SettingsBoxProps} />
                         <div id="main-box-wraper" className={styles.main_box_wraper}>
