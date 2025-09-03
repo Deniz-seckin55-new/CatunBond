@@ -6,7 +6,7 @@ import http from 'http'
 import { Server } from 'socket.io'
 import { PrismaClient, FriendRequest as DBFriendRequest } from "@prisma/client";
 import * as dotenv from 'dotenv';
-import { AllowedTypes, ChannelInfo, ClientResponsePacket, EditContext, Message, PendingFriendRequest, ReconnectData, SendMessageI, SocketData, SocketInformationType, WritingEvent } from "@/app/app/utils/socket_utils";
+import { AllowedTypes, ChannelInfo, ClientResponsePacket, EditContext, Message, MessageCreate, PendingFriendRequest, ReconnectData, SendMessageI, SocketData, SocketInformationType, WritingEvent } from "@/app/app/utils/socket_utils";
 import * as schemas from "@/app/app/utils/schemas";
 
 type NextWrapperServer = {
@@ -14,6 +14,8 @@ type NextWrapperServer = {
 };
 
 import { CreateChannelInfo, CreateMessageI } from "@/app/api/apicallreferences/utils";
+import { CreateMessage } from "@/app/api/v1/utils/utils";
+import { NextResponse } from "next/server";
 
 dotenv.config({ path: '.env' }); // Change if its .env for you
 
@@ -49,7 +51,7 @@ const io = new Server(httpServer, {
     pingInterval: 10000,
     pingTimeout: 60000,
     cors: {
-        origin: 'http://localhost:3000', // Replace with your frontend URL
+        origin: '*', // Replace with your frontend URL
         methods: ['GET', 'POST'],
         credentials: true,
     },
@@ -83,6 +85,14 @@ try {
             console.log("User disconnected", socket.id);
         });
 
+        socket.on("sendMessage", async (channelId: string, message: MessageCreate, callbackFn: (response: NextResponse<{data: Message}> | NextResponse<{message: string}>) => void) => {
+            console.log("Sending new message to ",channelId);
+
+            let result = await CreateMessage(db, channelId, UserID, message);
+
+            callbackFn(result);
+        });
+
         socket.on("joinChannel", (channelId: string) => {
             console.log("User joined channel", channelId, " ", socket.id);
             socket.join(`CHANNEL_${channelId}`);
@@ -93,50 +103,50 @@ try {
             socket.leave(`CHANNEL_${channelId}`);
         });
 
-        socket.on("friend_request_send", (data: SocketData) => {
-            console.log("friend_request_send", data.data);
-            const friendRequest: PendingFriendRequest = data.data as PendingFriendRequest;
-            io.to(friendRequest.receiverId).emit("friend_request_send", friendRequest);
-        });
+        // socket.on("friend_request_send", (data: SocketData) => {
+        //     console.log("friend_request_send", data.data);
+        //     const friendRequest: PendingFriendRequest = data.data as PendingFriendRequest;
+        //     io.to(friendRequest.senderId).emit("friend_request_send", friendRequest);
+        // });
 
         socket.on("get_status", (userId: string, fn: any) => {
-            if (io.sockets.adapter.rooms.get(userId)) {
+            if (io.sockets.adapter.rooms.has("USER_"+userId)) {
                 fn("online");
             } else {
                 fn("offline");
             }
         });
 
-        socket.on("friend_request_answer", (socketData: SocketData) => {
-            console.log("friend_request_answer", socketData);
-            const friendRequest = socketData.data as DBFriendRequest;
-            switch (socketData.infoType) {
-                case SocketInformationType.ClientAcceptFriendRequest:
-                    console.log("emitting to ", friendRequest.senderId, { friendRequest: friendRequest, answer: "accept" });
-                    io.to(friendRequest.senderId).emit("friend_request_answer", { friendRequest: friendRequest, answer: "accept" });
-                    break;
-                case SocketInformationType.ClientCancelFriendRequest:
-                    break;
-                case SocketInformationType.ClientDeclineFriendRequest:
-                    console.log("emitting to ", friendRequest.senderId, { friendRequest: friendRequest, answer: "decline" });
-                    io.to(friendRequest.senderId).emit("friend_request_answer", { friendRequest: friendRequest, answer: "decline" });
-                    break;
-                case SocketInformationType.ClientBlockFriendRequest:
-                    console.log("emitting to ", friendRequest.senderId, { friendRequest: friendRequest, answer: "block" });
-                    io.to(friendRequest.senderId).emit("friend_request_answer", { friendRequest: friendRequest, answer: "block" });
-                    break;
-                default:
-                    break;
-            }
-        });
+        // socket.on("friend_request_answer", (socketData: SocketData) => {
+        //     console.log("friend_request_answer", socketData);
+        //     const friendRequest = socketData.data as DBFriendRequest;
+        //     switch (socketData.infoType) {
+        //         case SocketInformationType.ClientAcceptFriendRequest:
+        //             console.log("emitting to ", friendRequest.senderId, { friendRequest: friendRequest, answer: "accept" });
+        //             io.to("USER_"+friendRequest.senderId).emit("friend_request_answer", { friendRequest: friendRequest, answer: "accept" });
+        //             break;
+        //         case SocketInformationType.ClientCancelFriendRequest:
+        //             break;
+        //         case SocketInformationType.ClientDeclineFriendRequest:
+        //             console.log("emitting to ", friendRequest.senderId, { friendRequest: friendRequest, answer: "decline" });
+        //             io.to("USER_"+friendRequest.senderId).emit("friend_request_answer", { friendRequest: friendRequest, answer: "decline" });
+        //             break;
+        //         case SocketInformationType.ClientBlockFriendRequest:
+        //             console.log("emitting to ", friendRequest.senderId, { friendRequest: friendRequest, answer: "block" });
+        //             io.to("USER_"+friendRequest.senderId).emit("friend_request_answer", { friendRequest: friendRequest, answer: "block" });
+        //             break;
+        //         default:
+        //             break;
+        //     }
+        // });
 
         socket.on("writing_event", (data: SocketData) => {
             const event: WritingEvent = data.data as WritingEvent;
 
             if (data.infoType === SocketInformationType.ClientStartWritingMessage) {
-                io.to(event.channelId).emit("writing_event", event.user, "start");
+                io.to("CHANNEL_"+event.channelId).emit("writing_event", event.user, "start");
             } else if (data.infoType === SocketInformationType.ClientStopWritingMessage) {
-                io.to(event.channelId).emit("writing_event", event.user, "stop");
+                io.to("CHANNEL_"+event.channelId).emit("writing_event", event.user, "stop");
             }
         });
 
@@ -145,12 +155,12 @@ try {
 
             const onlineUsers = (await db.server.findUnique({ where: { id: serverId }, select: { members: true } }))?.members.filter(member => io.sockets.adapter.rooms.get(member.id) !== undefined);
             onlineUsers?.forEach((user) => {
-                io.to(user.id).emit("category_channel_order_change", serverId, data);
+                io.to("USER_"+user.id).emit("category_channel_order_change", serverId, data);
             });
         });
 
         socket.on("channel_info_update", (data: ChannelInfo) => {
-            io.to(data.channelId)/*.except(UserID)*/.emit("channel_info_update", data);
+            io.to("CHANNEL_"+data.channelId)/*.except(UserID)*/.emit("channel_info_update", data);
         })
 
         socket.on("client_reconnect", async (data: ClientResponsePacket, callbackFn: (response: { newMessagesSentSince: Message[] }) => void) => {
@@ -212,7 +222,7 @@ try {
     });
 
     const PORT = 3001
-    httpServer.listen(PORT, () => {
+    httpServer.listen(PORT, '0.0.0.0', () => {
         console.log(`Socket.io server is running on port ${PORT}`)
     })
 

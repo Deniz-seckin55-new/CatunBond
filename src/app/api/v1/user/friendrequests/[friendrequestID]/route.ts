@@ -1,3 +1,5 @@
+import { FriendRequestAnswer } from "@/app/app/utils/socket_utils";
+import { getEmitter } from "@/lib/emitter";
 import { db } from "@/lib/prisma";
 import { currentUser } from "@clerk/nextjs/server";
 import { NextRequest, NextResponse } from "next/server";
@@ -17,7 +19,7 @@ export async function GET(request: NextRequest, { params }: { params: { friendre
         if (err instanceof Error)
             console.log(err.stack);
         return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
-    } 
+    }
 }
 export async function PATCH(request: NextRequest, { params }: { params: { friendrequestID: string } }) {
     try {
@@ -32,7 +34,16 @@ export async function PATCH(request: NextRequest, { params }: { params: { friend
         const getFriendRequest = await db.friendRequest.findUnique({ where: { id: friendrequestID } });
         if (!getFriendRequest) return NextResponse.json({ message: "Friend Request not found" }, { status: 404 });
 
-        if (getFriendRequest.receiverId !== user.id) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+        if (
+            (answer !== "CANCEL" && getFriendRequest.receiverId !== user.id) ||
+            (answer === "CANCEL" && getFriendRequest.senderId !== user.id)
+        ) {
+            return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+        }
+
+        if (getFriendRequest.status !== "PENDING") return NextResponse.json({ message: "Already responded to friend request!" });
+
+        const io = await getEmitter();
 
         switch (answer) {
             case "ACCEPT":
@@ -40,14 +51,18 @@ export async function PATCH(request: NextRequest, { params }: { params: { friend
                     where: { id: user.id }, data: {
                         friends: {
                             connect: {
-                                id: getFriendRequest.receiverId,
+                                id: getFriendRequest.senderId,
                             }
                         }
                     }
                 });
 
+                console.log("FR ", JSON.stringify(getFriendRequest));
+
+                console.log("User " + getFriendRequest.senderId + " got added to " + user.id + " friends");
+
                 await db.user.update({
-                    where: { id: getFriendRequest.receiverId }, data: {
+                    where: { id: getFriendRequest.senderId }, data: {
                         friends: {
                             connect: {
                                 id: user.id,
@@ -56,15 +71,25 @@ export async function PATCH(request: NextRequest, { params }: { params: { friend
                     }
                 });
 
+                console.log("User " + user.id + " got added to " + getFriendRequest.senderId + " friends");
+
                 await db.friendRequest.update({ where: { id: friendrequestID }, data: { status: "ACCEPTED" } });
+
+                io.to(`USER_${getFriendRequest.receiverId}`).emit("friend_request_answer", { friendRequest: getFriendRequest, answer: "accept" } as FriendRequestAnswer);
+
+                io.to(`USER_${getFriendRequest.senderId}`).emit("friend_request_answer", { friendRequest: getFriendRequest, answer: "accept" } as FriendRequestAnswer);
+
                 return NextResponse.json({ message: "Friend Request Accepted" }, { status: 200 });
             case "DECLINE":
                 await db.friendRequest.update({ where: { id: friendrequestID }, data: { status: "DECLINED" } });
+                io.to(`USER_${getFriendRequest.receiverId}`).emit("friend_request_answer", { friendRequest: getFriendRequest, answer: "decline" } as FriendRequestAnswer);
+                io.to(`USER_${getFriendRequest.senderId}`).emit("friend_request_answer", { friendRequest: getFriendRequest, answer: "decline" } as FriendRequestAnswer);
                 return NextResponse.json({ message: "Friend Request Declined" }, { status: 200 });
             case "CANCEL":
                 await db.friendRequest.update({ where: { id: friendrequestID }, data: { status: "CANCELED" } });
+                io.to(`USER_${getFriendRequest.receiverId}`).emit("friend_request_answer", { friendRequest: getFriendRequest, answer: "cancel" } as FriendRequestAnswer);
+                io.to(`USER_${getFriendRequest.senderId}`).emit("friend_request_answer", { friendRequest: getFriendRequest, answer: "cancel" } as FriendRequestAnswer);
                 return NextResponse.json({ message: "Friend Request Canceled" }, { status: 200 });
-                break;
             case "BLOCK":
                 await db.user.update({
                     where: { id: user.id }, data: {
@@ -84,5 +109,5 @@ export async function PATCH(request: NextRequest, { params }: { params: { friend
         if (err instanceof Error)
             console.log(err.stack);
         return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
-    } 
+    }
 }

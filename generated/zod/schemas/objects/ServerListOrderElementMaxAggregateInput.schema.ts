@@ -5,6 +5,7 @@ import type { Prisma } from '@prisma/client';
 const Schema: z.ZodType<Prisma.ServerListOrderElementMaxAggregateInputType> = z
   .object({
     id: z.literal(true).optional(),
+    serverId: z.literal(true).optional(),
     index: z.literal(true).optional(),
     userInfoUserId: z.literal(true).optional(),
   })

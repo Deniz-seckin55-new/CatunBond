@@ -2,6 +2,7 @@ import { db } from "@/lib/prisma";
 import { currentUser } from "@clerk/nextjs/server";
 import { NextRequest, NextResponse } from "next/server";
 import { defaultServerGet } from "../utils/utils";
+import uuid4 from "uuid4";
 export async function POST(request: NextRequest) {
     try {
         const user = await currentUser();
@@ -58,6 +59,10 @@ export async function POST(request: NextRequest) {
                 }
             }
         }});
+
+        const userInfo = await db.userInfo.findUnique({where: {userId: user.id}, select: {serverListOrder: true}});
+
+        await db.userInfo.update({where: {userId: user.id}, data: {serverListOrder: {create: {id: uuid4(), serverId: newServer.id, index: userInfo?.serverListOrder.length ?? 0 }}}})
 
         return NextResponse.json({ data: newServer }, { status: 200 });
     } catch (err) {

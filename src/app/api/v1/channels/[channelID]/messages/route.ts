@@ -5,7 +5,7 @@ import { db } from "@/lib/prisma";
 import redis from "@/lib/redis";
 import { currentUser } from "@clerk/nextjs/server";
 import { NextRequest, NextResponse } from "next/server";
-import { extractMentions } from "../../../utils/utils";
+import { CreateMessage, extractMentions } from "../../../utils/utils";
 
 export async function POST(request: NextRequest, { params }: { params: { channelID: string } }) {
     try {
@@ -17,101 +17,15 @@ export async function POST(request: NextRequest, { params }: { params: { channel
 
         if (!user) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
 
-        const dbUser = await db.user.findUnique({where: {id: user.id}});
-
-        if (!dbUser) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-        
         if (!MessageCreate) return NextResponse.json({ message: "MessageCreate is required" }, { status: 400 });
         if (!channelID) return NextResponse.json({ message: "Channel ID is required" }, { status: 400 });
 
-        const channelExists = await db.channel.findUnique({ where: { id: channelID }, include: { category: { select: { serverId: true } } } });
-
-        if (!channelExists) return NextResponse.json({ message: "Channel not found" }, { status: 404 });
-
-        let getChannelInfo = await db.channelInfo.findUnique({ where: { channelId: channelID } });
-        let skipPermCheck = false;
-
-        if (!getChannelInfo) {
-            getChannelInfo = await CreateChannelInfo(db, channelExists);
-            skipPermCheck = true;
-        }
-
-        const User_LastMessageSend = await redis.get(`USER_${user.id}_CHANNEL_${channelID}_LASTMESSAGESEND`);
-
-        if (User_LastMessageSend && typeof User_LastMessageSend === "string" && getChannelInfo && !skipPermCheck) {
-            if (getChannelInfo.slowMode !== 0) {
-                const timePast = (new Date().getTime() - Number(User_LastMessageSend));
-                if (timePast <= getChannelInfo.slowMode * 1000) {
-                    return NextResponse.json({ message: "Not allowed to send message. Slow mode" }, { status: 400 });
-                }
-            }
-        }
-
-        if (getChannelInfo?.readOnly && !skipPermCheck) {
-            return NextResponse.json({ message: "Not allowed to send message. Read-only" }, { status: 400 });
-        }
-
-        const messageMentions = extractMentions(MessageCreate.content);
-
-        const newMessage = await db.messages.create({
-            data: { ...MessageCreate, channelId: channelID, authorId: user.id, attachments: MessageCreate.attachments ?? undefined, mentions: messageMentions ?? [] },
-            include: {
-                author: {
-                    select: {
-                        id: true,
-                        username: true,
-                        avatarUrl: true
-                    }
-                },
-                channel: {
-                    select: {
-                        id: true,
-                        categoryId: true,
-                        name: true
-                    }
-                },
-                repliedTo: {
-                    include: {
-                        author: {
-                            select: {
-                                id: true,
-                                username: true,
-                                avatarUrl: true
-                            }
-                        },
-                        channel: {
-                            select: {
-                                id: true,
-                                categoryId: true,
-                                name: true
-                            }
-                        },
-                        repliedTo: {
-                            select: { id: true } // Depth End
-                        },
-                        reactions: true,
-                    },
-                },
-                reactions: true,
-            },
-        });
-
-        await redis.set(`USER_${user.id}_CHANNEL_${channelID}_LASTMESSAGESEND`, newMessage.timestamp.getTime() + "");
-
-        const io = await getEmitter();
-        io.to(`CHANNEL_${channelID}`).emit("message", newMessage);
-        await Promise.all(messageMentions.map(async (mentionedUserName) => {
-            const mentionedUser = await db.user.findFirst({ where: { username: mentionedUserName } });
-            if (mentionedUser)
-                io.to(`USER_${mentionedUser.id}`).emit("user_mentioned", channelExists.category?.serverId ?? "", channelExists as Channel, dbUser as User);
-        }));
-
-        return NextResponse.json({ data: newMessage }, { status: 200 });
+        return CreateMessage(db, channelID, user.id, MessageCreate);
     } catch (err) {
         if (err instanceof Error)
             console.log(err.stack);
         return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
-    } 
+    }
 }
 
 export async function GET(request: NextRequest, { params }: { params: { channelID: string } }) {
@@ -145,7 +59,7 @@ export async function GET(request: NextRequest, { params }: { params: { channelI
         // End
 
         const getMessages = await db.messages.findMany({
-            where: { channelId: (Array.isArray(channelID)) ? channelID[0] : channelID },
+            where: { channelId: channelID },
             include: {
                 author: {
                     select: {
@@ -192,5 +106,5 @@ export async function GET(request: NextRequest, { params }: { params: { channelI
         if (err instanceof Error)
             console.log(err.stack);
         return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
-    } 
+    }
 }

@@ -40,7 +40,8 @@ export async function PATCH(request: NextRequest) {
                     createMany: {
                         data: userInfo.serverListOrder.map((item, index) => ({
                             id: item.id,
-                            index: index, // or item.index
+                            serverId: item.serverId,
+                            index: item.index, // or item.index
                         }))
                     }
                 },

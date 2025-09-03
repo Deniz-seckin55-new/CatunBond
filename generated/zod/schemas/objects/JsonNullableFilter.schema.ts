@@ -24,6 +24,10 @@ const Schema: z.ZodType<Prisma.JsonNullableFilter> = z
     array_contains: jsonSchema.optional().nullable(),
     array_starts_with: jsonSchema.optional().nullable(),
     array_ends_with: jsonSchema.optional().nullable(),
+    lt: jsonSchema.optional(),
+    lte: jsonSchema.optional(),
+    gt: jsonSchema.optional(),
+    gte: jsonSchema.optional(),
     not: z
       .union([jsonSchema, z.lazy(() => JsonNullValueFilterSchema)])
       .optional(),

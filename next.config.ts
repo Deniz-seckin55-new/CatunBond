@@ -3,6 +3,7 @@ import { BundleAnalyzerPlugin } from "webpack-bundle-analyzer";
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  allowedDevOrigins: ['local-origin.dev', '*.local-origin.dev', '192.168.1.245'],
   webpack(config) {
     // SVG support for React components with SVGR
     config.module.rules.push({
@@ -44,10 +45,23 @@ const nextConfig: NextConfig = {
 
     return config;
   },
-  turbopack: { },
+  turbopack: {},
   images: {
     remotePatterns: [new URL('https://img.clerk.com/**')],
   },
+  async headers() {
+    return [
+      {
+        source: '/(.*)',
+        headers: [
+          {
+            key: 'Content-Security-Policy',
+            value: "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com;",
+          },
+        ],
+      },
+    ];
+  }
 };
 
 export default nextConfig;

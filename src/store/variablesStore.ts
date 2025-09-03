@@ -19,6 +19,8 @@ export const DefaultUserVariables: UserVariables = {
     appFontSize: 36,
     defaultZoomFactor: 2,
     magnifyingGlassOnPreviews: true,
+    showUsernamesUnderAvatarsInVoiceChats: false,
+    mirrorCameraWhenShared: true,
 }
 
 const tryFetchUserVariables = async (tries: number): Promise<UserVariables> => {

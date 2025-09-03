@@ -28,6 +28,9 @@ const Schema: z.ZodType<Prisma.ServerListOrderElementWhereInput> = z
     id: z
       .union([z.lazy(() => StringFilterObjectSchema), z.string()])
       .optional(),
+    serverId: z
+      .union([z.lazy(() => StringFilterObjectSchema), z.string()])
+      .optional(),
     index: z
       .union([z.lazy(() => IntFilterObjectSchema), z.number()])
       .optional(),

@@ -12,11 +12,11 @@ export default async function Page() {
             }
 
             // Check if the user exists in the database
-            db.user.findUnique({
+            db.user.count({
                 where: { id: user.id },
             }).then(userExists => {
 
-                if (!userExists) {
+                if (userExists < 1) {
                     let avatarUrl: string;
                     if (user.hasImage)
                         avatarUrl = user.imageUrl;
@@ -34,7 +34,7 @@ export default async function Page() {
                         console.log("Done!",response);
                     });
                 } else {
-                    console.log("User already exists.");
+                    console.log("User already exists. "+userExists);
                 }
 
                 db.$disconnect();

@@ -7,8 +7,9 @@ import equal from "fast-deep-equal";
 import React, { useEffect, useState } from "react";
 import { HexColorPicker } from "react-colorful";
 import styles from "../../page.module.css";
-import { DetailedDBUser, ServerInfo } from "../../utils/socket_utils";
-import { isObjectNotNull, OpenConfirmationMenuWithRetype, SettingsProps } from "../../utils/utils";
+import { DetailedDBUser, Server, ServerInfo } from "../../utils/socket_utils";
+import { getFileDataUrl, isObjectNotNull, OpenConfirmationMenuWithRetype, SettingsProps } from "../../utils/utils";
+import { useDropzone } from "react-dropzone";
 
 const currentSetting = "Server Information";
 
@@ -38,14 +39,18 @@ const ServerInformation: React.FC<SettingsProps> = ({ updateSettings }) => {
     useEffect(() => {
         const fetchServerInfo = async () => {
             try {
-                if (!currents.server) return;
+                if (!currents.settingsObject) return;
 
-                const serverInfoExists = serverInfoStore.getExistingServerInfo(currents.server.id);
+                const server: Server = currents.settingsObject as Server;
+
+                const serverInfoExists = serverInfoStore.getExistingServerInfo(server.id);
                 if (serverInfoExists) {
                     setOldServerInfo(serverInfoExists);
                     setServerInfo(serverInfoExists);
+
+                    console.log("Set server info (color)");
                 } else {
-                    const response = await axios.get(`/api/v1/servers/${currents.server.id}/info`); // Adjust API endpoint
+                    const response = await axios.get(`/api/v1/servers/${server.id}/info`); // Adjust API endpoint
                     setOldServerInfo(response.data.data);
                     setServerInfo(response.data.data);
 
@@ -59,7 +64,7 @@ const ServerInformation: React.FC<SettingsProps> = ({ updateSettings }) => {
         };
 
         fetchServerInfo();
-    });
+    }, []);
 
     // Detect unsaved changes
     useEffect(() => {
@@ -77,6 +82,7 @@ const ServerInformation: React.FC<SettingsProps> = ({ updateSettings }) => {
     };
 
     const onChangeColor = (color: string) => {
+        console.log("Changing color to ",color);
         setServerInfo((state) => ({ ...state, color: color }));
     };
 
@@ -86,6 +92,9 @@ const ServerInformation: React.FC<SettingsProps> = ({ updateSettings }) => {
 
     const onClickResetColorButton = () => {
         if (!oldServerInfo) return;
+
+        console.log("Resetting color");
+
         setServerInfo((prev) => ({ ...prev, color: oldServerInfo.color }));
     };
 
@@ -115,11 +124,11 @@ const ServerInformation: React.FC<SettingsProps> = ({ updateSettings }) => {
     };
 
     const handleDragEnd = (result: unknown) => {
-        if(!isObjectNotNull(result)) return;
-        if(!("source" in result && "destination" in result &&
+        if (!isObjectNotNull(result)) return;
+        if (!("source" in result && "destination" in result &&
             isObjectNotNull(result.source) && "index" in result.source && typeof result.source.index === "number" &&
             isObjectNotNull(result.destination) && "index" in result.destination && typeof result.destination.index === "number")) return;
-            // Man Why just why TypeScript (type "any" isnt allowed)
+        // Man Why just why TypeScript (type "any" isnt allowed)
         if (!result.destination) return;
 
         const reorderedRules = Array.from(serverInfo.rules);
@@ -129,12 +138,29 @@ const ServerInformation: React.FC<SettingsProps> = ({ updateSettings }) => {
         setServerInfo((prev) => ({ ...prev, rules: reorderedRules }));
     };
 
+    const changeServerIcon = (fileUrl: string) => {
+        axios.put(`/api/v1/servers/${serverInfo.serverId}`, JSON.stringify({
+            name: serverInfo.name,
+            iconUrl: fileUrl,
+        })).then(resp => {
+            serverInfo.iconUrl = fileUrl;
+            
+            if(oldServerInfo)
+                oldServerInfo.iconUrl = fileUrl;
+
+            if(currents.user) {
+                const oldUser = currents.user;
+                currents.setUser({...oldUser, servers: oldUser.servers.map(x => {if(x.id == serverInfo.serverId) {return {...x, iconUrl: fileUrl}} else return x;})})
+            }
+        });
+    }
+
     const onClickDeleteServer = () => {
-        if(!currents.server) return;
-        if(!currents.user) return;
+        if (!currents.server) return;
+        if (!currents.user) return;
 
         OpenConfirmationMenuWithRetype(currents, "Are you sure you want to delete this server?", currents.server.name, async (answer: boolean) => {
-            console.log("C.M. Answer: ",answer);
+            console.log("C.M. Answer: ", answer);
             if (!currents.server) return;
             if (!answer) return;
 
@@ -144,12 +170,44 @@ const ServerInformation: React.FC<SettingsProps> = ({ updateSettings }) => {
             serverInfoStore.removeServerInfo(serverId);
 
             const current_user = currents.user!;
-            const new_current_user: DetailedDBUser = {...current_user, servers: current_user.servers.filter((server) => server.id !== serverId)};
+            const new_current_user: DetailedDBUser = { ...current_user, servers: current_user.servers.filter((server) => server.id !== serverId) };
             currents.setUser(new_current_user);
-            
+
             currents.onClickAppIcon();
         });
     }
+
+    const [imageUrl, setimageUrl] = useState("");
+
+    const { acceptedFiles, getRootProps, getInputProps, open } = useDropzone({
+        maxFiles: 1,
+        accept: {
+            'image/png': ['.png', '.gif', '.jpg', '.jpeg', '.webm']
+        },
+        maxSize: 2000000, // 2 MB
+        multiple: false,
+        onDropAccepted: async (acceptFiles: File[]) => {
+            const file = acceptFiles[0];
+            let url = await getFileDataUrl(file) as string;
+            setimageUrl(url);
+
+            changeServerIcon(url);
+        }
+    });
+
+    const onClickServerIcon = (ev: React.MouseEvent) => {
+        open();
+    }
+
+    const onMouseOverServerIcon = (ev: React.MouseEvent) => {
+        setIsHoveringServerIcon(true);
+    }
+
+    const onMouseOutServerIcon = (ev: React.MouseEvent) => {
+        setIsHoveringServerIcon(false);
+    }
+
+    const [isHoveringServerIcon, setIsHoveringServerIcon] = useState<boolean>(false);
 
     if (loading) return <p>Loading...</p>;
 
@@ -159,7 +217,21 @@ const ServerInformation: React.FC<SettingsProps> = ({ updateSettings }) => {
             <div className={styles.small_pad} />
 
             <div className={styles.flex_rowa}>
-                <img src={serverInfo.iconUrl || ''} className={styles.appearance_userimage} />
+                <div className={`${styles.flex_rowaa}`} style={{ overflow: "visible" }}>
+                    <img src={serverInfo.iconUrl || ''} className={`${styles.appearance_userimage} ${styles.on_hover}`} onMouseOver={onMouseOverServerIcon} onMouseOut={onMouseOutServerIcon} onClick={onClickServerIcon} />
+                    <div className={``} style={{ position: "absolute", background: "var(--cb-color-black-transparent)", borderRadius: "50%", width: "3em", height: "3em", opacity: (isHoveringServerIcon ? 1 : 0), transition: "opacity 0.25s ease-in-out", pointerEvents: "none" }} >
+                        <svg xmlns="http://www.w3.org/2000/svg" style={{ position: "relative", left: "0.5em", top: "0.5em" }} width="2em" height="2em" viewBox="0 0 24 24" id="photo-camera">
+                            <path fill="none" d="M0 0h24v24H0V0z"></path>
+                            <circle cx="12" cy="12" r="3"></circle>
+                            <path d="M20 4h-3.17l-1.24-1.35c-.37-.41-.91-.65-1.47-.65H9.88c-.56 0-1.1.24-1.48.65L7.17 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm-8 13c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z"></path>
+                        </svg>
+                    </div>
+
+                    <div {...getRootProps({})} style={{ position: "absolute", pointerEvents: "none" }}>
+                        <input {...getInputProps()} />
+                    </div>
+
+                </div>
                 <p className={styles.appearance_username} style={{ color: serverInfo.color }}>{serverInfo.name}</p>
                 <button className={styles.setting_field_input_color_button} onClick={onClickColorButton}>
                     <svg className={styles.setting_field_input_color_button_image} xmlns="http://www.w3.org/2000/svg" width="10vh" height="10vh" viewBox="0 0 24 24" id="palette">

@@ -9,6 +9,7 @@ const Schema: z.ZodType<Prisma.ServerListOrderElementOrderByWithRelationInput> =
   z
     .object({
       id: z.lazy(() => SortOrderSchema).optional(),
+      serverId: z.lazy(() => SortOrderSchema).optional(),
       index: z.lazy(() => SortOrderSchema).optional(),
       userInfoUserId: z
         .union([

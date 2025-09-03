@@ -13,6 +13,12 @@ const Schema: z.ZodType<Prisma.ServerListOrderElementUpdateInput> = z
         z.lazy(() => StringFieldUpdateOperationsInputObjectSchema),
       ])
       .optional(),
+    serverId: z
+      .union([
+        z.string(),
+        z.lazy(() => StringFieldUpdateOperationsInputObjectSchema),
+      ])
+      .optional(),
     index: z
       .union([
         z.number(),

@@ -39,11 +39,7 @@ const ChannelRules: React.FC<SettingsProps> = ({ updateSettings }) => {
             try {
                 if (!currents.settingsObject) return;
 
-                const parse = schemas.ChannelSchema.safeParse(currents.settingsObject);
-
-                if(!parse.success) return;
-
-                const channel: Channel = parse.data;
+                const channel: Channel = currents.settingsObject as Channel;
 
                 const channelInfoExists = channelInfoStore.getExistingInfo(channel.id);
                 if (channelInfoExists) {
@@ -66,7 +62,7 @@ const ChannelRules: React.FC<SettingsProps> = ({ updateSettings }) => {
         };
 
         fetchChannelInfo();
-    });
+    }, []);
 
     // Detect unsaved changes
     useEffect(() => {

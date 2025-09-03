@@ -20,7 +20,7 @@ export async function PATCH(request: NextRequest) {
         const reordered = [...userInfo.serverListOrder];
 
         // Remove the item first
-        const currentIndex = reordered.findIndex(item => item.id === serverId);
+        const currentIndex = reordered.findIndex(item => item.serverId === serverId);
         if (currentIndex === -1) {
             return NextResponse.json({ message: "Server not found in order" }, { status: 404 });
         }
@@ -34,10 +34,11 @@ export async function PATCH(request: NextRequest) {
         // Recalculate indices
         const newOrder = reordered.map((item, index) => ({
             id: item.id,
-            index,
+            serverId: item.serverId,
+            index: index,
         }));
 
-        console.log(newOrder);
+        // console.log(newOrder);
 
         await db.userInfo.update({
             where: { userId: user.id }, data: {

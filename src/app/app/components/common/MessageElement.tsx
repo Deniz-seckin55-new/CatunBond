@@ -7,7 +7,7 @@ import React, { memo, useCallback, useEffect, useMemo, useRef } from "react";
 import styles from "../../page.module.css";
 import { Attachment, JsonAttachments, Message } from "../../utils/socket_utils";
 import { SyntaxHighlight } from "../../utils/syntax";
-import { AllMessageSyntaxHighlights, copyToClipboard, getEmojiOfName, getIconOfFileExtension, GetMessageDateString, getNameOfEmoji, MessageInfo, onMouseLeaveTooltipElement, onMouseOverTooltipElement, parseEmojis } from "../../utils/utils";
+import { AllMessageSyntaxHighlights, getEmojiOfName, getIconOfFileExtension, GetMessageDateString, getNameOfEmoji, MessageInfo, onMouseLeaveTooltipElement, onMouseOverTooltipElement, parseEmojis } from "../../utils/utils";
 import useReactionMenuStore from "@/store/reactionMenu";
 import emojiList from "@/data/emojiList.json";
 import Image from "next/image";
@@ -15,6 +15,7 @@ import { useDownload } from "./DownloadFile";
 import { DefaultUserVariables, useVariables } from "@/store/variablesStore";
 import { FILE_PREVIEW_SUPPORTED_IMAGE_FORMAT_LIST } from "../../utils/constants";
 import { FilePreview } from "./FilePreview";
+import { useCopyToClipboard } from "usehooks-ts";
 
 interface Props {
     message: Message;
@@ -28,16 +29,18 @@ interface Props {
     onMessageDelete: (message: Message) => void;
     onEditInput: (message: Message, event: React.KeyboardEvent) => void;
     onClickUserAvatar: (messageId: string | null, event: React.MouseEvent) => void;
+    onRightClickUserAvatar: (messageId: string | null, event: React.MouseEvent) => void;
     addReactionToMessage: (messageId: string, channelId: string, emojiName: string) => void;
 }
 
-export const MessageElement: React.FC<Props> = memo(({ message, hoveredMessageId, _onMessageReply, _onMessageReact, setHoveredMessageId, onClickReplyMessage, onClickUserAvatar, onEditInput, onMessageDelete, onMessageEdit, _onMessageDelete, addReactionToMessage }) => {
+export const MessageElement: React.FC<Props> = memo(({ message, hoveredMessageId, _onMessageReply, _onMessageReact, setHoveredMessageId, onClickReplyMessage, onClickUserAvatar, onRightClickUserAvatar, onEditInput, onMessageDelete, onMessageEdit, _onMessageDelete, addReactionToMessage }) => {
     const { messages } = useMessagesStore();
     const { MessageInfos, setMessageInfos } = useMessageInfoStore();
     const { kbState } = useKBState();
     const reactionMenu = useReactionMenuStore();
     const currents = useCurrents();
     const variables = currents.userVariables ?? DefaultUserVariables;
+    const [_, copyToClipboard] = useCopyToClipboard();
 
     const downloadFile = useDownload();
 
@@ -175,7 +178,7 @@ export const MessageElement: React.FC<Props> = memo(({ message, hoveredMessageId
             const currentCount = groupedReactions.values.length > 0 ? (groupedReactions.get(r.emojiName)?.count ?? 0) : 0;
 
             groupedReactions.set(r.emojiName, {
-                emoji: getEmojiOfName(r.emojiName),
+                emoji: getEmojiOfName(r.emojiName.replaceAll(' ', '_')),
                 emojiName: r.emojiName,
                 userReacted: r.userId === userId,
                 id: r.id,
@@ -204,12 +207,12 @@ export const MessageElement: React.FC<Props> = memo(({ message, hoveredMessageId
     const fmessageInfo = useMemo(() => MessageInfos.find(x => x.Message.id === message.id), [MessageInfos, message.id])
 
     const render = useMemo(() => {
-        return <div style={{fontSize: variables.channelFontSize}}>{SyntaxHighlight(AllMessageSyntaxHighlights, message.content, styles)}</div>
+        return <div style={{fontSize: (variables.channelFontSize ?? DefaultUserVariables.channelFontSize) + 4}}>{SyntaxHighlight(AllMessageSyntaxHighlights, message.content, styles, message.id)}</div>
     }, [message.content, AllMessageSyntaxHighlights, styles]);
 
     return (
         <>
-            <div className={`${messageIsMentioned ? styles.message_mentioned : styles.message} ${reactionMenu.messageId === message.id ? (messageIsMentioned ? styles.message_mentioned_active : styles.message_active) : ''}`} style={{fontSize: variables.channelFontSize}} onMouseOver={() => onMouseHoverOver(message.id?.toString())} onMouseLeave={onMouseHoverOut} onContextMenu={onContextMenuMessage} ref={ref} key={message.id}>
+            <div className={`${messageIsMentioned ? styles.message_mentioned : styles.message} ${reactionMenu.messageId === message.id ? (messageIsMentioned ? styles.message_mentioned_active : styles.message_active) : ''}`} style={{fontSize: (variables.channelFontSize ?? DefaultUserVariables.channelFontSize)}} onMouseOver={() => onMouseHoverOver(message.id?.toString())} onMouseLeave={onMouseHoverOut} onContextMenu={onContextMenuMessage} ref={ref} key={message.id}>
                 {
                     (() => {
                         if (message.repliedToId && message.repliedTo) {
@@ -219,7 +222,7 @@ export const MessageElement: React.FC<Props> = memo(({ message, hoveredMessageId
                                 repliedTo: null,
                             }
                             return (<div className={styles.message_reply_inner}>
-                                <svg xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" viewBox="0 0 100 54" width={50} height={27}>
+                                <svg xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" viewBox="0 0 100 54" width={50} height={27} style={{marginTop: "auto", marginBottom: "8px"}}>
                                     <path d="M 4 54 q 0 -50 50 -50" fill="none" stroke="black" strokeWidth="4" />
                                     <path d="M 54 4 l 50 0" fill="none" stroke="black" strokeWidth="4" />
                                 </svg>
@@ -276,13 +279,13 @@ export const MessageElement: React.FC<Props> = memo(({ message, hoveredMessageId
                     })()
                 }
                 <div className={styles.message_inner}>
-                    <div className={styles.message_useravatar_holder} onContextMenuCapture={(ev) => { ev.preventDefault(); onClickUserAvatar(message.id, ev) }} id="user_avatar">
-                        <img className={styles.message_useravatar} src={`${message.author.avatarUrl/*https://cat-storage-server.web.app/data/cat1.jpeg"*/}`} onContextMenuCapture={(ev) => { ev.preventDefault(); onClickUserAvatar(message.id, ev) }} onClick={(ev) => onClickUserAvatar(message.id, ev)} />
+                    <div className={styles.message_useravatar_holder} onContextMenuCapture={(ev) => { ev.preventDefault(); onRightClickUserAvatar(message.authorId, ev) }} id="user_avatar">
+                        <img className={styles.message_useravatar} src={`${message.author.avatarUrl/*https://cat-storage-server.web.app/data/cat1.jpeg"*/}`} onContextMenuCapture={(ev) => { ev.preventDefault(); onRightClickUserAvatar(message.authorId, ev) }} onClick={(ev) => onClickUserAvatar(message.id, ev)} />
                     </div>
                     <div className={styles.message_user_holder}>
                         <div className={styles.message_content_holder}>
-                            <p className={styles.message_username} style={{ color: useUserInfoStore.getState().getExistingUserInfo(message.author.id)?.usernameColor, fontSize: variables.channelFontSize }}>{message.author.username}</p>
-                            <p className={styles.message_timestamp} style={{fontSize: (variables.channelFontSize - 8) > 0 ? variables.channelFontSize - 8 : 2}}>{GetMessageDateString(new Date(message.timestamp))}</p>
+                            <p className={styles.message_username} style={{ color: useUserInfoStore.getState().getExistingUserInfo(message.author.id)?.usernameColor, fontSize: (variables.channelFontSize ?? DefaultUserVariables.channelFontSize) }}>{message.author.username}</p>
+                            <p className={styles.message_timestamp} style={{fontSize: (variables.channelFontSize ?? DefaultUserVariables.channelFontSize) - 2}}>{GetMessageDateString(new Date(message.timestamp))}</p>
                         </div>
                         <div>
                             {!(MessageInfos.find(msg => msg.Message.id === message.id)?.editMode) && (

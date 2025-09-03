@@ -6,6 +6,7 @@ const Schema: z.ZodType<Prisma.ServerListOrderElementCountAggregateInputType> =
   z
     .object({
       id: z.literal(true).optional(),
+      serverId: z.literal(true).optional(),
       index: z.literal(true).optional(),
       userInfoUserId: z.literal(true).optional(),
       _all: z.literal(true).optional(),

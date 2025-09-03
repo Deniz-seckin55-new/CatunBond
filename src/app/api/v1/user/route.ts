@@ -117,7 +117,7 @@ export async function GET(request: NextRequest) {
 
         const orderedServerIds = userInfo.serverListOrder
             .sort((a, b) => a.index - b.index)
-            .map((entry) => entry.id);
+            .map((entry) => entry.serverId);
 
         const orderedServers = orderedServerIds.map((id) =>
             DBuser.servers.find((server) => server.id === id)

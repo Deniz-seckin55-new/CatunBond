@@ -1,7 +1,9 @@
-import React, { useState, useEffect, useMemo, ReactNode, useRef, useLayoutEffect } from 'react';
+import React, { useState, useEffect, useMemo, ReactNode, useRef, useLayoutEffect, useCallback } from 'react';
 import styles from "@/app/app/page.module.css";
 import { useKBState } from '@/store/kbState';
 import SyntaxHighlighter from 'react-syntax-highlighter';
+
+import * as HookLib from 'usehooks-ts';
 
 const glitchChars = '!@#$%^&*()-_=+{}[]|;:,.<>?';
 
@@ -92,7 +94,7 @@ export const ColorfulText: React.FC<ColorfulTextProps> = ({ children, time, mark
     return (
         <>
             {markersEnabled && (
-                <span className={styles.markerTextStyle}>{"<<<colorful>>"}</span>
+                <span className={styles.markerTextStyle}>{`<<<colorful${time ==  "5s" ? "fast" : ""}>>`}</span>
             )}
             <span className={styles.colorfulTextStyle} style={{ animationDuration: time }}>{children}</span>
             {markersEnabled && (
@@ -104,19 +106,30 @@ export const ColorfulText: React.FC<ColorfulTextProps> = ({ children, time, mark
 interface SpoilerTextProps {
     children?: ReactNode;
     markersEnabled?: boolean;
+    messageId: string;
 }
 
-export const SpoilerText: React.FC<SpoilerTextProps> = ({ children, markersEnabled = false }) => {
+export const SpoilerText: React.FC<SpoilerTextProps> = ({ children, markersEnabled = false, messageId }) => {
     const [clicked, setClicked] = useState(false);
     const { kbState } = useKBState();
     const pressingAlt = kbState.includes("Alt");
+    const msgData = useMessageDataStore();
+    const dataLocation = "spoiler:clicked-" + messageId;
     const handleClick = () => {
         if (pressingAlt) {
             setClicked(false);
+
+            msgData.setData(dataLocation, "false");
         } else {
             setClicked(true);
+            
+            msgData.setData(dataLocation, "true");
         }
     }
+
+    useLayoutEffect(() => {
+        setClicked(msgData.getData(dataLocation) === "true");
+    }, []);
 
     return (
         <>
@@ -178,6 +191,30 @@ export const LinkText: React.FC<LinkTextProps> = ({ url, children, markersEnable
             )}
         </>
     );
+};
+
+interface GlowingNameTextProps {
+    color: string;
+    quotes: boolean,
+    children?: ReactNode;
+    markersEnabled?: boolean;
+}
+
+export const GlowingNameText: React.FC<GlowingNameTextProps> = ({ color, children, quotes, markersEnabled = false }) => {
+    return (
+        <>
+            {markersEnabled && (
+                <>
+                    <span className={styles.markerTextStyle}>{`~~${color}${quotes ? "'" : '"'}`}</span>
+                </>
+            )}
+            <span style={{ textShadow: color+" 1px 0 10px" }}>{children}</span>
+            {markersEnabled && (
+                <>
+                    <span className={styles.markerTextStyle}>{`${quotes ? "'": '"'}~~`}</span>
+                </>
+            )}
+        </>);
 };
 
 interface ColoredTextProps {
@@ -322,6 +359,17 @@ import localFont from 'next/font/local';
 import { a11yDark } from 'react-syntax-highlighter/dist/esm/styles/hljs';
 import { useCurrents } from '@/store/currents';
 import { DefaultUserVariables } from '@/store/variablesStore';
+import { Server, ServerInfo } from '../../utils/socket_utils';
+import axios from 'axios';
+import { useMessagesStore } from '@/store/messages';
+import { useServerInfoStore } from '@/store/serverInfos';
+import { toast } from 'react-toastify';
+import { useServerStore } from '@/store/servers';
+import { useInvisibleDiv } from '@/store/invisibleDiv';
+import { useChannelBoxRef } from '@/store/channelBoxRef';
+import { useHoveringElement } from '@/store/hoveringElement';
+import { getTopDistinctColorsFromUrl } from '../../utils/utils';
+import { useMessageDataStore } from '@/store/messageDataStore';
 
 export const CodeTextWithStyle: React.FC<CodeTextWithStyleProps> = ({ codeLanguage, style, children, markersEnabled = false }) => {
     return (
@@ -467,8 +515,8 @@ export const MentionText: React.FC<MentionTextProps> = ({ children, markersEnabl
     return (
         <>
             <div className={styles.mentionTextStyle}>
-                <span><span style={{ fontSize, color: "var(--cb-color-cyan)" }}>@</span>{text}</span>
-            </div>
+                <span><span style={{ color: "var(--cb-color-cyan)" }}>@</span>{text}</span>
+            </div>&nbsp;
         </>
     )
 }
@@ -487,6 +535,294 @@ export const EscapedChar: React.FC<EscapedCharProps> = ({ children, markersEnabl
                 </>
             )}
             <span>{children}</span>
+        </>
+    )
+}
+
+interface ServerInviteTextProps {
+    children?: ReactNode;
+    markersEnabled?: boolean;
+}
+
+export const ServerInviteText: React.FC<ServerInviteTextProps> = ({ children, markersEnabled = false }) => {
+    const currents = useCurrents();
+
+    const serverStore = useServerStore();
+
+    const serverID = useMemo(() => getTextContent(children).split(':')[0], [children]);
+    const serverInviteID = useMemo(() => getTextContent(children).split(':')[1], [children]);
+    const isJoined = useMemo(() => { return currents.user ? currents.user.servers.some(x => x.id === serverID) : null }, [serverID, currents.user?.servers]);
+    const [server, setServer] = useState<Server>();
+    const [serverInfo, setServerInfo] = useState<ServerInfo>();
+    useEffect(() => {
+        async function getServerInfo() {
+            const found = useServerInfoStore.getState().getExistingServerInfo(serverID);
+            if (!found) {
+                const response = await axios.get(`/api/v1/servers/${serverID}/info`); // Adjust API endpoint
+                setServerInfo(response.data.data);
+
+                useServerInfoStore.getState().addServerInfo(response.data.data);
+            } else {
+                setServerInfo(found);
+            }
+        }
+
+        getServerInfo();
+    }, [serverID]);
+    useEffect(() => {
+        async function getServer() {
+            if (server && server.id === serverID) return;
+
+            let found = serverStore.getExistingServer(serverID);
+            if (found) {
+                console.log("Found server", found.id);
+                setServer(found);
+                return;
+            }
+
+            if (serverStore.fetchingServers.includes(serverID)) return;
+
+            serverStore.addFetchingServer(serverID);
+
+            const resp = await axios.get(`api/v1/servers/${serverID}`);
+
+            if (resp.status === 200) {
+                setServer(resp.data.data as Server);
+                serverStore.addServer(resp.data.data as Server);
+            }
+
+            serverStore.removeFetchingServer(serverID);
+        }
+        getServer().then(() => {
+            console.log("Done getting server!", server);
+        });
+    }, [serverID, serverStore]);
+
+    const JoinServer = useCallback(() => {
+        if (isJoined) {
+            try {
+                if (!server) { console.log("No server"); return; }
+
+                currents.setCategories(server.categories);
+
+                currents.setFriendsDivV(false);
+                currents.setSideBoxChannelsV(true);
+
+                currents.setChannel(null);
+                useMessagesStore.getState().setMessages([]);
+
+                currents.setServer(server);
+            } catch (err) {
+                console.error(err);
+            }
+        } else {
+            fetch('/api/v1/user/servers', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    inviteLink: serverInviteID,
+                })
+            })
+                .then((res) => {
+                    if (res.status === 200) {
+                        res.json().then((data) => {
+                            console.log("MSG_SV_JOIN", data);
+                            if (data) {
+                                toast(data.message);
+                                const old_user = currents.user;
+
+                                const gotServer = data.data as Server;
+
+                                if (!old_user) { console.log("no user"); return; }
+
+                                currents.setUser({ ...old_user, servers: [...(old_user.servers), gotServer] });
+                                console.log("MSG_SV_SET", currents.user!.servers);
+
+                                setTimeout(() => {
+                                    try {
+                                        currents.setCategories(gotServer.categories);
+
+                                        currents.setFriendsDivV(false);
+                                        currents.setSideBoxChannelsV(true);
+
+                                        currents.setChannel(null);
+                                        useMessagesStore.getState().setMessages([]);
+
+                                        currents.setServer(gotServer);
+                                    } catch (err) {
+                                        console.error(err);
+                                    }
+                                }, 250);
+                            } else {
+
+                            }
+                        });
+                    } else {
+                        res.json().then(data => { toast(data.message) });
+                    }
+                })
+        }
+    }, [serverID, server]);
+
+    if (markersEnabled) {
+        return (
+            <>
+                <p style={{ color: "var(--cb-color-cyan)" }}>{`<<<serverinvite>>${serverID}:${serverInviteID}</ >`}</p>
+            </>
+        )
+    }
+
+    return (
+        <>
+            <div className={styles.server_invite_message_holder}>
+                <img className={styles.server_invite_message_image} src={server?.iconUrl} />
+                <div className={styles.lpad1} />
+                <div className={styles.flex_column} style={{ alignItems: "baseline" }}>
+                    <p style={{ color: serverInfo ? serverInfo.color : "var(--cb-color-white)" }}>{server?.name ?? "Loading..."}</p>
+                    <p><span style={{ color: "var(--cb-color-white)" }}>Members</span><span style={{ color: "var(--cb-color-gray)" }}>:</span><span style={{ color: "var(--cb-color-cyan)" }}>{server ? server.members.length + "" : "Loading..."}</span></p>
+                </div>
+                <div className={styles.lpad1} />
+                <div className={styles.server_invite_message_button_holder}>
+                    <button className={styles.server_invite_message_button} onClick={() => JoinServer()}>{isJoined === null ? "Loading..." : (isJoined ? "Joined" : "Join")}</button>
+                </div>
+            </div>
+        </>
+    );
+};
+
+interface UrlTextStyleProps {
+    children?: ReactNode;
+    markersEnabled?: boolean;
+    isReply?: boolean
+}
+
+const KeepScroll = (div: HTMLElement, action: () => void) => {
+    const scrollY = div.scrollTop;
+    action();
+    requestAnimationFrame(() => {
+        div.scrollTop = scrollY;
+    });
+}
+
+const DivGetElement = (div: Element, isElement: (element: Element) => Boolean) => {
+    for (let index = 0; index < div.children.length; index++) {
+        const element = div.children[index];
+        let check = isElement(element);
+
+        if (check) return element;
+    }
+
+    return false;
+}
+
+const DivGetElementCL = (div: Element, isElement: (element: ChildNode) => Boolean) => {
+    for (let index = 0; index < div.childNodes.length; index++) {
+        const element = div.childNodes[index];
+        let check = isElement(element);
+
+        if (check) return true;
+    }
+
+    return false;
+}
+
+function ExtractYoutubeId(url: string) {
+    let urlSplit = url.split('//')[1];
+    let exec = /(www\.)?((youtube\.com\/watch\?v=(?<id>[A-z0-9]+))|(youtu\.be\/(?<id2>[A-z0-9]+)))/.exec(urlSplit);
+
+    if (exec?.groups) {
+        let youtubeId = exec.groups["id"] ?? exec.groups["id2"];
+
+        return youtubeId;
+    }
+
+    return null;
+}
+
+export const UrlTextStyle: React.FC<UrlTextStyleProps> = ({ children, markersEnabled = false, isReply = false }) => {
+    const url = getTextContent(children);
+
+    console.log("I AM ",markersEnabled);
+
+    const hover = useHoveringElement();
+
+    const { element: InvDiv } = useInvisibleDiv();
+
+    const isYoutubeLink = useMemo(() => {
+        let urlSplit = url.split('//')[1];
+        let urlSplitL = urlSplit.toLowerCase();
+
+        if (
+            urlSplitL.startsWith("youtube") ||
+            urlSplitL.startsWith("www.youtube") ||
+            urlSplitL.startsWith("youtu.be") ||
+            urlSplitL.startsWith("www.youtu.be")
+        ) return true;
+        else return false;
+    }, [url]);
+
+    const onClickPopOut = useCallback(() => {
+        const videoId = ExtractYoutubeId(url);
+
+        if (!videoId) return;
+
+        hover.setVideoId(videoId);
+
+        hover.setShown(true);
+    }, [url, window.innerWidth, window.innerHeight]);
+
+    const videoIdMemo = useMemo(() => { return ExtractYoutubeId(url) }, [url]);
+
+    const [firstColor, setfirstColor] = useState<string>("red");
+    const [secondColor, setsecondColor] = useState<string>("blue");
+
+    const BGColor = useMemo(() => { return `conic-gradient(${firstColor}, ${secondColor}, ${firstColor})`; }, [firstColor, secondColor]);
+
+    useEffect(() => {
+        async function run() {
+            if (isYoutubeLink && videoIdMemo && !markersEnabled) {
+                let dist = await getTopDistinctColorsFromUrl(`http://img.youtube.com/vi/${videoIdMemo}/${0}.jpg`, 2, 150);
+                console.log(dist);
+                setfirstColor(dist[0]);
+                setsecondColor(dist[1]);
+            }
+        }
+
+        run();
+    }, [url, isYoutubeLink, videoIdMemo]);
+
+    const showYoutubeEmbed = useMemo(() => !markersEnabled && isYoutubeLink && videoIdMemo && !isReply, [markersEnabled, isYoutubeLink, videoIdMemo, isReply]);
+
+    return (
+        <>
+            <a href={url} target="_blank" className={styles.urlTextStyle}>{url}</a>
+            {(showYoutubeEmbed) && (
+                <>
+                    <div style={{ height: "16px" }} />
+                    <div className={styles.ytvid}>
+                        <div className={styles.posr_h} style={{ overflow: "visible", width: "auto" }}>
+                            <iframe className={`${styles.ytvid_iframe} ${styles.posr_e}`}
+                                width={"480px"}
+                                height={"270px"}
+                                src={`https://www.youtube.com/embed/${videoIdMemo}`}
+                                title="YouTube video player"
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                allowFullScreen={true}
+                            />
+                            <div className={`${styles.ytvid_bg} ${styles.posr_e}`} style={{ background: BGColor }} />
+                        </div>
+                        <div style={{ width: "0px" }} />
+                        <button onClick={onClickPopOut} className={`${styles.normal_icon_s} ${styles.popout_button}`}>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" id="made-call">
+                                <path fill="none" d="M0 0h24v24H0V0z"></path>
+                                <path d="M9 6c0 .56.45 1 1 1h5.59L4.7 17.89c-.39.39-.39 1.02 0 1.41.39.39 1.02.39 1.41 0L17 8.41V14c0 .55.45 1 1 1s1-.45 1-1V6c0-.55-.45-1-1-1h-8c-.55 0-1 .45-1 1z"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </>
+            )}
         </>
     )
 }

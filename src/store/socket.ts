@@ -16,14 +16,13 @@ interface SocketStore {
     getSocket: () => Socket | undefined;
 }
 
-const SocketURL = "http://localhost:3001";
-
 export const useSocketStore = create<SocketStore>((set, get) => ({
     socket: undefined,
     getSocket: () => {
         return get().socket;
     },
     connect: () => {
+        const SocketURL = `http://${window.location.hostname}:3001`;
         const initSocket = io(SocketURL, { query: { id: useCurrents.getState().user?.id } }); set({ socket: initSocket }); return initSocket;
     },
     disconnect: () => {
@@ -48,6 +47,10 @@ export const useSocket = () => {
     const channelInfoStore = useChannelInfoStore();
 
     const GetUser = socketutils.usegetUserSR;
+
+    useEffect(() => {
+        console.log(`${window.location.hostname}:3001 as socketio port 3001`);
+    }, []);
 
     useEffect(() => {
         if (user) {
@@ -86,29 +89,29 @@ export const useSocket = () => {
                 if(currents.channel?.id !== channel.id)
                     toast(`${mentioner.username} mentioned you on ${channel.name}`); // Make it so when clicked goes to message
             });
-            socket.on("friend_request_send", (friendRequest: socketutils.PendingFriendRequest) => {
-                if (friendRequest.receiverId == user.id) {
-                    // Notification
-                    toast(`${friendRequest.sender.username} sent you a friend request`);
-                }
-            });
-            socket.on("friend_request_answer", (data: socketutils.FriendRequestAnswer) => {
-                const { friendRequest, answer } = data;
-                console.log("friend_request_answer", friendRequest, answer);
-                GetUser(friendRequest.senderId).then((sender) => {
-                    if (!sender) return;
-                    switch (answer) {
-                        case "accept":
-                            toast(`${sender.username} accepted your friend request`);
-                            break;
-                        case "decline":
-                            toast(`${sender.username} declined your friend request`);
-                            break;
-                        default:
-                            break;
-                    }
-                })
-            });
+            // socket.on("friend_request_send", (friendRequest: socketutils.PendingFriendRequest) => {
+            //     if (friendRequest.receiverId == user.id) {
+            //         Notification
+            //         toast(`${friendRequest.sender.username} sent you a friend request`);
+            //     }
+            // });
+            // socket.on("friend_request_answer", (data: socketutils.FriendRequestAnswer) => {
+            //     const { friendRequest, answer } = data;
+            //     console.log("friend_request_answer", friendRequest, answer);
+            //     GetUser(friendRequest.senderId).then((sender) => {
+            //         if (!sender) return;
+            //         switch (answer) {
+            //             case "accept":
+            //                 toast(`${sender.username} accepted your friend request`);
+            //                 break;
+            //             case "decline":
+            //                 toast(`${sender.username} declined your friend request`);
+            //                 break;
+            //             default:
+            //                 break;
+            //         }
+            //     })
+            // });
             socket.on("writing_event", (eventUser: socketutils.User, eventType: string) => {
                 if (eventUser.id !== currents.user?.id) {
                     if (eventType === "start") {

@@ -7,6 +7,7 @@ const Schema: z.ZodType<Prisma.ServerListOrderElementMinOrderByAggregateInput> =
   z
     .object({
       id: z.lazy(() => SortOrderSchema).optional(),
+      serverId: z.lazy(() => SortOrderSchema).optional(),
       index: z.lazy(() => SortOrderSchema).optional(),
       userInfoUserId: z.lazy(() => SortOrderSchema).optional(),
     })

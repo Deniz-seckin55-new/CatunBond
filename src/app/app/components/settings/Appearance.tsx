@@ -24,11 +24,15 @@ const Appearance: React.FC<SettingsProps> = ({ updateSettings }) => {
     })
 
     const [hexpickerV, sethexpickerV] = useState<boolean>(false);
+    const [hexpickerPosition, sethexpickerPosition] = useState<{ left: number, top: number }>({ left: 0, top: 0 });
     const [oldUserInfo, setolduserInfo] = useState<UserInfo | null>(null);
 
     const getUserInfo = useGetUserInfo();
-    const onClickColorButton = () => {
+    const onClickColorButton = (ev: React.MouseEvent) => {
+        sethexpickerPosition({left: ev.currentTarget.getBoundingClientRect().left, top: ev.currentTarget.getBoundingClientRect().top + ev.currentTarget.getBoundingClientRect().height + 5});
         sethexpickerV(!hexpickerV);
+
+        console.log("Set to ", {left: ev.clientX, top: ev.clientY});
     }
 
     const onClickResetColorButton = () => {

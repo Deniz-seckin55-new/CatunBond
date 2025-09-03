@@ -1,3 +1,4 @@
+import { sanitizeKey } from "@/app/api/v1/utils/utils";
 import { SUPABASE_BUCKET_MAIN_0 } from "@/app/app/utils/constants";
 import { JsonAttachments, MessageUpdate } from "@/app/app/utils/socket_utils";
 import { getEmitter } from "@/lib/emitter";
@@ -37,7 +38,7 @@ export async function POST(request: NextRequest, { params } : { params: {channel
         if(!files) return NextResponse.json({message: "Files is required"}, {status: 400});
         if(files.length >= 10) return NextResponse.json({message: "You are not allowed to send more than 10 files at the same time"}, {status: 400});
 
-        const fileNameList = files.map(x => x.name);
+        const fileNameList = files.map(x => sanitizeKey(x.name));
 
         const channel = await db.channel.findUnique({where: {id: channelID}, select: {category: {select: {server: {select: {ownerId: true}}}}}});
         if(!channel) return NextResponse.json({message: "Channel Not Found"}, {status: 404});
@@ -101,14 +102,14 @@ export async function DELETE(request: NextRequest, { params } : { params: {chann
         // const user = await currentUser();
         const { channelID, messageID } = await params;
         const data = await request.json();
-        const fileName: string | undefined = data.fileName;
+        const fileName: string | undefined = sanitizeKey(data.fileName);
 
         if(!fileName) return NextResponse.json({message: "File name is required"}, {status: 400});
 
         const channel = await db.channel.findUnique({where: {id: channelID}});
         if(!channel) return NextResponse.json({message: "Channel Not Found"}, {status: 404});
         
-        const message = await db.messages.findUnique({where: {id: messageID}, select: {attachments: true}});
+        const message = await db.messages.findUnique({where: {id: messageID}, select: {attachments: true, mentions: true}});
         if(!message) return NextResponse.json({message: "Message Not Found"}, {status: 200});
 
         const getAttachments: JsonAttachments = typeof message.attachments === 'string' ? JSON.parse(message.attachments) : [];
@@ -122,6 +123,7 @@ export async function DELETE(request: NextRequest, { params } : { params: {chann
         }, select: {
             attachments: true,
             content: true,
+            mentions: true,
         }});
 
         const io = await getEmitter();

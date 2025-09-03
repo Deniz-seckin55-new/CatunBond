@@ -3,10 +3,11 @@ import styles from '../page.module.css';
 import React, { useEffect, useState } from 'react';
 import { Socket } from 'socket.io-client';
 import { AllowedTypes, Friend, FriendRequestAnswer, PendingFriendRequest, SocketData, SocketInformationType, User } from '../utils/socket_utils';
-import { useGetUser } from './common/GetUser';
+import { useGetUser, useGetUserByUsername } from './common/GetUser';
 import axios from 'axios';
 import { useCurrents } from '@/store/currents';
 import { ViewingFriendsDiv } from '../utils/utils';
+import { toast } from 'react-toastify';
 
 interface Props {
     pendingSentRequests: PendingFriendRequest[];
@@ -44,32 +45,38 @@ const FriendsDiv: React.FC<Props> = ({ pendingSentRequests, setpendingSentReques
         if (!currents.user) { return; }
 
         if (currents.friendsdiv.visible) {
-            setfriendsList(currents.user?.friends as User[]);
-            console.log("FriendsList: ", friendsList);
-            if (friendsList.length == 0) {
+            setfriendsList(currents.user.friends);
+            if (currents.user.friends.length == 0) {
                 setLoadingStates((prevState) => ({
                     ...prevState,
                     online: true,
                     offline: true,
                 }));
             }
-            friendsList.forEach((friend) => {
+
+            let tempStatuses: Friend[] = [];
+            currents.user.friends.forEach((friend) => {
                 socket?.emit("get_status", friend.id, function (data: "online" | "offline") {
                     const friendStatus: Friend = {
                         user: friend,
                         status: data,
                     }
-                    setfriends((prev) => [...prev, friendStatus]);
+                    tempStatuses.push(friendStatus);
                     setLoadingStates((prevState) => ({
                         ...prevState,
                         online: true,
                         offline: true,
                     }));
-                    console.log("Friends", friends);
                 });
-            })
+            });
+
+            setfriends(tempStatuses);
+
+            console.log("Friends", tempStatuses);
         }
     }, [currents.friendsdiv.visible, currents.user]);
+
+    useEffect(() => { console.log("frl", friendsList) }, [friendsList]);
 
     useEffect(() => {
         if (!currents.user) { return; }
@@ -94,6 +101,8 @@ const FriendsDiv: React.FC<Props> = ({ pendingSentRequests, setpendingSentReques
     }, [currents.friendsdiv.visible, currents.user]);
 
     useEffect(() => {
+        if (!currents.user) return;
+
         axios.get("/api/v1/user/blocked").then((data) => {
             if (data.data.data) {
                 const blockedUsers: User[] = data.data.data as User[];
@@ -107,12 +116,12 @@ const FriendsDiv: React.FC<Props> = ({ pendingSentRequests, setpendingSentReques
     }, [currents.user])
 
     const onClickFriendAction = (request: PendingFriendRequest, answer: string) => {
-        fetch(`/api/v1/user/friendrequests/${request.id}`, {
-            method: "PATCH",
-            body: JSON.stringify({
-                answer: answer.toUpperCase(),
-            })
-        }).then(res => res.json().then(data => {
+        if (!currents.user) { toast.error("Couldn't cancel friend request!"); return; }
+
+        axios.patch(`/api/v1/user/friendrequests/${request.id}`, JSON.stringify({
+            answer: answer.toUpperCase(),
+        })).then(res => {
+            const data = res.data;
             if (data.message !== "Invalid Action" && data.message !== "Internal Server Error") {
                 const infoType = (() => {
                     switch (answer) {
@@ -132,31 +141,34 @@ const FriendsDiv: React.FC<Props> = ({ pendingSentRequests, setpendingSentReques
                     console.log("Invalid answer.");
                     return;
                 }
-                const socketData: SocketData = {
-                    infoType: infoType,
-                    dataType: AllowedTypes.FriendRequest,
-                    data: request,
-                }
-                socket?.emit(`friend_request_answer`, socketData);
+
                 if (infoType == SocketInformationType.ClientCancelFriendRequest) {
                     setpendingSentRequests(pendingSentRequests.filter(x => x.id !== request.id));
                 }
             }
-        }))
+        }).catch(err => {
+            console.log("err", err);
+            toast.error(err.response.statusText);
+        });
     }
 
     useEffect(() => {
         if (!socket)
             return;
         socket.on("friend_request_send", (friendRequest: PendingFriendRequest) => {
+            console.log("recieved fr", friendRequest);
             if (!currents.user)
                 return;
             if (friendRequest.sender.id === currents.user.id) {
+                console.log("toasted equal");
+                toast(`friend request sent to ${friendRequest.sender.username}!`);
                 setpendingSentRequests((prev) => [
                     ...prev,
                     friendRequest,
                 ]);
             } else {
+                console.log("toasted not equal");
+                toast.info(`${friendRequest.sender.username} sent you a friend request!`);
                 setpendingRecievedRequests((prev) => [
                     ...prev,
                     friendRequest,
@@ -164,28 +176,93 @@ const FriendsDiv: React.FC<Props> = ({ pendingSentRequests, setpendingSentReques
             }
         });
         socket.on("friend_request_answer", (data: FriendRequestAnswer) => {
+            console.log("answering fr", data);
             const { friendRequest, answer } = data;
             console.log("friend_request_answer", friendRequest, answer);
+            console.log("c1");
             GetUser(friendRequest.senderId).then((sender) => {
+                console.log("c2");
                 if (!sender) return;
-                switch (answer) {
-                    case "accept":
-                        setfriendsList((prev) => [
-                            ...prev,
-                            sender,
-                        ])
-                        socket?.emit("get_status", sender.id, function (data: any) {
-                            const newFriend: Friend = {
-                                status: data,
-                                user: sender,
-                            }
-                            setfriends((prev) => [
+                console.log("c3");
+                if (friendRequest.senderId !== currents.user?.id)
+                    switch (answer) {
+                        case "accept":
+                            console.log("c4");
+                            setfriendsList((prev) => [
                                 ...prev,
-                                newFriend,
+                                sender,
                             ])
+                            console.log("c5");
+                            socket?.emit("get_status", sender.id, function (data: any) {
+                                console.log("c6");
+                                const newFriend: Friend = {
+                                    status: data,
+                                    user: sender,
+                                }
+                                setfriends((prev) => [
+                                    ...prev,
+                                    newFriend,
+                                ])
+                            });
+
+                            GetUser(friendRequest.senderId).then(user => {
+                                console.log("c7");
+                                toast.success("You are now friends with " + user?.username + "!");
+                            });
+                            break;
+                        case "decline":
+                            console.log("c8");
+                            GetUser(friendRequest.senderId).then(user => {
+                                console.log("c9");
+                                toast.success(user?.username + " declined your friend request");
+                            });
+                            break;
+                        case "cancel":
+                            console.log("c10");
+                            setpendingRecievedRequests(x => x.filter(y => y.id !== friendRequest.id));
+                        default:
+                            break;
+                    }
+                else switch (answer) {
+                    case "accept":
+                        console.log("c11");
+                        const acceptorId = friendRequest.receiverId;
+                        GetUser(acceptorId).then(acceptor => {
+                            console.log("c12");
+                            if (!acceptor) { toast.error("Couldn't update friends! Please refresh the application"); return; }
+                            
+                            console.log("c13");
+                            toast.success(acceptor?.username + " accepted your friend request");
+                            console.log("c14");
+
+                            setfriendsList((prev) => [
+                                ...prev,
+                                acceptor,
+                            ]);
+
+                            console.log("c15");
+
+                            socket?.emit("get_status", acceptor.id, function (data: any) {
+                                console.log("c16");
+                                const newFriend: Friend = {
+                                    status: data,
+                                    user: acceptor,
+                                }
+                                console.log("c17");
+                                setfriends((prev) => [
+                                    ...prev,
+                                    newFriend,
+                                ])
+                                console.log("c18", newFriend);
+                            });
                         });
                         break;
                     case "decline":
+                        console.log("c19");
+                        GetUser(friendRequest.receiverId).then(acceptor => {
+                            console.log("c20");
+                            toast.error(acceptor?.username + " declined your friend request");
+                        })
                         break;
                     default:
                         break;
@@ -194,7 +271,12 @@ const FriendsDiv: React.FC<Props> = ({ pendingSentRequests, setpendingSentReques
                 setpendingSentRequests(pendingSentRequests.filter(x => x.id !== friendRequest.id));
             })
         });
-    }, [])
+
+        return () => {
+            socket.off("friend_request_send");
+            socket.off("friend_request_answer");
+        };
+    }, [socket])
 
     return (
         <div className={styles.friends_box_list_holder}>
@@ -212,9 +294,9 @@ const FriendsDiv: React.FC<Props> = ({ pendingSentRequests, setpendingSentReques
                     {friends.filter(x => x.status === "online").map((friend) => {
                         console.log("Rendering friend: ", friend);
                         return (
-                            <div className={styles.friend_user_div_holder} onClick={() => onClickFriendUser(friend.user)} key={`main-${friend.user.id}`}>
+                            <div className={styles.friend_user_div_holder} key={`main-${friend.user.id}`}>
                                 <hr className={styles.hr_two} />
-                                <div className={styles.friend_user_div} key={`div-${friend.user.id}`}>
+                                <div className={styles.friend_user_div} id="fr_holder" onClick={(ev) => { if ((ev.target as HTMLElement).id === "fr_holder") onClickFriendUser(friend.user) }} key={`div-${friend.user.id}`}>
                                     <div className={`${styles.useravatar_holder} ${styles.friend_user_avatar}`} key={`avatar-${friend.user.id}`}>
                                         <img className={styles.message_useravatar} src={`${friend.user.avatarUrl/*https://cat-storage-server.web.app/data/cat1.jpeg"*/}`} />
                                     </div>
@@ -244,11 +326,11 @@ const FriendsDiv: React.FC<Props> = ({ pendingSentRequests, setpendingSentReques
                         </>
                     )}
                     {friends.filter(x => x.status === "offline").map((friend) => {
-                        console.log("Rendering friend: ", friend);
+                        // console.log("Rendering friend: ", friend);
                         return (
-                            <div className={styles.friend_user_div_holder} onClick={() => onClickFriendUser(friend.user)} key={`main-${friend.user.id}`}>
+                            <div className={styles.friend_user_div_holder} key={`main-${friend.user.id}`}>
                                 <hr className={styles.hr_two} />
-                                <div className={styles.friend_user_div} key={`div-${friend.user.id}`}>
+                                <div className={styles.friend_user_div} id="fr_holder" onClick={(ev) => { if ((ev.target as HTMLElement).id === "fr_holder") onClickFriendUser(friend.user) }} key={`div-${friend.user.id}`}>
                                     <div className={`${styles.useravatar_holder} ${styles.friend_user_avatar}`} key={`avatar-${friend.user.id}`}>
                                         <img className={styles.message_useravatar} src={`${friend.user.avatarUrl/*https://cat-storage-server.web.app/data/cat1.jpeg"*/}`} />
                                     </div>
@@ -278,13 +360,13 @@ const FriendsDiv: React.FC<Props> = ({ pendingSentRequests, setpendingSentReques
                         </>
                     )}
                     {pendingRecievedRequests.map((request) => {
-                        console.log("Rendering friend: ", request);
+                        // console.log("Rendering friend: ", request);
                         const sender: User = request.sender as User;
                         console.log(sender);
                         return (
-                            <div className={styles.friend_user_div_holder} onClick={() => onClickFriendUser(request.sender)} key={`main-${request.senderId}`}>
+                            <div className={styles.friend_user_div_holder} key={`main-${request.senderId}`}>
                                 <hr className={styles.hr_two} />
-                                <div className={styles.friend_user_div} key={`div-${sender.id}`}>
+                                <div className={styles.friend_user_div} id="fr_holder" onClick={(ev) => { if ((ev.target as HTMLElement).id === "fr_holder") onClickFriendUser(request.sender) }} key={`div-${sender.id}`}>
                                     <div className={`${styles.useravatar_holder} ${styles.friend_user_avatar}`} key={`avatar-${sender.id}`}>
                                         <img className={styles.message_useravatar} src={`${sender.avatarUrl/*https://cat-storage-server.web.app/data/cat1.jpeg"*/}`} />
                                     </div>
@@ -322,12 +404,12 @@ const FriendsDiv: React.FC<Props> = ({ pendingSentRequests, setpendingSentReques
                         </>
                     )}
                     {pendingSentRequests.map((request) => {
-                        console.log("Rendering friend: ", request);
+                        // console.log("Rendering friend: ", request);
                         const reciever: User = request.receiver as User;
                         return (
-                            <div className={styles.friend_user_div_holder} onClick={() => onClickFriendUser(reciever)} key={`main-${request.receiverId}`}>
+                            <div className={styles.friend_user_div_holder} key={`main-${request.receiverId}`}>
                                 <hr className={styles.hr_two} />
-                                <div className={styles.friend_user_div} key={`div-${reciever.id}`}>
+                                <div className={styles.friend_user_div} id="fr_holder" onClick={(ev) => { if ((ev.target as HTMLElement).id === "fr_holder") onClickFriendUser(request.sender) }} key={`div-${reciever.id}`}>
                                     <div className={`${styles.useravatar_holder} ${styles.friend_user_avatar}`} key={`avatar-${reciever.id}`}>
                                         <img className={styles.message_useravatar} src={`${reciever.avatarUrl/*https://cat-storage-server.web.app/data/cat1.jpeg"*/}`} />
                                     </div>
@@ -362,11 +444,11 @@ const FriendsDiv: React.FC<Props> = ({ pendingSentRequests, setpendingSentReques
                         </>
                     )}
                     {blocked.map((user) => {
-                        console.log("Rendering friend: ", user);
+                        // console.log("Rendering friend: ", user);
                         return (
-                            <div className={styles.friend_user_div_holder} onClick={() => onClickFriendUser(user)} key={`main-${user.id}`}>
+                            <div className={styles.friend_user_div_holder} key={`main-${user.id}`}>
                                 <hr className={styles.hr_two} />
-                                <div className={styles.friend_user_div} key={`div-${user.id}`}>
+                                <div className={styles.friend_user_div} id="fr_holder" onClick={(ev) => { if ((ev.target as HTMLElement).id === "fr_holder") onClickFriendUser(user) }} key={`div-${user.id}`}>
                                     <div className={`${styles.useravatar_holder} ${styles.friend_user_avatar}`} key={`avatar-${user.id}`}>
                                         <img className={styles.message_useravatar} src={`${user.avatarUrl/*https://cat-storage-server.web.app/data/cat1.jpeg"*/}`} />
                                     </div>

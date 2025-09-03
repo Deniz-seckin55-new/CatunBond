@@ -77,6 +77,12 @@ export async function GET(request: NextRequest) {
         
         // const n = await db.user.updateMany({where: { id: { not: { contains: ";" } } }, data: { variables: {channelFontSize: 16, appFontSize: 16} } });
 
+        const user = await currentUser();
+
+        if(!user) return;
+
+        await db.user.update({where: {id: user.id}, data: {friends: {set: []}} })
+
         return NextResponse.json({
             message: ["Emitted"],
         }, { status: 200 })

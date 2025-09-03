@@ -18,7 +18,7 @@ export async function generateMetadata(): Promise<Metadata> {
             url: 'https://catunbond.com',
             siteName: 'CatunBond',
         },
-        category: 'tecnology',
+        category: 'technology',
         icons: {
             icon: '/app_icons/app_icon_blue.png',
         },

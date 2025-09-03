@@ -85,6 +85,12 @@ export async function PUT(request: NextRequest, { params }: { params: { serverID
             }
         });
 
+        await db.serverInfo.update({
+            where: {serverId: serverID}, data: {
+                iconUrl: iconUrl ?? getServer.iconUrl
+            }
+        });
+
         return NextResponse.json({ message: "Server updated" }, { status: 200 });
     } catch (err) {
         if (err instanceof Error)

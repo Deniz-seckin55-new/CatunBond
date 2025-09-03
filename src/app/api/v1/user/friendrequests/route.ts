@@ -1,3 +1,4 @@
+import { getEmitter } from "@/lib/emitter";
 import { db } from "@/lib/prisma";
 import { currentUser } from "@clerk/nextjs/server";
 import { NextRequest, NextResponse } from "next/server";
@@ -105,6 +106,12 @@ export async function POST(request: NextRequest) {
                     }
                 }
             }
+        });
+
+        console.log("New FR ",JSON.stringify(newFriendRequest));
+
+        getEmitter().then(io => {
+            io.to("USER_"+friendId).emit("friend_request_send", newFriendRequest);
         });
 
         return NextResponse.json({ data: newFriendRequest }, { status: 200 });

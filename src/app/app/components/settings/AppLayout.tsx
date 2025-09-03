@@ -98,6 +98,10 @@ const AppLayout: React.FC<SettingsProps> = ({ updateSettings }) => {
             />
             <p className={styles.appearance_etitle}>Magnifying Glass On Previews</p>
             <ReactSwitch onChange={(checked) => handleInputChange("magnifyingGlassOnPreviews", checked)} checked={localUserVariables.magnifyingGlassOnPreviews ?? DefaultUserVariables.magnifyingGlassOnPreviews} onColor="#17B890" offColor="#FF3A20" />
+            <p className={styles.appearance_etitle}>Show Usernames Under Avatars In Voice Chats</p>
+            <ReactSwitch onChange={(checked) => handleInputChange("showUsernamesUnderAvatarsInVoiceChats", checked)} checked={localUserVariables.showUsernamesUnderAvatarsInVoiceChats ?? DefaultUserVariables.showUsernamesUnderAvatarsInVoiceChats} onColor="#17B890" offColor="#FF3A20" />
+            <p className={styles.appearance_etitle}>Mirror Camera When Shared</p>
+            <ReactSwitch onChange={(checked) => handleInputChange("mirrorCameraWhenShared", checked)} checked={localUserVariables.mirrorCameraWhenShared ?? DefaultUserVariables.mirrorCameraWhenShared} onColor="#17B890" offColor="#FF3A20" />
             <div className={`${styles.setting_save_div} ${(unsavedChanges === true) ? (styles.setting_save_div_active) : ''}`}>
                 <p className={styles.setting_save_text}>You have unsaved changes</p>
                 <button className={`${settings.saveLoading && styles.setting_save_button_disabled} ${styles.setting_save_button} ${!settings.saveLoading && styles.on_hover}`} disabled={settings.saveLoading} onClick={onClickSaveButton}>Save</button>

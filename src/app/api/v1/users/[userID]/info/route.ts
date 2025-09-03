@@ -46,7 +46,8 @@ export async function PUT(request: NextRequest, { params }: { params: { userID: 
                     createMany: {
                         data: getUserInfo.serverListOrder.map((item, index) => ({
                             id: item.id,
-                            index: index, // or item.index
+                            serverId: item.serverId,
+                            index: item.index, // or item.index,
                         }))
                     }
                 }

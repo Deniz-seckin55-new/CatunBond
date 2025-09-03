@@ -49,6 +49,12 @@ const Schema: z.ZodType<Prisma.ServerListOrderElementScalarWhereWithAggregatesIn
           z.string(),
         ])
         .optional(),
+      serverId: z
+        .union([
+          z.lazy(() => StringWithAggregatesFilterObjectSchema),
+          z.string(),
+        ])
+        .optional(),
       index: z
         .union([z.lazy(() => IntWithAggregatesFilterObjectSchema), z.number()])
         .optional(),

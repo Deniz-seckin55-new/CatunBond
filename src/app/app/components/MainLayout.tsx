@@ -3,6 +3,10 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import styles from '../page.module.css';
 
+import {
+    useLocalParticipant,
+} from '@livekit/components-react';
+
 import { useChannelInfoStore } from "@/store/channelInfos";
 import { useCurrents } from "@/store/currents";
 import { useDirectMessageStore } from "@/store/directmessages";
@@ -16,7 +20,7 @@ import axios, { AxiosError } from "axios";
 import { useRouter } from "next/navigation";
 import Peer, { MediaConnection } from "peerjs";
 import { toast } from "react-toastify";
-import { Socket } from 'socket.io-client';
+import { io, Socket } from 'socket.io-client';
 import { MESSAGES_FIRST_LOAD_MAX_AMOUNT } from "../utils/constants";
 import { AllowedTypes, Category, Channel, ChannelInfo, DetailedDBUser, DirectMessage, EditContext, JsonAttachments, Message, MessageCreate, MessageUpdate, PendingFriendRequest, SendMessageI, Server, SocketData, SocketInformationType, User, VoiceChatInformation, WritingEvent } from "../utils/socket_utils";
 import { DBVoiceChatWithMembers, ExploreBoxMode, fetchChannelInfo, MessageInfo, SettingsMode, ToUserSmall, ToVCInfo, UpdateMessageInfo, ViewingFriendsDiv } from "../utils/utils";
@@ -43,6 +47,13 @@ import { Reaction } from "@prisma/client";
 import { useVariablesStore } from "@/store/variablesStore";
 import { ImagePreview } from "./common/ImagePreviewFull";
 import { useImagePreviewStore } from "@/store/imagepreviewstore";
+import LiveKit from "./LiveKit";
+import FullScreenVideo from "./common/FullScreenVideo";
+import { usePersistantUserStorage } from "@/store/persistantUserStorage";
+import InvisibleHolder from "./InvisibleHolder";
+import { HoveringElement } from "./HoveringElement";
+import { NextResponse } from "next/server";
+import { HelpMenu } from "./common/HelpMenu";
 
 // const fetchLocalUser = async () => {
 //     const data = await axios.get("/api/v1/user");
@@ -62,6 +73,8 @@ const MainLayout: React.FC = () => {
     const kb = useKBState();
     const channelInfoStore = useChannelInfoStore();
     const [lastMessageSentDate, setlastMessageSentDate] = useState<number>(0);
+
+    const persistantUserStorage = usePersistantUserStorage();
 
     const currents = useCurrents();
     const [LoadingText, setLoadingText] = useState("Loading..."); // Replace with loading gif
@@ -106,30 +119,30 @@ const MainLayout: React.FC = () => {
 
     const [TextareaInitalConstNumber, setTextareaInitalConstNumber] = useState(0);
 
-    const [localStream, setlocalStream] = useState<MediaStream | null>(null);
+    // const [localStream, setlocalStream] = useState<MediaStream | null>(null);
 
-    const getMediaStream = useCallback(async () => {
-        if (localStream) return localStream;
+    // const getMediaStream = useCallback(async () => {
+    //     if (localStream) return localStream;
 
-        try {
-            // const devices = await navigator.mediaDevices.enumerateDevices();
-            // const audioDevices = devices.filter(x => x.kind === "audioinput");
+    //     try {
+    //         // const devices = await navigator.mediaDevices.enumerateDevices();
+    //         // const audioDevices = devices.filter(x => x.kind === "audioinput");
 
-            const stream = await navigator.mediaDevices.getUserMedia({
-                audio: {
-                    echoCancellation: false,
-                    noiseSuppression: true,
-                    channelCount: 2
-                },
-                video: false,
-            });
+    //         const stream = await navigator.mediaDevices.getUserMedia({
+    //             audio: {
+    //                 echoCancellation: false,
+    //                 noiseSuppression: true,
+    //                 channelCount: 2
+    //             },
+    //             video: false,
+    //         });
 
-            setlocalStream(stream);
-            return stream;
-        } catch (err) {
-            console.error(err);
-        }
-    }, []);
+    //         setlocalStream(stream);
+    //         return stream;
+    //     } catch (err) {
+    //         console.error(err);
+    //     }
+    // }, []);
 
     // const toggleFriendsDivVisibility = () => {
     //     currents.setFriendsDivV(!currents.friendsdiv.visible);
@@ -166,7 +179,22 @@ const MainLayout: React.FC = () => {
             currents.setFriendsDivV(false);
             currents.setSideBoxChannelsV(true);
 
+            currents.setChannel(null);
+            messageStore.setMessages([]);
+
             currents.setServer(server);
+
+            setTimeout(() => {
+                let found = persistantUserStorage.serverLastChannelList[server.id];
+
+                console.log("found server", found);
+
+                if (found) {
+                    console.log("Auto loading channel");
+
+                    onClickChannel(found);
+                }
+            }, 10);
         } catch (err) {
             console.error(err);
         }
@@ -186,6 +214,7 @@ const MainLayout: React.FC = () => {
     }
 
     const onRightClickChannel = (channel: Channel, ct: React.MouseEvent<HTMLDivElement, MouseEvent>) => {
+        console.log("CHANNELRIGHTCLICK", channel, ct);
         currents.setContextMenuXY(ct.pageX.clamp(10, window.innerWidth - ct.currentTarget.getBoundingClientRect().width - 150), ct.pageY.clamp(10, window.innerHeight - ct.currentTarget.getBoundingClientRect().height - 150));
         currents.setContextMenuObject(channel);
         currents.setContextMenuIncludes([]);
@@ -196,42 +225,90 @@ const MainLayout: React.FC = () => {
         return false;
     }
 
-    const onClickChannel = useCallback((channel: Channel) => {
+    const isInterrupted = useRef(false);
+
+    const setChannelInterrupted = (val: boolean) => {
+        isInterrupted.current = val;
+    };
+
+    const onClickChannel = (channel: (Channel | string)) => {
         try {
-            fetch(`api/v1/channels/${channel.id}/messages?limit=${MESSAGES_FIRST_LOAD_MAX_AMOUNT}`).then((res) => {
+            let channelId = "";
+            if (typeof channel === "string") {
+                channelId = channel;
+            } else {
+                channelId = channel.id;
+            }
+
+            if (currents.channel?.id === channelId) { return; }
+
+            currents.setisChannelLoading(true);
+
+            fetch(`api/v1/channels/${channelId}/messages?limit=${MESSAGES_FIRST_LOAD_MAX_AMOUNT}`).then((res) => {
                 if (res.status != 200) {
-                    console.log("Error fetching messages for channel " + channel.id);
+                    console.log("Error fetching messages for channel " + channelId);
                     return;
                 }
                 res.json().then((data) => {
-                    console.log("Got all messages", data);
-                    const blocked = currents.user?.blocked;
+                    requestAnimationFrame(() => {
+                        console.log("Got all messages", data);
+                        const blocked = currents.user?.blocked;
 
-                    const messageList: Message[] = data.data;
+                        const messageList: Message[] = data.data;
 
-                    if (blocked) {
-                        const FilteredMessages = messageList.filter(x => !(blocked.includes(x.authorId)));
+                        if (blocked) {
+                            const FilteredMessages = messageList.filter(x => !(blocked.includes(x.authorId)));
 
-                        if (FilteredMessages.length > 0)
-                            chStore.setendMessageId(FilteredMessages[FilteredMessages.length - 1].id);
+                            if (FilteredMessages.length > 0)
+                                chStore.setendMessageId(FilteredMessages[FilteredMessages.length - 1].id);
 
-                        messageStore.setMessages(FilteredMessages);
-                    } else {
-                        if (messageList.length > 0)
-                            chStore.setendMessageId(messageList[messageList.length - 1].id);
-                        messageStore.setMessages(messageList);
-                    }
+                            messageStore.setMessages(FilteredMessages);
+                        } else {
+                            if (messageList.length > 0)
+                                chStore.setendMessageId(messageList[messageList.length - 1].id);
+                            messageStore.setMessages(messageList);
+                        }
 
-                    // console.log("Channel loaded ", channel);
-                    // console.log("Messages: ", messageList);
+                        // console.log("Channel loaded ", channel);
+                        // console.log("Messages: ", messageList);
 
-                    currents.setChannel(channel);
+                        if (typeof channel !== "string")
+                            setTimeout(() => {
+                                if (currents.server) {
+                                    persistantUserStorage.setLastChannelOfServer(currents.server.id, channel);
+                                    console.log("DW1 set last channel", currents.server.id, channelId);
+                                } else {
+                                    console.log("DW1 no server???");
+                                }
+
+                                requestAnimationFrame(() => {
+                                    console.log("DW1", persistantUserStorage.serverLastChannelList);
+                                });
+                            }, 20);
+                        if (typeof channel !== "string")
+                            currents.setChannel(channel);
+                        else {
+                            let found: Channel | undefined;
+                            currents.Categories.forEach(cat => {
+                                cat.channels.forEach(cah => {
+                                    if (cah.id === channelId) {
+                                        found = cah;
+                                    }
+                                });
+                            });
+
+                            if (found)
+                                currents.setChannel(found);
+                        }
+
+                        currents.setisChannelLoading(false);
+                    });
                 });
             })
         } catch (err) {
             console.error(err);
         }
-    }, []);
+    }
 
     const onClickExploreButton = () => {
         currents.setExploreBoxMode(0);
@@ -303,14 +380,12 @@ const MainLayout: React.FC = () => {
                 }).then(res => res.json().then(data => {
                     if (data.data) {
                         const FriendRequest: PendingFriendRequest = data.data;
-                        const socketData: SocketData = {
-                            infoType: SocketInformationType.ClientSendFriendRequest,
-                            dataType: AllowedTypes.FriendRequest,
-                            data: FriendRequest
-                        }
-                        socket?.emit("friend_request_send", socketData);
+
                         setpendingSentRequests((prev) => [...prev, FriendRequest]);
                         setLoadingText("Success!");
+
+                        toast.success("Friend request sent to " + friendName);
+
                         loadingTextResetTimeout();
                     } else {
                         setLoadingText(data.message);
@@ -335,12 +410,7 @@ const MainLayout: React.FC = () => {
         }).then(res => res.json().then(data => {
             if (data.data) {
                 const FriendRequest: PendingFriendRequest = data.data;
-                const socketData: SocketData = {
-                    infoType: SocketInformationType.ClientSendFriendRequest,
-                    dataType: AllowedTypes.FriendRequest,
-                    data: FriendRequest
-                }
-                socket?.emit("friend_request_send", socketData);
+
                 setpendingSentRequests((prev) => [...prev, FriendRequest]);
 
                 toast("Friend request sent");
@@ -372,18 +442,12 @@ const MainLayout: React.FC = () => {
         }
     }
 
-    const onClickMicrophone = () => {
-        if (!localStream) return;
+    const onClickMicrophone = useCallback(() => {
 
-        const currentMic = !microphoneState;
+        if (!currents.liveKitParticipant) return;
 
-        setmicrophoneState(currentMic);
-
-        localStream.getAudioTracks()[0].enabled = currentMic;
-
-        console.log("Microphone clicked", currentMic, localStream.getAudioTracks()[0]);
-        // !! IMPORTANT: For some reason, when localStream.getAudioTracks()[0] doesn't get console.log()'ed the code doesn't work.
-    }
+        currents.setLiveKitParticipant({ ...currents.liveKitParticipant, isMicrophoneEnabled: !currents.liveKitParticipant.isMicrophoneEnabled });
+    }, []);
 
     const closeExploreBox = () => {
         currents.setExploreBoxV(false);
@@ -500,6 +564,8 @@ const MainLayout: React.FC = () => {
     }
 
     const okdi_handleSendMessage_post = async (channelId: string, message: MessageCreate) => {
+        // const resp = await axios.post(`api/v1/channels/${channelId}/messages/`, message);
+
         const resp = await axios.post(`api/v1/channels/${channelId}/messages/`, message);
 
         if (resp.status === 200) {
@@ -507,6 +573,26 @@ const MainLayout: React.FC = () => {
         } else {
             return { success: false, message: resp.data.message };
         }
+
+        // return new Promise<{ success: boolean; data?: any; message: string }>((resolve) => {
+        //     socket?.emit("sendMessage", channelId, message, (response: NextResponse<{ data: Message }> | NextResponse<{ message: string }>) => {
+        //         if (!response.json) return;
+        //         response.json().then(resp => {
+        //             if (resp.status === 200 && resp.data) {
+        //                 resolve({
+        //                     success: true,
+        //                     data: resp.data.data,
+        //                     message: resp.data.message
+        //                 });
+        //             } else {
+        //                 resolve({
+        //                     success: false,
+        //                     message: resp.data.message
+        //                 });
+        //             }
+        //         });
+        //     });
+        // });
     }
 
     const okdi_handleSendMessage_clearData = (textarea: HTMLTextAreaElement, sentDateTime: Date) => {
@@ -590,17 +676,47 @@ const MainLayout: React.FC = () => {
         okdi_handleSendMessage(event);
     }
 
+    const parentHasId = (target: HTMLElement, id: string) => {
+        let current = target;
+
+        while (true) {
+            if (current.id == id) {
+                return true;
+            }
+
+            if (!current.parentElement)
+                break;
+
+            current = current.parentElement;
+        }
+
+        return false;
+    }
+
     const onMouseDown = (event: MouseEvent) => {
         const target = event.target as HTMLElement;
-        console.log(target.classList);
+        console.log(target.classList, target.id);
 
         if (target.id != "context-menu") {
             if (event.button === 0)
                 currents.setContextMenuShown(false);
         }
-        if (target.id != "reaction-menu" && target.id != "reaction-menu-button" && !target.classList.values().some(x => x.startsWith("epr"))) {
+
+        if (target.id != "user-profile-sub-menu" && target.id != "user-profile-other-actions-button") {
+            if (event.button === 0) {
+                useUserProfileStore.getState().setIsSubMenuShown(false);
+            }
+        }
+
+        if (target.id != "reaction-menu" && target.id != "reaction-menu-button" && !Array.from(target.classList.values()).some((x: string) => x.startsWith("epr"))) {
             if (event.button === 0) {
                 reactionMenuStore.setShown(false);
+            }
+        }
+
+        if (!parentHasId(target, "helpmenu") && !parentHasId(target, "message_box_main")) {
+            if (event.button === 0) {
+                currents.sethelpmenuShown(false);
             }
         }
     }
@@ -717,6 +833,17 @@ const MainLayout: React.FC = () => {
         } else { console.warn("No user id found", ev); }
     };
 
+    const onRightClickUserAvatar = (userId: string | null, ev: React.MouseEvent) => {
+        if (!userId) { console.warn("_onClickUserAvatar: userId == null"); return; }
+
+        ev.preventDefault();
+
+        console.log("Open user context menu: ");
+        console.log(userId);
+
+        OpenUserContextMenu(userId, ev);
+    }
+
     // const onClickUserAvatarWithUserIdVoiceChatInclude = ...
 
     const onClickSettings = (mode: SettingsMode) => {
@@ -726,7 +853,7 @@ const MainLayout: React.FC = () => {
         console.log("Opened sestting ", mode,);
     }
 
-    const openSettings = (mode: SettingsMode, object: unknown) => {
+    const openSettings = (mode: SettingsMode, object: any) => {
         currents.setSetting(null);
         currents.setSettingsMode(mode);
         currents.setSettingsObject(object);
@@ -748,64 +875,42 @@ const MainLayout: React.FC = () => {
         fn();
     }
 
-    const onClickCall = () => {
+    useEffect(() => {
+        if (!currents.user) return;
+        if (voicesocket) return;
+
+        let thisUser = currents.user;
+
+        // Initialize voice socket connection
+        voicesocket = io("http://localhost:3002", {
+            query: {
+                info: [
+                    thisUser.id,
+                    thisUser.username,
+                    thisUser.avatarUrl,
+                ]
+            }
+        });
+
+
+    }, [currents.user]);
+
+    // const { onClickCallButton } = useCallHandler();
+
+    const onClickCall = useCallback(() => {
+        // onClickCallButton();
         if (!currents.channel) return;
         if (!currents.user) return;
 
-        fetch(`/api/v1/voicechats/${currents.channel!.id}`).then(res => res.json().then(data => {
-            console.log("VC ", data);
-            if (data.data) {
-                const DBvc: DBVoiceChatWithMembers = data.data;
-                JoinCall(ToVCInfo(DBvc));
-                // There is a vc, return
-                // const vc: VoiceChatInformation = data.data as VoiceChatInformation;
-                return;
-            } else {
-                // Start the call
-                fetch("api/v1/voicechats", {
-                    method: "POST",
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        channelId: currents.channel!.id,
-                        serverId: currents.server?.id,
-                    })
-                }).then(res => res.json().then(data => {
-                    if (data.data) {
-                        // Call successfully started
-                        const vc: DBVoiceChatWithMembers = data.data as DBVoiceChatWithMembers;
-                        currents.setVC(vc);
+        currents.setLiveikitRoom(currents.channel.id);
 
-                        // Join the call
-                        JoinCall(ToVCInfo(vc));
-                    } else {
-                        // Call couldn't start
-                        toast("Couldn't start the call");
-                        return;
-                    }
-                }))
-            }
-        }))
-        // Check if there is already call if there is then return;  ✓
-        // If there is no call, start a call;   ✓
-        // when leaving, if last person Emit "end_call" if "/api/v1/call/end" is successfully;
-        // Leave call if app closes;
-        // When call is started/joined load Users;
-        // Get user's volume and if higher than certain value (>0) then add an effect for talking;
-        // Add voice and video sharing;
-        // Add screen sharing and voice call Options;
-        // Add share system voice switch;
-        // Lots of debugging
-        // If a call has one user for more than 5 minutes then auto-leave call (and also api call and socketio emit)
-        // set voicechatopen to true/false on join/leave of a call;
-        // Add mute/unmute buttons and also shortcuts for them;
-        // Use DB to store who is in the vc currently;
-    }
+        currents.setLivekitShown(true);
+    }, [currents.channel, currents.user]);
 
     const onClickLeaveCall = () => {
-        if (!currents.vc) return;
-        LeaveCall(ToVCInfo(currents.vc));
+        currents.setLivekitShown(false);
+
+        currents.setLiveikitRoom("");
     }
 
     const OpenUserContextMenu = (userId: string, ev: React.MouseEvent) => {
@@ -816,94 +921,6 @@ const MainLayout: React.FC = () => {
         currents.setContextMenuMode("User");
 
         console.log(currents.contextmenu);
-    }
-
-    const JoinCall = (vc: VoiceChatInformation) => {
-        if (!currents.user) return;
-        console.log("Joining call ", vc);
-
-        fetch(`/api/v1/voicechats/${vc.id}`, {
-            method: "PATCH",
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                action: "JOIN",
-            })
-        }).then(res => res.json().then(data => {
-            console.log("vc join request", data);
-            if (data.message === "Successfully joined voice chat") {
-                console.log("Join call: ", data);
-
-                const newVC = data.data as DBVoiceChatWithMembers;
-
-                getMediaStream().then(stream => {
-                    newVC.members.filter(x => x.id !== currents.user?.id).forEach(vcUser => {
-                        if (!peer) {
-                            toast("Slow down! You aren't ready for some voice chat action yet.");
-                            return;
-                        }
-
-                        const call = peer.call(`${vcUser.id}_peeruser`, stream!, {
-                            metadata: {
-                                user: ToUserSmall(currents.user!),
-                            }
-                        });
-
-                        setcalls((prev) => ({ ...prev, [vcUser.id]: call }));
-
-                        call.on('stream', (remoteStream) => {
-                            setUserStreams(prev => ({
-                                ...prev,
-                                [vcUser.id]: remoteStream,
-                            }))
-                        });
-
-                        call.on("close", () => {
-                            setUserStreams(prev => {
-                                const updatedStreams = { ...prev };
-                                delete updatedStreams[vcUser.id];
-                                return updatedStreams;
-                            });
-
-                            if (currents.vc?.members) {
-                                currents.setVCUsers(currents.vc.members.filter((user: User) => user.id !== vcUser.id));
-                            }
-                        });
-                    })
-
-                    currents.setVC(newVC);
-                    currents.setVCOpen(true);
-
-                    voicesocket?.emit("vc_join");
-                }).catch(err => { console.error("Failed to get media stream", err) });
-            } else {
-                toast("Couldn't join vc " + data.message);
-            }
-        }));
-    }
-
-    const LeaveCall = (vc: VoiceChatInformation) => {
-        console.log("Leaving call", vc);
-        fetch(`api/v1/voicechats/${vc.id}`, {
-            method: "PATCH",
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                action: "LEAVE",
-            }),
-        }).then(res => res.json().then(data => {
-            if (data.message === "Successfully left voice chat") {
-                console.log("Leave call: ", data);
-                voicesocket?.emit("vc_leave");
-
-                currents.setVC(null);
-                currents.setVCOpen(false);
-            } else {
-                toast("Couldn't leave vc " + data.message);
-            }
-        }));
     }
 
     const deleteMessage = async (message: Message) => {
@@ -971,29 +988,34 @@ const MainLayout: React.FC = () => {
 
                 currents.setFriendsDivV(false);
                 try {
-                    fetch(`api/v1/channels/${directMessage.id}/messages`).then((res) => {
+                    fetch(`api/v1/channels/${directMessage.id}/messages?limit=${MESSAGES_FIRST_LOAD_MAX_AMOUNT}`).then((res) => {
                         if (res.status != 200) {
                             console.log("Error fetching messages for channel " + directMessage.id);
                             return;
                         }
                         res.json().then((data) => {
+                            console.log("Got all messages", data);
+                            const blocked = currents.user?.blocked;
+
                             const messageList: Message[] = data.data;
-                            messageStore.setMessages(messageList);
 
-                            console.log("Messages: ", messageList);
+                            if (blocked) {
+                                const FilteredMessages = messageList.filter(x => !(blocked.includes(x.authorId)));
 
-                            currents.setDirectMessage(directMessage);
+                                if (FilteredMessages.length > 0)
+                                    chStore.setendMessageId(FilteredMessages[FilteredMessages.length - 1].id);
 
-                            console.log("Set DM to ", directMessage);
+                                messageStore.setMessages(FilteredMessages);
+                            } else {
+                                if (messageList.length > 0)
+                                    chStore.setendMessageId(messageList[messageList.length - 1].id);
+                                messageStore.setMessages(messageList);
+                            }
 
-                            console.log("Loading DM ", directMessage);
+                            // console.log("Channel loaded ", channel);
+                            // console.log("Messages: ", messageList);
 
-                            currents.setChannel({
-                                categoryId: null,
-                                channelType: "DIRECTMESSAGE",
-                                id: directMessage.id,
-                                name: directMessage.directMsgFor.filter(x => x.id !== currents.user?.id)[0].username,
-                            });
+                            currents.setChannel({ categoryId: null, channelType: "DIRECTMESSAGE", id: directMessage.id, name: directMessage.directMsgFor.filter(x => x.id !== currents.user?.id)[0].username });
                         });
                     })
                 } catch (err) {
@@ -1031,6 +1053,7 @@ const MainLayout: React.FC = () => {
         onClickBackButton: onClickBackButton,
         onClickServerJoinButton: onClickServerJoinButton,
         onClickSendFriendRequestButton: onClickSendFriendRequestButton,
+        onClickUserAvatarWithUserId,
         setLoadingText: setLoadingText,
         LoadingText: LoadingText,
     }
@@ -1054,14 +1077,13 @@ const MainLayout: React.FC = () => {
         onEditInput: onEditInput,
         onClickUserAvatar: onClickUserAvatarWithMesssageId,
         onClickUserAvatarWithUserId: onClickUserAvatarWithUserId,
+        onRightClickUserAvatar,
         addReactionToMessage: addReactionToMessage,
         sendMessageWithTextarea: sendMessageWithTextarea,
         onClickMicrophone: onClickMicrophone,
         onClickLeaveCall: onClickLeaveCall,
         setMessageInfos: setMessageInfos,
         voicesocket: voicesocket,
-        localStream: localStream,
-        getMediaStream: getMediaStream,
         userStreams: userStreams,
         setUserStreams: setUserStreams,
         calls: calls,
@@ -1111,7 +1133,13 @@ const MainLayout: React.FC = () => {
     }
 
     const UserProfileProps = {
-        onClickDirectMessage: onClickDirectMessage,
+        onClickDirectMessage,
+        sendFriendRequestWithId,
+        UserProfileOtherActionsMenuProps: {
+            onClickDirectMessageWithCallback,
+            onClickCall,
+            openExploreBox,
+        }
     }
 
     const onKeyUp = (event: KeyboardEvent) => {
@@ -1135,6 +1163,7 @@ const MainLayout: React.FC = () => {
             closeExploreBox();
             currents.setContextMenuShown(false);
             setcreateBoxV(false);
+            currents.sethelpmenuShown(false);
 
             ips.setShown(false);
         }
@@ -1144,7 +1173,7 @@ const MainLayout: React.FC = () => {
             if (ips.shown) {
                 ips.setZoomFactor(1);
                 ips.setPos({ x: 0, y: 0 });
-            
+
                 event.preventDefault();
             }
         }
@@ -1216,6 +1245,8 @@ const MainLayout: React.FC = () => {
 
                 currents.setUser(gotUser);
 
+                console.log("GotUser", gotUser);
+
                 currents.setUserFetching(false);
             }).catch((err) => {
                 currents.setUserFetching(false);
@@ -1246,40 +1277,40 @@ const MainLayout: React.FC = () => {
         }
     }, [tooltipRef.current]);
 
-    useEffect(() => {
-        getMediaStream().then(stream => { });
-    }, []);
+    // useEffect(() => {
+    //     getMediaStream().then(stream => { });
+    // }, []);
 
-    useEffect(() => {
-        if (!currents.user) return;
+    // useEffect(() => {
+    //     if (!currents.user) return;
 
-        const newPeer = new Peer(`${currents.user!.id}_peeruser`);
-        setpeer(newPeer);
+    //     const newPeer = new Peer(`${currents.user!.id}_peeruser`);
+    //     setpeer(newPeer);
 
-        getMediaStream().then(stream => {
-            newPeer.on('call', (call_peer) => {
-                console.log("Incoming call from:", call_peer.peer);
-                call_peer.answer(stream); // Answer with local stream
+    //     getMediaStream().then(stream => {
+    //         newPeer.on('call', (call_peer) => {
+    //             console.log("Incoming call from:", call_peer.peer);
+    //             call_peer.answer(stream); // Answer with local stream
 
-                const vcUser: User = call_peer.metadata.user;
+    //             const vcUser: User = call_peer.metadata.user;
 
-                currents.setVCUsers([...currents.vc!.members, { ...vcUser, avatarUrl: vcUser.avatarUrl }]);
+    //             currents.setVCUsers([...currents.vc!.members, { ...vcUser, avatarUrl: vcUser.avatarUrl }]);
 
-                call_peer.on("stream", (remoteStream) => {
-                    setUserStreams(prev => ({ ...prev, [call_peer.peer]: remoteStream }));
-                });
+    //             call_peer.on("stream", (remoteStream) => {
+    //                 setUserStreams(prev => ({ ...prev, [call_peer.peer]: remoteStream }));
+    //             });
 
-                call_peer.on("close", () => {
-                    setUserStreams(prev => {
-                        const updatedStreams = { ...prev };
-                        delete updatedStreams[call_peer.peer];
-                        return updatedStreams;
-                    });
-                    currents.setVCUsers(currents.vc!.members.filter(x => x.id !== vcUser.id));
-                });
-            })
-        })
-    }, [currents.user]);
+    //             call_peer.on("close", () => {
+    //                 setUserStreams(prev => {
+    //                     const updatedStreams = { ...prev };
+    //                     delete updatedStreams[call_peer.peer];
+    //                     return updatedStreams;
+    //                 });
+    //                 currents.setVCUsers(currents.vc!.members.filter(x => x.id !== vcUser.id));
+    //             });
+    //         })
+    //     })
+    // }, [currents.user]);
 
     useEffect(() => {
         fetch("/api/v1/app/checkUser");
@@ -1322,6 +1353,7 @@ const MainLayout: React.FC = () => {
         <div>
             {/*<VoiceChat {...VoiceChatProps} />*/}
             {/*(<TransComp />)*/}
+            <FullScreenVideo />
             <ReactionMenu />
             <ConfirmationMenu />
             <UsersHandler />
@@ -1329,6 +1361,9 @@ const MainLayout: React.FC = () => {
             <UserProfile {...UserProfileProps} />
             <ContextMenu {...ContextMenuProps} />
             <Tooltip {...TooltipProps} />
+            <HoveringElement />
+            <HelpMenu />
+            {/* <LiveKit /> */}
             <div className={styles.body}>
                 <div className={styles.main_container}>
                     <BackgroundBlur onClickBgBlur={onClickBgBlur} />
@@ -1356,6 +1391,7 @@ const MainLayout: React.FC = () => {
                 </div>
             </div>
             {/* Functional Components */}
+            <InvisibleHolder />
         </div>
     )
 };

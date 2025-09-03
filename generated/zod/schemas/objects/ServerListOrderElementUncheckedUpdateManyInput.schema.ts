@@ -14,6 +14,12 @@ const Schema: z.ZodType<Prisma.ServerListOrderElementUncheckedUpdateManyInput> =
           z.lazy(() => StringFieldUpdateOperationsInputObjectSchema),
         ])
         .optional(),
+      serverId: z
+        .union([
+          z.string(),
+          z.lazy(() => StringFieldUpdateOperationsInputObjectSchema),
+        ])
+        .optional(),
       index: z
         .union([
           z.number(),

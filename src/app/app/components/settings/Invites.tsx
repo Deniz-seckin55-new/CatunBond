@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from "react";
 import styles from "../../page.module.css";
-import { copyToClipboard, onMouseLeaveTooltipElement, onMouseOverTooltipElement, SettingsProps } from "../../utils/utils";
+import { onMouseLeaveTooltipElement, onMouseOverTooltipElement, SettingsProps } from "../../utils/utils";
 import { useCurrents } from "@/store/currents";
 import { useServerInvitesStore } from "@/store/serverInvites";
 import axios from "axios";
 import { toast } from "react-toastify";
+import { useCopyToClipboard } from "usehooks-ts";
 
 // const currentSetting = "Server Invites";
 const ServerInvites: React.FC<SettingsProps> = ({ }) => {
@@ -15,6 +16,8 @@ const ServerInvites: React.FC<SettingsProps> = ({ }) => {
     const [oldServerInvites, setOldServerInvites] = useState<string[] | null>(null);
     const [createServerInviteLoading, setcreateServerInviteLoading] = useState<boolean>(false);
     const [loadingDeleteList, setloadingDeleteList] = useState<string[]>([]);
+
+    const [_, copyToClipboard] = useCopyToClipboard();
 
     const serverInvitesStore = useServerInvitesStore();
 

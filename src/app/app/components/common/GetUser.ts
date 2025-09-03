@@ -32,16 +32,23 @@ export const useGetUser = () => {
         return newUser;
     }, [userStore.users]);
 }
+
+let fetchingUserInfos: string[] = [];
+
 export const useGetUserInfo = () => {
     const userInfoStore = useUserInfoStore();
 
     return useCallback(async (userID: string): Promise<UserInfo | undefined> => {
         if (userID === "" || !userID) return;
 
+        if(fetchingUserInfos.includes(userID)) {console.log("Already fetching ",userID); return;}
+
         const userExists = userInfoStore.userInfos.find(x => x.userId === userID);
         if (userExists) {
             return userExists;
         }
+
+        fetchingUserInfos.push(userID);
 
         const resp = await axios.get(`/api/v1/users/${userID}/info`);
 
@@ -52,6 +59,8 @@ export const useGetUserInfo = () => {
         userInfoStore.addUserInfo(newUser);
 
         console.log("Got user with id: ", newUser);
+
+        fetchingUserInfos = fetchingUserInfos.filter(x => x !== userID);
 
         return newUser;
     }, [userInfoStore.userInfos]);

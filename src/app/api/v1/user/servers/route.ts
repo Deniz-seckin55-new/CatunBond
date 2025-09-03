@@ -1,7 +1,8 @@
 import { db } from "@/lib/prisma";
 import { currentUser } from "@clerk/nextjs/server";
 import { NextRequest, NextResponse } from "next/server";
-import { GetUserInfo } from "../../utils/utils";
+import { defaultServerGet, GetUserInfo } from "../../utils/utils";
+import uuid4 from "uuid4";
 export async function GET(request: NextRequest) {
     try {
         const user = await currentUser();
@@ -9,7 +10,7 @@ export async function GET(request: NextRequest) {
 
         const userInfo = await GetUserInfo(db, user.id);
 
-        if(!userInfo) return NextResponse.json({ message: "User Info not found" }, { status: 404 });
+        if (!userInfo) return NextResponse.json({ message: "User Info not found" }, { status: 404 });
 
         const orderedServerIds = userInfo.serverListOrder
             .sort((a, b) => a.index - b.index)
@@ -62,7 +63,7 @@ export async function GET(request: NextRequest) {
         if (err instanceof Error)
             console.log(err.stack);
         return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
-    } 
+    }
 }
 
 export async function POST(request: NextRequest) {
@@ -92,14 +93,34 @@ export async function POST(request: NextRequest) {
         if (!userInfo) return NextResponse.json({ message: "User Info not found" }, { status: 404 });
 
         await db.user.update({ where: { id: user.id }, data: { servers: { connect: { id: serverExists.id } } } });
-        await db.userInfo.update({ where: { userId: user.id }, data: { serverListOrder: { create: { id: serverExists.id, index: userInfo.serverListOrder.length } } } });
+        await db.userInfo.upsert({ where: { userId: user.id }, create: { userId: user.id, biography: "", mainLink: "", shortDescription: "", serverListOrder: { create: { id: uuid4(), serverId: serverExists.id, index: userInfo.serverListOrder.length } } }, update: { serverListOrder: { create: { id: uuid4(), serverId: serverExists.id, index: userInfo.serverListOrder.length } } } });
 
-        return NextResponse.json({ message: "Server joined successfully" }, { status: 200 });
+        const getServer = await db.server.findUnique({
+            where: { id: serverExists.id }, include: {
+                categories: {
+                    include: {
+                        channels: {
+                            orderBy: { index: "asc" }
+                        },
+                    },
+                    orderBy: { index: "asc" }
+                },
+                members: {
+                    select: {
+                        id: true,
+                        username: true,
+                        avatarUrl: true,
+                    }
+                }
+            }, omit: defaultServerGet.omit,
+        });
+
+        return NextResponse.json({ data: getServer, message: "Server joined successfully" }, { status: 200 });
     } catch (err) {
         if (err instanceof Error)
             console.log(err.stack);
         return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
-    } 
+    }
 }
 export async function DELETE(request: NextRequest) {
     try {
@@ -120,12 +141,25 @@ export async function DELETE(request: NextRequest) {
         if (!userAlreadyJoinedServer) return NextResponse.json({ message: "User is not in the server" }, { status: 400 });
 
         await db.user.update({ where: { id: user.id }, data: { servers: { disconnect: { id: serverId } } } });
-        await db.userInfo.update({ where: { userId: user.id }, data: { serverListOrder: { delete: { id: serverId } } } });
+
+        // Find the serverListOrder element's unique id for this serverId
+        const userInfo = await db.userInfo.findUnique({
+            where: { userId: user.id },
+            select: { serverListOrder: true }
+        });
+        const serverListOrderElement = userInfo?.serverListOrder.find((el: any) => el.serverId === serverId);
+
+        if (serverListOrderElement) {
+            await db.userInfo.update({
+                where: { userId: user.id },
+                data: { serverListOrder: { delete: { id: serverListOrderElement.id } } }
+            });
+        }
 
         return NextResponse.json({ message: "Server left successfully" }, { status: 200 });
     } catch (err) {
         if (err instanceof Error)
             console.log(err.stack);
         return NextResponse.json({ message: "Internal Server Error" }, { status: 500 });
-    } 
+    }
 }

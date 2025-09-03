@@ -74,10 +74,7 @@ const SettingsBox: React.FC = () => {
             case "ChannelInfo":
                 if (!currents.settingsObject) return;
 
-                const parse = ChannelSchema.safeParse(currents.settingsObject);
-                if (!parse.success) return;
-
-                const channel: Channel = parse.data;
+                const channel: Channel = currents.settingsObject as Channel;
                 const channelinfores = await axios.patch(`/api/v1/channels/${channel.id}/info`, data);
                 const newchannelinfo: ChannelInfo = channelinfores.data.data;
                 channelInfoStore.replaceInfo(channel.id, newchannelinfo);

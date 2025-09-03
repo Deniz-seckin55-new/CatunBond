@@ -23,11 +23,16 @@ import { io, Socket } from 'socket.io-client';
 import { MESSAGE_LOAD_DEFAULT_AMOUNT } from '../utils/constants';
 import { Channel, ChannelInfo, DetailedDBUser, Message, User } from '../utils/socket_utils';
 import { SyntaxHighlight } from '../utils/syntax';
-import { AllMessageSyntaxHighlights, GetMessageDateString, MessageInfo, onMouseLeaveTooltipElement, onMouseOverTooltipElement, parseEmojis, showAutoCompleteMentionRegex, ToUserSmall, UpdateMessageInfo } from '../utils/utils';
+import { allFunctions, AllMessageSyntaxHighlights, allStyles, GetMessageDateString, isCharNumber, MessageInfo, onMouseLeaveTooltipElement, onMouseOverTooltipElement, parseEmojis, showAutoCompleteMentionRegex, ToUserSmall, UpdateMessageInfo } from '../utils/utils';
 import { useGetUserByUsernameSync, useGetUserInfo } from './common/GetUser';
 import { MessageElement } from './common/MessageElement';
 import ScrollToBottomButton from './common/ScrollToBottomButton';
 import { DefaultUserVariables, useVariablesStore } from '@/store/variablesStore';
+import { useVoiceChatState } from '@/store/voiceChatState';
+import LiveKit from './LiveKit';
+import { useChannelBoxRef } from '@/store/channelBoxRef';
+import uuid4, { valid } from 'uuid4';
+import { useInterval } from 'usehooks-ts';
 
 const VoiceSocketURL = "http://localhost:3002";
 
@@ -42,13 +47,12 @@ interface Props {
     onEditInput: (message: Message, event: React.KeyboardEvent) => void;
     onClickUserAvatar: (messageId: string | null, event: React.MouseEvent) => void;
     onClickUserAvatarWithUserId: (userId: string | null, event: React.MouseEvent) => void;
+    onRightClickUserAvatar: (messageId: string | null, event: React.MouseEvent) => void;
     addReactionToMessage: (messageId: string, channelId: string, emojiName: string) => void;
     sendMessageWithTextarea: (message: string, ch: Channel, usr: DetailedDBUser, textarea: HTMLTextAreaElement) => void;
     onClickMicrophone: () => void;
     onClickLeaveCall: () => void;
-    getMediaStream: () => Promise<MediaStream | undefined>;
     voicesocket: Socket | undefined;
-    localStream: MediaStream | null;
     userStreams: { [userId: string]: MediaStream };
     setUserStreams: React.Dispatch<React.SetStateAction<{ [userId: string]: MediaStream }>>;
     calls: Record<string, MediaConnection>;
@@ -97,7 +101,7 @@ function getVolume(stream: MediaStream) {
 const ReplyMessageAnimationKeyframes = [{ backgroundColor: 'var(--cb-color-red)' }, { backgroundColor: 'transparent' }];
 const ReplyMessageAnimationOptions: KeyframeAnimationOptions = { duration: 500, easing: 'ease-in-out', iterations: 1, fill: 'none' };
 
-const ChannelBox: React.FC<Props> = ({ onMessageReply, onMessageReact, onMessageEdit, onMessageDelete, onEditInput, onKeyDownInput, onClickUserAvatar, onClickUserAvatarWithUserId, addReactionToMessage, sendMessageWithTextarea, onClickMicrophone, onClickLeaveCall, getMediaStream, localStream, userStreams, setUserStreams, calls, setcalls, peer, microphoneState }) => {
+const ChannelBox: React.FC<Props> = ({ onMessageReply, onMessageReact, onMessageEdit, onMessageDelete, onEditInput, onKeyDownInput, onClickUserAvatar, onClickUserAvatarWithUserId, onRightClickUserAvatar, addReactionToMessage, sendMessageWithTextarea, onClickMicrophone, onClickLeaveCall, userStreams, setUserStreams, calls, setcalls, peer, microphoneState }) => {
     const { writingUsers } = useWritingUsers();
     const { messages, ...messagesState } = useMessagesStore();
     const { MessageInfos, setMessageInfos } = useMessageInfoStore();
@@ -108,6 +112,8 @@ const ChannelBox: React.FC<Props> = ({ onMessageReply, onMessageReact, onMessage
     const chStore = useChannelBoxStore();
     const getUserByUsername = useGetUserByUsernameSync();
     const channelInfoStore = useChannelInfoStore();
+
+    // const VoiceChat = useVoiceChatState();
 
     const [userScroll, setuserScroll] = useState(0);
     const [hoveredMessageId, setHoveredMessageId] = useState<string | null>(null);
@@ -342,7 +348,7 @@ const ChannelBox: React.FC<Props> = ({ onMessageReply, onMessageReact, onMessage
     const renderTextRef = useRef<HTMLSpanElement>(null);
 
     const renderText = useMemo(() => {
-        return SyntaxHighlight(AllMessageSyntaxHighlights, textWritten, styles, true);
+        return SyntaxHighlight(AllMessageSyntaxHighlights, textWritten, styles, "localtextbox", true);
     }, [textWritten]);
 
     useLayoutEffect(() => {
@@ -362,16 +368,46 @@ const ChannelBox: React.FC<Props> = ({ onMessageReply, onMessageReact, onMessage
         settextWritten(ev.currentTarget.value);
     }, []);
 
+    const [lastCtrlTime, setlastCtrlTime] = useState<number>(0);
+
+    let [callStackBack, setcallStackBack] = useState<string[]>([]);
+    let [callStackFront, setcallStackFront] = useState<string[]>([]);
+
+    const justPressed = useRef<boolean>(false)
+
+    useInterval(() => {
+        if (justPressed) {
+            justPressed.current = false
+            return
+        }
+
+        if (messageBoxRef.current) {
+            const msgbox = messageBoxRef.current;
+            const value = msgbox.value;
+            console.log("setting", callStackBack[callStackBack.length - 1], value);
+            if (callStackBack[callStackBack.length - 1] !== value) {
+                setcallStackBack(x => [...x, value]);
+                console.log("set!", callStackBack);
+            }
+        }
+    }, 250);
+
+    const nearestUserMessageIndex = useMemo(() =>  messages.findLastIndex(x => x.authorId === currents.user!.id), [messages.length, currents.user?.id]);
+    const nearestUserMessage = useMemo(() => messages[nearestUserMessageIndex], [messages, currents.user?.id]);
+    const nearestUserMessageInfo = useMemo(() => MessageInfos.find(x => x.Message.id === nearestUserMessage.id), [messages, currents.user?.id]);
+
     const messageBoxOnKeyDown = (ev: React.KeyboardEvent<HTMLTextAreaElement>) => {
         if (!autocompleteDivShown) {
+            justPressed.current = (true)
+            if (ev.key === "Enter") {
+                setcallStackBack([]);
+                setcallStackFront([]);
+            }
+
             onKeyDownInput(ev);
 
             if (ev.key === "ArrowUp" && ev.currentTarget.selectionEnd === 0) {
                 if (!currents.user) return;
-
-                const nearestUserMessageIndex = messages.findLastIndex(x => x.authorId === currents.user!.id);
-                const nearestUserMessage = messages[nearestUserMessageIndex];
-                const nearestUserMessageInfo = MessageInfos.find(x => x.Message.id === nearestUserMessage.id);
 
                 if (scrollPageRef.current) {
                     scrollPageRef.current.scrollToIndex(nearestUserMessageIndex);
@@ -397,27 +433,95 @@ const ChannelBox: React.FC<Props> = ({ onMessageReply, onMessageReact, onMessage
                     });
                 }
             }
+
+            if (ev.ctrlKey) {
+                const doubleTap = Date.now() - lastCtrlTime < 300;
+
+                console.log("CTRLPRESS", (Date.now() - lastCtrlTime), lastCtrlTime);
+
+                const key = ev.code[ev.code.length - 1] || ev.key;
+
+                if (isCharNumber(key)) {
+                    if (doubleTap) {
+                        console.log("DPTAP");
+                        const found = allStyles.find(x => x.shortcut.includes(key));
+                        found?.action(ev.shiftKey ? "All" : "Select");
+                        ev.preventDefault();
+                    } else {
+                        const found = allFunctions.find(x => x.shortcut.includes(key));
+                        found?.action(ev.shiftKey ? "All" : "Select");
+                        ev.preventDefault();
+                    }
+                }
+
+                if (["A", "B", "C", "D", "E", "F"].includes(key) && doubleTap) {
+                    const found = allStyles.find(x => x.shortcut === "Ctrl+Ctrl+" + key);
+                    found?.action(ev.shiftKey ? "All" : "Select");
+                    ev.preventDefault();
+                }
+
+                if (ev.ctrlKey && ev.key === "z") {
+                    ev.preventDefault();
+
+                    const before = ev.currentTarget.value;
+
+                    const last = callStackBack[callStackBack.length - 2];
+
+                    setcallStackBack(x => x.slice(0, x.length - 2));
+
+                    if (last) {
+                        ev.currentTarget.value = last;
+                        setcallStackFront(x => [...x, before]);
+                        console.log("popping!", last);
+                    }
+
+                    return;
+                }
+
+                if (ev.ctrlKey && ev.key === "y") {
+                    ev.preventDefault();
+
+                    console.log("CSF", callStackFront);
+
+                    const last = callStackFront[callStackFront.length - 1];
+
+                    setcallStackFront(x => x.slice(0, x.length - 1));
+
+                    if (last)
+                        ev.currentTarget.value = last;
+
+                    return;
+                }
+            }
         }
         else {
-            console.log(autocompleteDivShown, ev.target, ev.key, textWritten);
-
             if (!ev.target) return;
 
             if (ev.key === "ArrowUp" && autocompleteDivShown) {
                 const s = autocompleteselectedIndex;
-                const newS = s > 0 ? s - 1 : s;
+                ev.preventDefault();
+                let newS = s > 0 ? s - 1 : s;
+                if (s - 1 === -1) {
+                    newS = autocompleteSuggestions.length - 1;
+                }
                 setautocompleteselectedIndex(newS);
                 if (suggestionRefs && suggestionRefs.current[newS])
-                    suggestionRefs.current[newS].scrollIntoView({
+                    suggestionRefs.current[newS]!.scrollIntoView({
                         behavior: 'smooth',
+                        block: 'center',
                     });
             } else if (ev.key === "ArrowDown" && autocompleteDivShown) {
+                ev.preventDefault();
                 const s = autocompleteselectedIndex;
-                const newS = s < autocompleteSuggestions.length - 1 ? s + 1 : s;
+                let newS = s < autocompleteSuggestions.length - 1 ? s + 1 : s;
+                if (s + 1 === autocompleteSuggestions.length) {
+                    newS = 0;
+                }
                 setautocompleteselectedIndex(newS);
                 if (suggestionRefs && suggestionRefs.current[newS])
-                    suggestionRefs.current[newS].scrollIntoView({
+                    suggestionRefs.current[newS]!.scrollIntoView({
                         behavior: 'smooth',
+                        block: 'center',
                     });
             } else if (ev.key === "Enter" && autocompleteDivShown) {
                 console.log("Selected suggestion: ", autocompleteSuggestions[autocompleteselectedIndex]);
@@ -665,6 +769,8 @@ const ChannelBox: React.FC<Props> = ({ onMessageReply, onMessageReact, onMessage
         // }
     }
 
+    const [height, setHeight] = useState<string>("0");
+
     useEffect(() => {
         if (vcboxRef.current) {
             interact(vcboxRef.current).resizable({
@@ -675,23 +781,29 @@ const ChannelBox: React.FC<Props> = ({ onMessageReply, onMessageReact, onMessage
                     }),
 
                     interact.modifiers.restrictSize({
-                        min: { width: vcboxRef.current.clientWidth, height: 100 }
+                        min: { width: 200, height: 150 }
                     })
                 ],
                 listeners: {
-                    move(event: any) {
-                        const target = event.target;
-                        let y = (parseFloat(target.getAttribute('data-y')) || 0)
+                    move(event) {
+                        var target = event.target
+                        var x = (parseFloat(target.getAttribute('data-x')) || 0)
+                        var y = (parseFloat(target.getAttribute('data-y')) || 0)
 
                         // update the element's style
+                        target.style.width = event.rect.width + 'px'
                         target.style.height = event.rect.height + 'px'
 
                         // translate when resizing from top or left edges
-                        y += event.deltaRect.top
+                        x += event.deltaRect.left
+                        y += event.deltaRect.top;
 
-                        target.style.transform = 'translateY(' + y + 'px)'
+                        target.style.transform = 'translate(' + x + 'px,' + y + 'px)'
 
+                        target.setAttribute('data-x', x)
                         target.setAttribute('data-y', y)
+
+                        setHeight(target.style.height);
                     }
                 }
             })
@@ -703,92 +815,11 @@ const ChannelBox: React.FC<Props> = ({ onMessageReply, onMessageReact, onMessage
     }
 
     /// Voice Chat
-    useEffect(() => {
-        if (AudioRef.current) {
-            getMediaStream().then(stream => {
-                if (stream)
-                    AudioRef.current!.srcObject = stream;
-            })
-        }
-    }, [AudioRef.current, microphoneState])
 
+    // useEffect(() => {
+    // console.log("Connected Users: ", VoiceChat.GetConnectedUsers());
+    // }, [VoiceChat.consumers]);
 
-    useEffect(() => {
-        if (!currents.user) return;
-        if (!currents.user.id) return;
-        if (!currents.vc) return;
-
-        voicesocket = io(VoiceSocketURL, {
-            query: {
-                info: [currents.user.id, currents.user.username, currents.user.avatarUrl].join(","), // CHANGE LATER !! IMPORTANT !!
-                vc: currents.vc,
-            }
-        });
-
-        console.log("Set VCS!");
-        voicesocket.on("vc_update", (eventType: string, eventUser: User) => {
-            console.log("vc_update", { eventType, eventUser: eventUser });
-            if (eventType === "join") {
-                if (currents.vc?.members.find(x => x.id === eventUser.id) === undefined) {
-                    currents.setVCUsers([...currents.vc!.members, eventUser]);
-                }
-                if (!Object.keys(calls).includes(`${eventUser.id}`)) {
-                    if (!peer) return;
-
-                    const call = peer.call(`${eventUser.id}_peeruser`, localStream!, {
-                        metadata: {
-                            user: ToUserSmall(currents.user!),
-                        }
-                    });
-
-                    setcalls((prev) => ({ ...prev, [eventUser.id]: call }));
-
-                    call.on('stream', (remoteStream) => {
-                        setUserStreams(prev => ({
-                            ...prev,
-                            [eventUser.id]: remoteStream,
-                        }))
-                    });
-
-                    call.on("close", () => {
-                        setUserStreams(prev => {
-                            const updatedStreams = { ...prev };
-                            delete updatedStreams[eventUser.id];
-                            return updatedStreams;
-                        });
-                        currents.setVCUsers(currents.vc!.members.filter(x => x.id !== eventUser.id));
-                    });
-                }
-            } else if (eventType === "leave") {
-                if (currents.vc?.members.find(x => x.id === eventUser.id) !== undefined)
-                    currents.setVCUsers(currents.vc?.members.filter(x => x.id !== eventUser.id))
-                try {
-                    setUserStreams((prev) => {
-                        const newStreams = { ...prev };
-                        delete newStreams[eventUser.id];
-                        return newStreams;
-                    });
-                } catch (err) { }
-            }
-        });
-
-        return () => { voicesocket?.disconnect(); }
-    }, [currents.user, currents.vc]);
-
-    const [Volumes, setVolumes] = useState<{ userId: string, soundHeight: number }[]>([]);
-    useEffect(() => {
-        const interval = setInterval(() => {
-            currents.vc?.members.forEach((vcUser) => {
-                const stream = userStreams[vcUser.id];
-                if (!stream) return;
-
-                const volume = getVolume(stream);
-                setVolumes((state: { userId: string, soundHeight: number }[]) => state.map(x => x.userId === vcUser.id ? { ...x, soundHeight: volume } : x));
-            });
-        }, 50);
-
-        return () => { clearInterval(interval); }
-    }, [userStreams, currents.vc]);
     /// Voice Chat End
 
     useEffect(() => {
@@ -820,8 +851,29 @@ const ChannelBox: React.FC<Props> = ({ onMessageReply, onMessageReact, onMessage
     }, [messageBoxRef.current, textWritten, messageBoxDisabled]);
 
     const replyingToRender = useMemo(() => {
-        return SyntaxHighlight(AllMessageSyntaxHighlights, messagesState.replyingTo?.content ?? "", styles)
+        return SyntaxHighlight(AllMessageSyntaxHighlights, messagesState.replyingTo?.content ?? "", styles, messagesState.replyingTo?.id || uuid4(), false, true)
     }, [messagesState.replyingTo]);
+
+    const onContextMenuTextarea = (event: React.MouseEvent) => {
+        if (!currents.helpmenuShown)
+            event.preventDefault();
+
+        currents.setmessageBoxRef(event.currentTarget as HTMLTextAreaElement);
+
+        currents.sethelpmenuShown(true);
+    }
+
+    const onSelectTextarea = (event: React.SyntheticEvent) => {
+        const t = event.currentTarget as HTMLTextAreaElement;
+
+        console.log("setting t", { start: t.selectionStart, end: t.selectionEnd });
+
+        currents.setmessageBoxSavedSelection({ start: t.selectionStart, end: t.selectionEnd });
+    }
+
+    useEffect(() => {
+        currents.setmessageBoxRef(messageBoxRef.current);
+    }, [messageBoxRef.current]);
 
     let showNSFWwarning = false;
     if (currentChannelInfo !== undefined) {
@@ -829,8 +881,27 @@ const ChannelBox: React.FC<Props> = ({ onMessageReply, onMessageReact, onMessage
         showNSFWwarning = (info.nsfw && !(MEM.nsfwProceededChannels.find(() => info.channelId))) /* && currents.server?.ownerId !== currents.user?.id */;
     }
 
+    const chRef = useRef<HTMLDivElement | null>(null);
+
+    const { setElement } = useChannelBoxRef();
+
+    useEffect(() => {
+        setElement(chRef.current);
+    }, [chRef]);
+
+    if (currents.isChannelLoading) {
+        return (
+            <div id="channel-box" className={styles.channel_box}>
+                <div className={`${styles.message_box}`} style={{ height: `${messageBoxHeight}vw`, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "row" }}>
+                    <img src="load.svg" width={"60vh"} height={"60vh"} style={{ marginLeft: "2rem" }} />
+                    Loading Channel...
+                </div>
+            </div>
+        );
+    }
+
     if (showNSFWwarning) {
-        return (<div id="channel-box" className={styles.channel_box}>
+        return (<div id="channel-box" className={styles.channel_box} ref={chRef}>
             <div className={styles.flex_column}>
                 <svg className={styles.icons_warning} xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 24 24" id="warning">
                     <path d="M4.47 21h15.06c1.54 0 2.5-1.67 1.73-3L13.73 4.99c-.77-1.33-2.69-1.33-3.46 0L2.74 18c-.77 1.33.19 3 1.73 3zM12 14c-.55 0-1-.45-1-1v-2c0-.55.45-1 1-1s1 .45 1 1v2c0 .55-.45 1-1 1zm1 4h-2v-2h2v2z" fill="var(--cb-color-red)"></path>
@@ -849,67 +920,93 @@ const ChannelBox: React.FC<Props> = ({ onMessageReply, onMessageReact, onMessage
     } else {
         return (
             <>
-                <div id="channel-box" className={styles.channel_box} onMouseMove={onMouseMove}>
-                    <audio ref={AudioRef} style={{ display: 'none' }} autoPlay={false} />
+                <div id="channel-box" className={styles.channel_box} onMouseMove={onMouseMove} ref={chRef}>
+                    {/* <audio ref={AudioRef} style={{ display: 'none' }} autoPlay={false} />
                     {Object.entries(userStreams).map(([userId, url]) => {
                         return <audio key={userId} style={{ display: 'none' }} ref={(audio) => { if (audio) audio.srcObject = url; }} autoPlay={true} />
-                    })}
-                    {(currents.voicechatopen && currents.vc) && (
-                        <div className={styles.channel_box_vc} ref={vcboxRef}>
-                            <div className={styles.channel_box_vc_top}>
-                                <div className={styles.vc_actions_left}>
+                    })} */}
+                    {(currents.voicechatopen) && (<></>
+                        //         <div className={styles.channel_box_vc} ref={vcboxRef}>
+                        //             <div className={styles.channel_box_vc_top}>
+                        //                 <div className={styles.vc_actions_left}>
 
-                                </div>
-                                <div className={styles.vc_actions_right}>
+                        //                 </div>
+                        //                 <div className={styles.vc_actions_right}>
 
-                                </div>
-                            </div>
-                            <div className={styles.channel_box_vc_middle}>
-                                {currents.vc.members.map((user) => {
-                                    return (
-                                        <div key={`vcUser-${user.id}`}>
-                                            <div className={styles.auto_useravatar_holder} style={{ borderWidth: (Volumes.find(x => x.userId === user.id)?.soundHeight || 0) * 4 }}>
-                                                <img className={styles.message_useravatar} src={`${user.avatarUrl/*https://cat-storage-server.web.app/data/cat1.jpeg"*/}`} onClick={() => { }} onContextMenu={(ev) => { ev.preventDefault(); onClickUserAvatarWithUserId(user.id, ev) }} />
-                                            </div>
-                                        </div>
-                                    )
-                                })}
-                            </div>
-                            <div className={styles.channel_box_vc_bottom}>
-                                <div className={styles.vc_actions_left}>
+                        //                 </div>
+                        //             </div>
+                        //             <div className={styles.channel_box_vc_middle}>
+                        //                 {VoiceChat.GetConnectedUsers().map((userId) => {
+                        //                     const user = currents.server?.members.find(x => x.id === userId) || getUserByUsername(userId);
 
-                                </div>
-                                <div className={styles.vc_actions_middle}>
-                                    <div className={styles.vc_icon_holder}>
-                                        <svg className={styles.vc_icon} onClick={() => { onClickMicrophone(); settooltipText(microphoneState ? "Turn Microphone Off" : "Turn Microphone On"); }} onMouseLeave={() => onMouseLeaveTooltipElement(currents)} onMouseOver={(ev) => onMouseOverTooltipElement(ev, microphoneState ? "Turn Microphone Off" : "Turn Microphone On", currents)} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" id="micrphone">
-                                            <path d="M12 15c1.66 0 2.99-1.34 2.99-3L15 6c0-1.66-1.34-3-3-3S9 4.34 9 6v6c0 1.66 1.34 3 3 3zm6.08-3c-.42 0-.77.3-.83.71-.37 2.61-2.72 4.39-5.25 4.39s-4.88-1.77-5.25-4.39c-.06-.41-.42-.71-.83-.71-.52 0-.92.46-.85.97.46 2.97 2.96 5.3 5.93 5.75V21c0 .55.45 1 1 1s1-.45 1-1v-2.28c2.96-.43 5.47-2.78 5.93-5.75.07-.51-.33-.97-.85-.97z" fill="var(--cb-color-white)"></path>
-                                        </svg>
-                                        <div className={styles.vc_icon_overlap_holder}>
-                                            <div className={styles.vc_icon_overlap} style={{ width: (microphoneState ? '0em' : '1em') }}></div>
-                                        </div>
+                        //                     if (!user) return <></>;
+
+                        //                     return (
+                        //                         <div key={`vcUser-${userId}`}>
+                        //                             <div className={styles.auto_useravatar_holder} /*style={{ borderWidth: (Volumes.find(x => x.userId === user.id)?.soundHeight || 0) * 4 }}*/>
+                        //                                 <img className={styles.message_useravatar} src={`${user.avatarUrl/*https://cat-storage-server.web.app/data/cat1.jpeg"*/}`} onClick={() => { }} onContextMenu={(ev) => { ev.preventDefault(); onClickUserAvatarWithUserId(user.id, ev) }} />
+                        //                             </div>
+                        //                         </div>
+                        //                     )
+                        //                 })}
+                        //             </div>
+                        //             <div className={styles.channel_box_vc_bottom}>
+                        //                 <div className={styles.vc_actions_left}>
+
+                        //                 </div>
+                        //                 <div className={styles.vc_actions_middle}>
+                        //                     <div className={styles.vc_icon_holder}>
+                        //                         <svg className={styles.vc_icon} onClick={() => { onClickMicrophone(); settooltipText(microphoneState ? "Turn Microphone Off" : "Turn Microphone On"); }} onMouseLeave={() => onMouseLeaveTooltipElement(currents)} onMouseOver={(ev) => onMouseOverTooltipElement(ev, microphoneState ? "Turn Microphone Off" : "Turn Microphone On", currents)} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" id="micrphone">
+                        //                             <path d="M12 15c1.66 0 2.99-1.34 2.99-3L15 6c0-1.66-1.34-3-3-3S9 4.34 9 6v6c0 1.66 1.34 3 3 3zm6.08-3c-.42 0-.77.3-.83.71-.37 2.61-2.72 4.39-5.25 4.39s-4.88-1.77-5.25-4.39c-.06-.41-.42-.71-.83-.71-.52 0-.92.46-.85.97.46 2.97 2.96 5.3 5.93 5.75V21c0 .55.45 1 1 1s1-.45 1-1v-2.28c2.96-.43 5.47-2.78 5.93-5.75.07-.51-.33-.97-.85-.97z" fill="var(--cb-color-white)"></path>
+                        //                         </svg>
+                        //                         <div className={styles.vc_icon_overlap_holder}>
+                        //                             <div className={styles.vc_icon_overlap} style={{ width: (microphoneState ? '0em' : '1em') }}></div>
+                        //                         </div>
+                        //                     </div>
+                        //                     <svg className={styles.vc_icon_inactive} onMouseLeave={() => onMouseLeaveTooltipElement(currents)} onMouseOver={(ev) => onMouseOverTooltipElement(ev, "Screen Share", currents)} xmlns="http://www.w3.org/2000/svg" enableBackground="new 0 0 24 24" viewBox="0 0 24 24" id="share-screen">
+                        //                         <g id="share_screen">
+                        //                             <path fill="var(--cb-color-white-soft)" d="M9,11c0-1.1-0.9-2-2-2H4c-1.1,0-2,0.9-2,2v6c0,1.1,0.9,2,2,2h3c1.1,0,2-0.9,2-2V11z M4,17v-6h3l0,6H4z"></path>
+                        //                             <path fill="var(--cb-color-white-soft)" d="M19,4H7C5.3,4,4,5.3,4,7c0,0.6,0.4,1,1,1s1-0.4,1-1c0-0.6,0.4-1,1-1h12c0.6,0,1,0.4,1,1v7c0,0.6-0.4,1-1,1h-7
+                        // c-0.6,0-1,0.4-1,1v2h-1c-0.6,0-1,0.4-1,1s0.4,1,1,1h4c0.6,0,1-0.4,1-1s-0.4-1-1-1h-1v-1h6c1.7,0,3-1.3,3-3V7C22,5.3,20.7,4,19,4z"></path>
+                        //                         </g>
+                        //                     </svg>
+                        //                     <svg className={styles.vc_icon_inactive} onMouseLeave={() => onMouseLeaveTooltipElement(currents)} onMouseOver={(ev) => onMouseOverTooltipElement(ev, "Video Share", currents)} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" id="videocam">
+                        //                         <path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l2.29 2.29c.63.63 1.71.18 1.71-.71V8.91c0-.89-1.08-1.34-1.71-.71L17 10.5z" fill="var(--cb-color-white-soft)"></path>
+                        //                     </svg>
+                        //                     <svg className={`${styles.vc_icon_leave}`} onClick={onClickLeaveCall} onMouseLeave={() => onMouseLeaveTooltipElement(currents)} onMouseOver={(ev) => onMouseOverTooltipElement(ev, "Leave Call", currents)} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" id="call">
+                        //                         <path fill="none" d="M0 0h24v24H0V0z"></path>
+                        //                         <path d="m19.23 15.26-2.54-.29a1.99 1.99 0 0 0-1.64.57l-1.84 1.84a15.045 15.045 0 0 1-6.59-6.59l1.85-1.85c.43-.43.64-1.03.57-1.64l-.29-2.52a2.001 2.001 0 0 0-1.99-1.77H5.03c-1.13 0-2.07.94-2 2.07.53 8.54 7.36 15.36 15.89 15.89 1.13.07 2.07-.87 2.07-2v-1.73c.01-1.01-.75-1.86-1.76-1.98z" fill="var(--cb-color-white)"></path>
+                        //                     </svg>
+                        //                 </div>
+                        //                 <div className={styles.vc_actions_right}>
+
+                        //                 </div>
+                        //             </div>
+
+                        //             <hr className={styles.hr_resize} />
+                        //         </div>
+                    )}
+                    {currents.liveikitRoom && (
+                        <>
+                            <div className={styles.channel_box_vc} ref={vcboxRef}>
+                                <div className={styles.channel_box_vc_top}>
+                                    <div className={styles.vc_actions_left}>
+
                                     </div>
-                                    <svg className={styles.vc_icon_inactive} onMouseLeave={() => onMouseLeaveTooltipElement(currents)} onMouseOver={(ev) => onMouseOverTooltipElement(ev, "Screen Share", currents)} xmlns="http://www.w3.org/2000/svg" enableBackground="new 0 0 24 24" viewBox="0 0 24 24" id="share-screen">
-                                        <g id="share_screen">
-                                            <path fill="var(--cb-color-white-soft)" d="M9,11c0-1.1-0.9-2-2-2H4c-1.1,0-2,0.9-2,2v6c0,1.1,0.9,2,2,2h3c1.1,0,2-0.9,2-2V11z M4,17v-6h3l0,6H4z"></path>
-                                            <path fill="var(--cb-color-white-soft)" d="M19,4H7C5.3,4,4,5.3,4,7c0,0.6,0.4,1,1,1s1-0.4,1-1c0-0.6,0.4-1,1-1h12c0.6,0,1,0.4,1,1v7c0,0.6-0.4,1-1,1h-7
-                c-0.6,0-1,0.4-1,1v2h-1c-0.6,0-1,0.4-1,1s0.4,1,1,1h4c0.6,0,1-0.4,1-1s-0.4-1-1-1h-1v-1h6c1.7,0,3-1.3,3-3V7C22,5.3,20.7,4,19,4z"></path>
-                                        </g>
-                                    </svg>
-                                    <svg className={styles.vc_icon_inactive} onMouseLeave={() => onMouseLeaveTooltipElement(currents)} onMouseOver={(ev) => onMouseOverTooltipElement(ev, "Video Share", currents)} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" id="videocam">
-                                        <path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l2.29 2.29c.63.63 1.71.18 1.71-.71V8.91c0-.89-1.08-1.34-1.71-.71L17 10.5z" fill="var(--cb-color-white-soft)"></path>
-                                    </svg>
-                                    <svg className={`${styles.vc_icon_leave}`} onClick={onClickLeaveCall} onMouseLeave={() => onMouseLeaveTooltipElement(currents)} onMouseOver={(ev) => onMouseOverTooltipElement(ev, "Leave Call", currents)} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" id="call">
-                                        <path fill="none" d="M0 0h24v24H0V0z"></path>
-                                        <path d="m19.23 15.26-2.54-.29a1.99 1.99 0 0 0-1.64.57l-1.84 1.84a15.045 15.045 0 0 1-6.59-6.59l1.85-1.85c.43-.43.64-1.03.57-1.64l-.29-2.52a2.001 2.001 0 0 0-1.99-1.77H5.03c-1.13 0-2.07.94-2 2.07.53 8.54 7.36 15.36 15.89 15.89 1.13.07 2.07-.87 2.07-2v-1.73c.01-1.01-.75-1.86-1.76-1.98z" fill="var(--cb-color-white)"></path>
-                                    </svg>
+                                    <div className={styles.vc_actions_right}>
+
+                                    </div>
                                 </div>
-                                <div className={styles.vc_actions_right}>
+                                <div className={styles.channel_box_vc_middle}>
+                                    <LiveKit onVisible={() => setHeight("150px")} height={height || "auto"} onClickUserAvatarWithUserId={onClickUserAvatarWithUserId} />
+                                </div>
+                                <div className={styles.channel_box_vc_bottom}>
 
                                 </div>
+
+                                {/* <hr className={styles.hr_resize} /> */}
                             </div>
-
-                            <hr className={styles.hr_resize} />
-                        </div>
+                        </>
                     )}
                     <div className={`${styles.message_box}`} style={{ height: `${messageBoxHeight}vw` }} ref={scrollPageDivRef}>
                         {/* {messages.map((message) => {
@@ -928,7 +1025,7 @@ const ChannelBox: React.FC<Props> = ({ onMessageReply, onMessageReact, onMessage
 
                             return <MessageElement {...MessageElementProps} key={message.id} />
                         })} */}
-                        <Virtuoso totalCount={messagesLength} data={messages} initialTopMostItemIndex={messages.length - 1} startReached={onReachStart} endReached={onReachEnd} onScroll={onScrollMessages} ref={scrollPageRef} style={{ width: "100%", height: "100%" }} onLoadedData={() => scrollPageRef.current?.scrollToIndex(messages.length - 1)} itemContent={(i, message) => {
+                        <Virtuoso totalCount={messagesLength} overscan={Number.MAX_SAFE_INTEGER} data={messages} initialTopMostItemIndex={messages.length - 1} startReached={onReachStart} endReached={onReachEnd} onScroll={onScrollMessages} ref={scrollPageRef} style={{ width: "100%", height: "100%" }} onLoadedData={() => scrollPageRef.current?.scrollToIndex(messages.length - 1)} itemContent={(i, message) => {
                             const MessageElementProps = {
                                 message,
                                 hoveredMessageId: hoveredMessageId,
@@ -941,6 +1038,7 @@ const ChannelBox: React.FC<Props> = ({ onMessageReply, onMessageReact, onMessage
                                 onMessageDelete: onMessageDelete,
                                 onEditInput: onEditInput,
                                 onClickUserAvatar: onClickUserAvatar,
+                                onRightClickUserAvatar: onRightClickUserAvatar,
                                 addReactionToMessage: addReactionToMessage,
                             }
                             return <MessageElement {...MessageElementProps} key={message.id} />
@@ -991,7 +1089,7 @@ const ChannelBox: React.FC<Props> = ({ onMessageReply, onMessageReact, onMessage
                     )}
                     <div className={`${styles.message_box_wraper} ${messagesState.replyingTo && (styles.message_box_wraper_reply)}`}>
                         <div className={styles.posr_h}>
-                            <textarea className={`${styles.posr_e} ${styles.contenteditable} ${styles.msg_typer} ${(!currents.channel || (currentChannelInfo && ((currentChannelInfo as ChannelInfo).readOnly))) && styles.msg_disabled}`} disabled={messageBoxDisabled} style={{ opacity: 0.25 }} onWheel={onMessageScroll} onChange={messageBoxOnChange} onKeyDown={messageBoxOnKeyDown} onScroll={onMessageWriteBoxScroll} ref={messageBoxRef} />
+                            <textarea className={`${styles.posr_e} ${styles.contenteditable} ${styles.msg_typer} ${(!currents.channel || (currentChannelInfo && ((currentChannelInfo as ChannelInfo).readOnly))) && styles.msg_disabled}`} disabled={messageBoxDisabled} style={{ opacity: 0.25 }} onWheel={onMessageScroll} onChange={messageBoxOnChange} onKeyDown={messageBoxOnKeyDown} onScroll={onMessageWriteBoxScroll} onContextMenu={(ev) => onContextMenuTextarea(ev)} onSelect={(ev) => onSelectTextarea(ev)} onKeyUp={(ev) => { if (ev.key === "Control") { setlastCtrlTime(Date.now()) } }} id="message_box_main" ref={messageBoxRef} />
                             <span className={`${styles.posr_e} ${styles.msg_overlay} ${styles.no_touch} ${styles.msg_typer}`} style={{ overflow: "hidden", whiteSpace: "pre-wrap" }} ref={renderTextRef}>{renderText}</span>
                         </div>
                         <div className={styles.message_box_actions}>

@@ -1,5 +1,6 @@
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "windows"]
 }
 
 generator zod {
@@ -8,8 +9,8 @@ generator zod {
 }
 
 datasource db {
-  provider = "cockroachdb"
-  url      = env("DB_URL")
+  provider  = "postgresql"
+  url       = env("DB_URL")
 }
 
 model User {
@@ -27,7 +28,7 @@ model User {
   friends            User[]           @relation("UserFriends")
   friendOf           User[]           @relation("UserFriends")
   servers            Server[]         @relation("UserServers")
-  variables          Json             @default("{\"channelFontSize\": 16, \"appFontSize\": 36, \"defaultZoomFactor\": 2, \"magnifyingGlassOnPreviews\": true}")
+  variables          Json             @default("{\"channelFontSize\": 16, \"appFontSize\": 36, \"defaultZoomFactor\": 2, \"magnifyingGlassOnPreviews\": true, \"showUsernamesUnderAvatarsInVoiceChats\": false}")
 }
 
 model Reaction {
@@ -146,6 +147,7 @@ model UserInfo {
 
 model ServerListOrderElement {
   id             String    @id
+  serverId       String
   index          Int
   userInfoUserId String?
   UserInfo       UserInfo? @relation(fields: [userInfoUserId], references: [userId])

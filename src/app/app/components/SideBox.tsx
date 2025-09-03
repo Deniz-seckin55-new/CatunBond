@@ -10,6 +10,7 @@ import { Category, Channel, User } from '../utils/socket_utils';
 import { SyntaxHighlight } from '../utils/syntax';
 import { ExploreBoxMode, onMouseLeaveTooltipElement, onMouseOverTooltipElement, SettingsMode, SyntaxPattern } from '../utils/utils';
 import { DefaultUserVariables } from '@/store/variablesStore';
+import interact from 'interactjs';
 
 interface Props {
     onClickSearch: () => void;
@@ -49,9 +50,9 @@ const SideBox: React.FC<Props> = ({ createBoxV, createBoxC, setcreateBoxV, onCli
 
         const currentServer = currents.server;
 
-        if(currents.Categories === currentServer.categories) return;
+        if (currents.Categories === currentServer.categories) return;
 
-        currents.setServer({...currentServer, categories: currents.Categories});
+        currents.setServer({ ...currentServer, categories: currents.Categories });
 
         const idList = currents.Categories.map((c) => { return { id: c.id, channels: c.channels.map((x) => x.id) } as { id: string, channels: string[] } });
 
@@ -59,7 +60,7 @@ const SideBox: React.FC<Props> = ({ createBoxV, createBoxC, setcreateBoxV, onCli
             idList,
         );
 
-        if(socket && socket.connected) {
+        if (socket && socket.connected) {
             socket.emit("category_channel_order_change", currentServer.id, idList);
             console.log("emited category_channel_order_change ", [currentServer.id, idList]);
         }
@@ -164,15 +165,17 @@ const SideBox: React.FC<Props> = ({ createBoxV, createBoxC, setcreateBoxV, onCli
         }
     }, []);
 
+    const SideBoxMainRef = useRef<HTMLDivElement | null>(null)
+
     return (
         <>
-            <div id="side-box" style={{fontSize: currents.userVariables?.appFontSize ?? DefaultUserVariables.appFontSize}} className={styles.side_box}>
+            <div id="side-box" style={{ fontSize: currents.userVariables?.appFontSize ?? DefaultUserVariables.appFontSize }} className={styles.side_box}>
                 <div id="side-box-search" className={styles.side_box_search}>
                     <div id="side-box-search-input-wraper" className={styles.side_box_search_input_wraper}>
                         <input id="side-box-search-input" className={styles.side_box_search_input} type="text" placeholder="Search anything" readOnly onClick={onClickSearch} />
                     </div>
                 </div>
-                {!currents.SideBoxChannelsV && (<div id="side-box-main" className={styles.side_box_main}>
+                {!currents.SideBoxChannelsV && (<div id="side-box-main" className={styles.side_box_main} ref={SideBoxMainRef}>
                     <div id="side-box-top" className={styles.side_box_top}>
                         <div id="friends-button-wraper" className={styles.friends_button_wraper}>
                             <img id="friends-button-image" className={styles.friends_button_image} />
@@ -206,31 +209,33 @@ const SideBox: React.FC<Props> = ({ createBoxV, createBoxC, setcreateBoxV, onCli
                         </svg>)}
                     </div>
                     <div className={styles.side_box_channels} ref={SideBoxChannelsRef}>
-                        <div className={`${styles.side_box_channels_edit_button_holder}`}>
-                            <div>
-                                <svg className={styles.side_box_channels_edit_button} onMouseEnter={() => { sethoveringOrder(true); }} onMouseOver={(ev) => {onMouseOverTooltipElement(ev, "Order", currents)}} onMouseLeave={() => { sethoveringOrder(false); onMouseLeaveTooltipElement(currents); }} onClick={() => { const currentOrderEdit = !orderEdit; setorderEdit((state) => !state); if(!currentOrderEdit) submitNewCategoryAndChanelOrder(); }} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" id="reorder">
-                                    <path fill="none" d="M0 0h24v24H0V0z"></path>
-                                    <path d="M3 15h18v-2H3v2zm0 4h18v-2H3v2zm0-8h18V9H3v2zm0-6v2h18V5H3z" style={{ transition: "fill 0.25s ease-in-out" }}
-                                        fill={`var(${(() => {
-                                            if (hoveringOrder) {
-                                                if (orderEdit) {
-                                                    return "--cb-color-blue-dark";
+                        {(currents.server?.ownerId === currents.user?.id) && (
+                            <div className={`${styles.side_box_channels_edit_button_holder}`}>
+                                <div>
+                                    <svg className={styles.side_box_channels_edit_button} onMouseEnter={() => { sethoveringOrder(true); }} onMouseOver={(ev) => { onMouseOverTooltipElement(ev, "Order", currents) }} onMouseLeave={() => { sethoveringOrder(false); onMouseLeaveTooltipElement(currents); }} onClick={() => { const currentOrderEdit = !orderEdit; setorderEdit((state) => !state); if (!currentOrderEdit) submitNewCategoryAndChanelOrder(); }} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" id="reorder">
+                                        <path fill="none" d="M0 0h24v24H0V0z"></path>
+                                        <path d="M3 15h18v-2H3v2zm0 4h18v-2H3v2zm0-8h18V9H3v2zm0-6v2h18V5H3z" style={{ transition: "fill 0.25s ease-in-out" }}
+                                            fill={`var(${(() => {
+                                                if (hoveringOrder) {
+                                                    if (orderEdit) {
+                                                        return "--cb-color-blue-dark";
+                                                    } else {
+                                                        return "--cb-color-blue";
+                                                    }
                                                 } else {
-                                                    return "--cb-color-blue";
+                                                    if (orderEdit) {
+                                                        return "--cb-color-blue";
+                                                    } else {
+                                                        return "--cb-color-black";
+                                                    }
                                                 }
-                                            } else {
-                                                if (orderEdit) {
-                                                    return "--cb-color-blue";
-                                                } else {
-                                                    return "--cb-color-black";
-                                                }
-                                            }
-                                        })()
-                                            })`}>
-                                    </path>
-                                </svg>
+                                            })()
+                                                })`}>
+                                        </path>
+                                    </svg>
+                                </div>
                             </div>
-                        </div>
+                        )}
                         {(currents.server?.ownerId !== currents.user?.id || !orderEdit) && currents.Categories.map((category) => {
                             return (
                                 <div key={category.id} className={styles.posr_e}>
@@ -246,7 +251,7 @@ const SideBox: React.FC<Props> = ({ createBoxV, createBoxC, setcreateBoxV, onCli
                                             <div className={styles.channel_element_wraper} onMouseEnter={(ev) => sethoveringChannel(channel)} onMouseLeave={(ev) => hoveringChannel === channel && sethoveringChannel(null)} key={`wraper-${channel.id}`}>
                                                 <div className={`${styles.channel_element} ${currents.channel ? (currents.channel.id == channel.id ? styles.channel_element_active : "") : ""}`} onContextMenu={(ev) => { ev.preventDefault(); onRightClickChannel(channel, ev); }} onClick={() => onClickChannel(channel)} key={channel.id}>
                                                     <span className={styles.channel_name} id={channel.id} key={`channel-${channel.id}`}>{
-                                                        SyntaxHighlight(ChannelNamePatterns, `#${channel.name}`, styles)
+                                                        SyntaxHighlight(ChannelNamePatterns, `#${channel.name}`, styles, "local-sidebar")
                                                     }</span>
                                                 </div>
                                                 {(currents.server?.ownerId === currents.user?.id && hoveringChannel?.id === channel.id) && (
@@ -349,7 +354,7 @@ const SideBox: React.FC<Props> = ({ createBoxV, createBoxC, setcreateBoxV, onCli
                                                                                                     }}
                                                                                                 >
                                                                                                     <span className={styles.channel_name}>
-                                                                                                        {SyntaxHighlight(ChannelNamePatterns, `#${channel.name}`, styles)}
+                                                                                                        {SyntaxHighlight(ChannelNamePatterns, `#${channel.name}`, styles, "local-sidebar")}
                                                                                                     </span>
                                                                                                 </div>
 

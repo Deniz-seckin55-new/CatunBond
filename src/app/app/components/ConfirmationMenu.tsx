@@ -50,6 +50,10 @@ export const ConfirmationMenu: React.FC = () => {
                 currents.setConfirmationMenuText("");
             }, 250);
         }
+
+        setTimeout(() => {
+            setretypeInputText("");
+        }, 250);
     }
 
     const onInputRetype = (text: string) => {

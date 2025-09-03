@@ -5,7 +5,7 @@ import { Category, Channel, ChannelInfo, DirectMessage, Message, SendMessageI, S
 import { DetailedDBUser } from "./socket_utils";
 import emojiNames from "@/data/emojiList.json";
 import { genInvite } from "@/app/api/v1/utils/utils";
-import { BacktickText, CodeText, CodeTextWithStyle, ColoredText, ColoredTextName, ColoredTextRGB, ColorfulText, DoubleBacktickText, EscapedChar, GlitchText, GradientText, LinkText, MentionText, SpoilerText, TextShadowText, UnimportantText, WDText } from "../components/common/StyleTexts";
+import { BacktickText, CodeText, CodeTextWithStyle, ColoredText, ColoredTextName, ColoredTextRGB, ColorfulText, DoubleBacktickText, EscapedChar, GlitchText, GlowingNameText, GradientText, LinkText, MentionText, ServerInviteText, SpoilerText, TextShadowText, UnimportantText, UrlTextStyle, WDText } from "../components/common/StyleTexts";
 import ServerInformation from "../components/settings/ServerInformation";
 import ChannelInformation from "../components/settings/ChannelInformation";
 import ChannelRules from "../components/settings/ChannelRules";
@@ -65,6 +65,7 @@ export enum ExploreBoxMode {
     UserMute = 7,
     UserKick = 8,
     UserBan = 9,
+    UserSelectionScreen = 10,
 }
 
 export interface TooltipInfo {
@@ -101,6 +102,46 @@ export interface Currents {
     ServerUsersDivV: boolean;
     settingsObject: unknown;
     userVariables: UserVariables | null;
+    liveikitRoom: string;
+    livekitShown: boolean;
+    liveKitParticipant: {
+        isMicrophoneEnabled: boolean;
+        isScreenShareEnabled: boolean;
+        isCameraEnabled: boolean;
+        microphoneTrack: any | undefined;
+        cameraTrack: any | undefined;
+        lastMicrophoneError: Error | undefined;
+        lastCameraError: Error | undefined;
+        localParticipant: any;
+    } | null;
+    setLiveKitParticipant: (participant: {
+        isMicrophoneEnabled: boolean;
+        isScreenShareEnabled: boolean;
+        isCameraEnabled: boolean;
+        microphoneTrack: any | undefined;
+        cameraTrack: any | undefined;
+        lastMicrophoneError: Error | undefined;
+        lastCameraError: Error | undefined;
+        localParticipant: any;
+    } | null) => void;
+    fullScreenVideo: HTMLMediaElement | null;
+    fsvIsMirrored: boolean;
+    isChannelLoading: boolean;
+    helpmenuShown: boolean,
+    messageboxRef: HTMLTextAreaElement | null;
+    messageBoxSavedSelection: { start: number, end: number };
+    setTextWritten: (string: string) => void;
+    setsetTextWritten: (setTextWritten: (string: string) => void) => void,
+    setmessageBoxSavedSelection: (s: { start: number, end: number }) => void,
+    setmessageBoxRef: (messageboxRef: HTMLTextAreaElement | null) => void;
+    sethelpmenuShown: (helpmenuShown: boolean) => void;
+    setisChannelLoading: (isChannelLoading: boolean) => void;
+    setFsvIsMirrored: (fsvIsMirrored: boolean) => void;
+    fsvReturnFunction: ((vid: HTMLMediaElement) => void) | null;
+    setFsvReturnFunction: ((f: ((w: HTMLMediaElement) => void)) => void);
+    setFullScreenVideo: (fsv: HTMLMediaElement | null) => void;
+    setLivekitShown: (livekitShown: boolean) => void;
+    setLiveikitRoom: (room: string) => void;
     setUserVariables: (userVariables: UserVariables | null) => void;
     setSettingsObject: (settingsObject: unknown) => void;
     setServerUsersDivV: (ServerUsersDivV: boolean) => void;
@@ -208,11 +249,16 @@ export type ViewingFriendsDiv = 'online' | 'offline' | 'blocked' | 'pending';
 import ustyles from "@/app/app/page.module.css";
 import { UserVariables } from "@/store/variablesStore";
 import AppLayout from "../components/settings/AppLayout";
+import { toast } from "react-toastify";
+import { useCurrents } from "@/store/currents";
+import { useCopyToClipboard } from "usehooks-ts";
 export function renderMatchContent(
     className: string,
     match: RegExpMatchArray,
+    messageId: string,
     children?: React.ReactNode,  // Single ReactNode instead of array
     markersEnabled?: boolean,
+    isReply?: boolean,
 ): React.ReactElement {  // Always return a ReactElement
     // Wrap all returns in React.createElement or JSX
     switch (className) {
@@ -225,7 +271,7 @@ export function renderMatchContent(
         case "colorfulfastTextStyle":
             return <ColorfulText markersEnabled={markersEnabled} time="5s">{children ?? match[1]}</ColorfulText>;
         case "spoilerTextStyle":
-            return <SpoilerText markersEnabled={markersEnabled}>{children ?? match[1]}</SpoilerText>;
+            return <SpoilerText markersEnabled={markersEnabled} messageId={messageId}>{children ?? match[1]}</SpoilerText>;
         case "linkTextStyle":
             return <LinkText markersEnabled={markersEnabled} url={match[2]}>{match[1]}</LinkText>;
         case "linkTextStyleRev":
@@ -287,62 +333,70 @@ export function renderMatchContent(
             return <br />
         case "mentionTextStyle":
             return <MentionText markersEnabled={markersEnabled}>{match[1]}</MentionText>
+        case "serverInviteTextStyle":
+            return <ServerInviteText markersEnabled={markersEnabled}>{match[1]}</ServerInviteText>
+        case "urlLinkTextStyle":
+            return <UrlTextStyle markersEnabled={markersEnabled} isReply={isReply}>{children ?? match[1]}</UrlTextStyle>
+        case "glowingTextNameStyle":
+            return <GlowingNameText markersEnabled={markersEnabled} color={match[1]} quotes={false}>{match[2]}</GlowingNameText>
+        case "glowingTextNameQuoteStyle":
+            return <GlowingNameText markersEnabled={markersEnabled} color={match[1]} quotes={true}>{match[2]}</GlowingNameText>
         default:
             return <span className={ustyles[className]}>{children ?? match[1]}</span>; // Wrap in fragment to ensure ReactElement return
     }
 }
-export function OLDSyntaxHighlight(
-    patterns: SyntaxPattern[],
-    incoming: string,
-    styles: Record<string, string>
-): JSX.Element[] {
-    let elements: (string | JSX.Element)[] = [incoming]; // Start with the full text
-    let lastIndex = 0;
+// export function OLDSyntaxHighlight(
+//     patterns: SyntaxPattern[],
+//     incoming: string,
+//     styles: Record<string, string>
+// ): JSX.Element[] {
+//     let elements: (string | JSX.Element)[] = [incoming]; // Start with the full text
+//     let lastIndex = 0;
 
-    for (const pattern of patterns) {
-        const newElements: (string | JSX.Element)[] = [];
+//     for (const pattern of patterns) {
+//         const newElements: (string | JSX.Element)[] = [];
 
-        for (const el of elements) {
-            if (typeof el === "string") {
-                // If it's plain text, apply syntax highlighting
-                const matches = [...el.matchAll(pattern.pattern)];
-                let cursor = 0;
+//         for (const el of elements) {
+//             if (typeof el === "string") {
+//                 // If it's plain text, apply syntax highlighting
+//                 const matches = [...el.matchAll(pattern.pattern)];
+//                 let cursor = 0;
 
-                for (const match of matches) {
-                    if (match.index === undefined) continue;
+//                 for (const match of matches) {
+//                     if (match.index === undefined) continue;
 
-                    // Add unstyled text before the match
-                    if (cursor < match.index) {
-                        newElements.push(el.slice(cursor, match.index));
-                    }
+//                     // Add unstyled text before the match
+//                     if (cursor < match.index) {
+//                         newElements.push(el.slice(cursor, match.index));
+//                     }
 
-                    // Add styled match
-                    newElements.push(
-                        <span key={`match-${lastIndex++}`} className={`${styles[pattern.className]} ${ustyles.hl}`}>
-                            {renderMatchContent(pattern.className, match)}
-                        </span>
-                    );
+//                     // Add styled match
+//                     newElements.push(
+//                         <span key={`match-${lastIndex++}`} className={`${styles[pattern.className]} ${ustyles.hl}`}>
+//                             {renderMatchContent(pattern.className, match)}
+//                         </span>
+//                     );
 
-                    cursor = match.index + match[0].length;
-                }
+//                     cursor = match.index + match[0].length;
+//                 }
 
-                // Add any remaining text after the last match
-                if (cursor < el.length) {
-                    newElements.push(el.slice(cursor));
-                }
-            } else {
-                // If it's already a JSX element, keep it
-                newElements.push(el);
-            }
-        }
+//                 // Add any remaining text after the last match
+//                 if (cursor < el.length) {
+//                     newElements.push(el.slice(cursor));
+//                 }
+//             } else {
+//                 // If it's already a JSX element, keep it
+//                 newElements.push(el);
+//             }
+//         }
 
-        elements = newElements;
-    }
+//         elements = newElements;
+//     }
 
-    return elements.map((el, index) =>
-        typeof el === "string" ? <span key={`text-${index}`}>{el}</span> : el
-    );
-}
+//     return elements.map((el, index) =>
+//         typeof el === "string" ? <span key={`text-${index}`}>{el}</span> : el
+//     );
+// }
 
 
 export function getLineHeight(element: HTMLElement): number {
@@ -577,10 +631,6 @@ Number.prototype.clamp = function (this: number, min: number, max: number): numb
     return Math.min(Math.max(this, min), max);
 };
 
-export async function copyToClipboard(content: string) {
-    await navigator.clipboard.writeText(content);
-}
-
 export function OpenConfirmationMenu(currents: Currents, question: string, f: (answer: boolean) => void) {
     console.log("Openning Conf.Menu!");
 
@@ -599,6 +649,21 @@ export function OpenConfirmationMenuWithRetype(currents: Currents, question: str
 }
 
 export const AllMessageSyntaxHighlights = [
+    {
+        className: "glowingTextNameStyle",
+        pattern: /(?<!\\)~~([^\"]+)"([^\"]+?)"(?<!\\)~~/gmi
+    },{
+        className: "glowingTextNameQuoteStyle",
+        pattern: /(?<!\\)~~([^\']+)'([^\']+?)'(?<!\\)~~/gmi
+    },
+    {
+        className: "urlLinkTextStyle",
+        pattern: /(?<!\\)(https?:\/\/[^ ]+)/gmi
+    },
+    {
+        className: "serverInviteTextStyle",
+        pattern: /<<<serverinvite>>(.+?)(?<!\\)<\/İ>/gmi
+    },
     {
         className: "mentionTextStyle",
         pattern: /(?<!\\)\@([^ ]+)( |$)/g
@@ -739,3 +804,318 @@ export const getIconOfFileExtension = (fileExtension: string): string | undefine
 
 export const showAutoCompleteMentionRegex = /(?<!\\)\@([^ ]+)( |$)/gmi;
 export const showAutoCompleteMentionRegexTrue = /(?<!\\)\@([^ \n]+)( |$)/gi;
+
+export const SendServerInvites = async (serverId: string, friends: User[], currents: Currents, callbackFn: (() => void) | null) => {
+    try {
+        const response = await axios.post(`/api/v1/servers/${serverId}/invite`, JSON.stringify({
+            users: friends.map(friend => ({ id: friend.id, username: friend.username, avatarUrl: friend.avatarUrl })),
+        }));
+
+        if (response.data.success) {
+            toast.success("Invites sent successfully!");
+        } else {
+            toast.error("Failed to send invites: " + response.data.message);
+            console.error("Failed to send invites:", response.data.message);
+        }
+
+        callbackFn?.();
+    } catch (error) {
+        console.error("Error sending server invites:", error);
+    }
+}
+
+export function getFileDataUrl(file: File) {
+    return new Promise((resolve, reject) => {
+        // Create a FileReader instance
+        const reader = new FileReader();
+
+        // Manages file loading
+        reader.onload = () => resolve(reader.result);
+
+        // Handle any errors
+        reader.onerror = error => reject(error);
+
+        // Read the file as a data URL
+        reader.readAsDataURL(file);
+    });
+}
+
+export function hexToRgb(hex: string) {
+    var result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    return result ? {
+        r: parseInt(result[1], 16),
+        g: parseInt(result[2], 16),
+        b: parseInt(result[3], 16)
+    } : null;
+}
+
+export function loadImage(url: string): Promise<HTMLImageElement> {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = "anonymous"; // avoid tainted canvas
+        img.src = url;
+        img.onload = () => resolve(img);
+        img.onerror = reject;
+    });
+}
+
+export function colorDistance(c1: { r: number; g: number; b: number }, c2: { r: number; g: number; b: number }) {
+    return Math.sqrt(
+        (c1.r - c2.r) ** 2 +
+        (c1.g - c2.g) ** 2 +
+        (c1.b - c2.b) ** 2
+    );
+}
+
+export function isGrayscale(r: number, g: number, b: number, tolerance = 15) {
+    return (
+        Math.abs(r - g) < tolerance &&
+        Math.abs(g - b) < tolerance &&
+        Math.abs(r - b) < tolerance
+    );
+}
+
+export function rgbToHsl(r: number, g: number, b: number) {
+    r /= 255; g /= 255; b /= 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    let h = 0, s = 0, l = (max + min) / 2;
+
+    if (max !== min) {
+        const d = max - min;
+        s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+        switch (max) {
+            case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+            case g: h = (b - r) / d + 2; break;
+            case b: h = (r - g) / d + 4; break;
+        }
+        h /= 6;
+    }
+    return { h, s, l };
+}
+
+export function hslToRgb(h: number, s: number, l: number) {
+    function hue2rgb(p: number, q: number, t: number) {
+        if (t < 0) t += 1; if (t > 1) t -= 1;
+        if (t < 1 / 6) return p + (q - p) * 6 * t;
+        if (t < 1 / 2) return q;
+        if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+        return p;
+    }
+    let r, g, b;
+
+    if (s === 0) r = g = b = l; // achromatic
+    else {
+        const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+        const p = 2 * l - q;
+        r = hue2rgb(p, q, h + 1 / 3);
+        g = hue2rgb(p, q, h);
+        b = hue2rgb(p, q, h - 1 / 3);
+    }
+
+    return {
+        r: Math.round(r * 255),
+        g: Math.round(g * 255),
+        b: Math.round(b * 255),
+    };
+}
+
+export async function getTopDistinctColorsFromUrl(
+    url: string,
+    topN = 2,
+    minDistance = 100
+): Promise<string[]> {
+    try {
+        const img = await loadImage(url);
+
+        const canvas = document.createElement("canvas");
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return [];
+
+        ctx.drawImage(img, 0, 0);
+
+        const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const colorCountMap: Record<string, number> = {};
+
+        for (let i = 0; i < data.length; i += 4) {
+            const alpha = data[i + 3];
+            if (alpha < 128) continue;
+
+            const r = data[i], g = data[i + 1], b = data[i + 2];
+
+            if (isGrayscale(r, g, b)) continue;
+
+            const key = rgbToKey(r, g, b, 12);
+            colorCountMap[key] = (colorCountMap[key] || 0) + 1;
+        }
+
+        const sorted = Object.entries(colorCountMap).sort((a, b) => b[1] - a[1]);
+
+        const distinctColors: { r: number; g: number; b: number }[] = [];
+
+        for (const [key] of sorted) {
+            const color = keyToRgb(key);
+
+            const isDistinct = distinctColors.every(
+                (c) => colorDistance(c, color) >= minDistance
+            );
+
+            if (isDistinct) {
+                distinctColors.push(color);
+                if (distinctColors.length >= topN) break;
+            }
+        }
+
+        return distinctColors.map((c) => {
+            let meow = rgbToHsl(c.r, c.g, c.b);
+            meow.s *= 10;
+
+            let meow2 = hslToRgb(meow.h, meow.s, meow.l);
+
+            return `rgb(${meow2.r},${meow2.g},${meow2.b})`;
+        });
+    } catch (e) {
+        console.error("Image loading failed", e);
+        return [];
+    }
+}
+
+export function rgbToKey(r: number, g: number, b: number, bucketSize = 24): string {
+    // Round each channel down to nearest multiple of bucketSize
+    const rr = Math.floor(r / bucketSize) * bucketSize;
+    const gg = Math.floor(g / bucketSize) * bucketSize;
+    const bb = Math.floor(b / bucketSize) * bucketSize;
+    return `${rr},${gg},${bb}`;
+}
+
+export function keyToRgb(key: string): { r: number; g: number; b: number } {
+    const [r, g, b] = key.split(",").map(Number);
+    return { r, g, b };
+}
+
+export const FunctionAny = (mode: 'Select' | 'All', reShaper: (str: string) => string) => {
+    const messageBox = useCurrents.getState().messageboxRef;
+    if (messageBox) {
+        if (mode === "All") {
+            messageBox.value = reShaper(messageBox.value);
+        } else {
+            messageBox.focus();
+
+            requestAnimationFrame(() => {
+                console.log("This ", messageBox.selectionStart, messageBox.selectionEnd);
+
+                const start = messageBox.selectionStart;
+                const end = messageBox.selectionEnd;
+
+                let text = messageBox.value.slice(start, end);
+
+                text = reShaper(text);
+
+                messageBox.setRangeText(text, start, end, 'select');
+                messageBox.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText" }));
+            });
+        }
+    } else {
+        console.log("no msgbox");
+    }
+}
+
+export const StyleAny = (mode: 'Select' | 'All', startPad: string, endPad: string) => {
+    const messageBox = useCurrents.getState().messageboxRef;
+    if (messageBox) {
+        if (mode === "All") {
+            messageBox.value = startPad + (messageBox.value) + endPad;
+        } else {
+            messageBox.focus();
+
+            requestAnimationFrame(() => {
+                console.log("This ", messageBox.selectionStart, messageBox.selectionEnd);
+
+                const start = messageBox.selectionStart;
+                const end = messageBox.selectionEnd;
+
+                let text = messageBox.value.slice(start, end);
+
+                text = startPad + (text) + endPad;
+
+                messageBox.setRangeText(text, start, end, 'select');
+                messageBox.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText" }));
+            });
+        }
+    }
+}
+
+export const allFunctions : { label: string, shortcut: string, action: (mode: 'Select' | 'All') => void }[] = [
+    { label: "Upper Case", shortcut: "Ctrl+1", action: (mode) => FunctionAny(mode, (x) => x.toLocaleUpperCase()) },
+    { label: "Lower Case", shortcut: "Ctrl+2", action: (mode) => FunctionAny(mode, (x) => x.toLocaleLowerCase()) },
+    { label: "Well Form", shortcut: "Ctrl+3", action: (mode) => FunctionAny(mode, (x) => x.toWellFormed()) },
+    { label: "Normalize", shortcut: "Ctrl+4", action: (mode) => FunctionAny(mode, (x) => x.normalize()) },
+    {
+        label: "Wave Case", shortcut: "Ctrl+5", action: (mode) => FunctionAny(mode, (x) => {
+            let y = "";
+            for (let index = 0; index < x.length; index++) {
+                const element = x[index];
+
+                if (index % 2 === 0)
+                    y += element.toLocaleUpperCase();
+                else
+                    y += element.toLocaleLowerCase();
+            }
+
+            return y;
+        })
+    },
+    {
+        label: "Random Case", shortcut: "Ctrl+6", action: (mode) => FunctionAny(mode, (x) => {
+            let y = "";
+            for (let index = 0; index < x.length; index++) {
+                const element = x[index];
+
+                if (Math.random() > 0.5)
+                    y += element.toLocaleUpperCase();
+                else
+                    y += element.toLocaleLowerCase();
+            }
+
+            return y;
+        })
+    },
+    {
+        label: "Reverse Case", shortcut: "Ctrl+7", action: (mode) => FunctionAny(mode, (x) => {
+            let y = "";
+            for (let index = 0; index < x.length; index++) {
+                const element = x[index];
+
+                if (element === element.toLocaleUpperCase())
+                    y += element.toLocaleLowerCase();
+                else
+                    y += element.toLocaleUpperCase();
+            }
+
+            return y;
+        })
+    },
+    { label: "Reverse Text", shortcut: "Ctrl+8", action: (mode) => FunctionAny(mode, (x) => x.split('').reverse().join('')) },
+];
+
+export const allStyles: { label: string, shortcut: string, action: (mode: 'Select' | 'All') => void }[] = [
+    { label: "Rainbow Effect", shortcut: "Ctrl+Ctrl+1", action: (mode) => StyleAny(mode, "<<<rainbow>>", "</0>") },
+    { label: "Glitch Effect", shortcut: "Ctrl+Ctrl+2", action: (mode) => StyleAny(mode, "<<<hack>>", "</0>") },
+    { label: "Cool Effect", shortcut: "Ctrl+Ctrl+3", action: (mode) => StyleAny(mode, "<<<cool>>", "</0>") },
+    { label: "Colorful Effect", shortcut: "Ctrl+Ctrl+4", action: (mode) => StyleAny(mode, "<<<colorful>>", "</0>") },
+    { label: "Spoiler Text", shortcut: "Ctrl+Ctrl+5", action: (mode) => StyleAny(mode, "||", "||") },
+    { label: "Link Text", shortcut: "Ctrl+Ctrl+6", action: (mode) => StyleAny(mode, "[Link](", ")") },
+    { label: "Colored Text", shortcut: "Ctrl+Ctrl+7", action: (mode) => StyleAny(mode, "%blue\"", "\"") },
+    { label: "Backtick Text", shortcut: "Ctrl+Ctrl+8", action: (mode) => StyleAny(mode, "`", "`") },
+    { label: "Double Backtick Text", shortcut: "Ctrl+Ctrl+A", action: (mode) => StyleAny(mode, "``", "``") },
+    { label: "Code Text", shortcut: "Ctrl+Ctrl+B", action: (mode) => StyleAny(mode, "```:a11y\n", "\n```") },
+    { label: "Glowing Effect", shortcut: "Ctrl+Ctrl+C", action: (mode) => StyleAny(mode, "~~", "~~") },
+    { label: "Unimportant Text", shortcut: "Ctrl+Ctrl+D", action: (mode) => StyleAny(mode, "//", "//") },
+    { label: "Wingdings Text", shortcut: "Ctrl+Ctrl+E", action: (mode) => StyleAny(mode, "<<<wd>>", "</0>") },
+    { label: "Colorful Fast Effect", shortcut: "Ctrl+Ctrl+F", action: (mode) => StyleAny(mode, "<<<colorfulfast>>", "</0>") },
+];
+
+export function isCharNumber(c: string) {
+  return c >= '0' && c[0] <= '9';
+}

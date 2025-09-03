@@ -1,10 +1,13 @@
 import React, { SetStateAction, useEffect, useState } from 'react';
 import styles from '../page.module.css';
 import { useDropzone } from 'react-dropzone'
-import { Category, Channel, Server } from '../utils/socket_utils';
+import { Category, Channel, Server, User } from '../utils/socket_utils';
 import { toast } from 'react-toastify';
 import { useCurrents } from '@/store/currents';
 import axios from 'axios';
+import { Virtuoso } from 'react-virtuoso';
+import { FriendListElement } from './common/FriendListElement';
+import { getFileDataUrl, SendServerInvites } from '../utils/utils';
 
 interface Props {
     createBoxC: Category | null,
@@ -14,27 +17,12 @@ interface Props {
     onClickBackButton: () => void;
     onClickServerJoinButton: (str: string) => void;
     onClickSendFriendRequestButton: (str: string) => void;
+    onClickUserAvatarWithUserId: (userId: string | null, event: React.MouseEvent) => void;
     setLoadingText: React.Dispatch<React.SetStateAction<string>>;
     LoadingText: string;
 }
 
-function getFileDataUrl(file: File) {
-    return new Promise((resolve, reject) => {
-        // Create a FileReader instance
-        const reader = new FileReader();
-
-        // Manages file loading
-        reader.onload = () => resolve(reader.result);
-
-        // Handle any errors
-        reader.onerror = error => reject(error);
-
-        // Read the file as a data URL
-        reader.readAsDataURL(file);
-    });
-}
-
-const ExploreBox: React.FC<Props> = ({ createBoxC, setcreateBoxV, closeExploreBox, onClickJoinButton, onClickBackButton, onClickServerJoinButton, onClickSendFriendRequestButton, setLoadingText, LoadingText }) => {
+const ExploreBox: React.FC<Props> = ({ createBoxC, setcreateBoxV, closeExploreBox, onClickJoinButton, onClickBackButton, onClickServerJoinButton, onClickSendFriendRequestButton, onClickUserAvatarWithUserId, setLoadingText, LoadingText }) => {
     const currents = useCurrents();
 
     useEffect(() => {
@@ -43,6 +31,7 @@ const ExploreBox: React.FC<Props> = ({ createBoxC, setcreateBoxV, closeExploreBo
 
     const [ServerInput, setServerInput] = useState("");
     const [FriendInput, setFriendInput] = useState("");
+    const [selectedUsersList, setSelectedUsersList] = useState<User[]>([]);
     const [boxHeight, setBoxHeight] = useState("50%");
     const [imageurl, setimageUrl] = useState<string>("");
     const [serverCreatePageIndex, setserverCreatePageIndex] = useState<number>(1);
@@ -255,7 +244,7 @@ const ExploreBox: React.FC<Props> = ({ createBoxC, setcreateBoxV, closeExploreBo
             if (data.data) {
                 const gotCategory: Category = data.data;
 
-                currents.setServer({ ...currentServer, categories: [...currentServer.categories, gotCategory]} as Server)
+                currents.setServer({ ...currentServer, categories: [...currentServer.categories, gotCategory] } as Server)
 
                 setLoadingText("Successfully created category!");
                 setTimeout(() => {
@@ -326,6 +315,8 @@ const ExploreBox: React.FC<Props> = ({ createBoxC, setcreateBoxV, closeExploreBo
             setBoxHeight("50%");
         } else if (currents.exploreboxmode === 6) {
             setBoxHeight("50%");
+        } else if (currents.exploreboxmode === 10) {
+            setBoxHeight("75%");
         }
     }, [currents.exploreboxmode]);
 
@@ -403,7 +394,9 @@ const ExploreBox: React.FC<Props> = ({ createBoxC, setcreateBoxV, closeExploreBo
                 {currents.exploreboxmode == 1 && (
                     <>
                         <div className={styles.explore_box_top}>
-                            <button className={styles.explore_box_join_button} onClick={onClickBackButton}>{"<-"}</button>
+                            <button className={styles.explore_box_join_button} onClick={onClickBackButton}>
+                                <img src="/keyboard-backspace-white.svg" width={32} height={32} className={styles.explore_box_back_button_icon} alt="Back" />
+                            </button>
                             <input type="text" id="explore-input-1" className={styles.explore_input_server} placeholder="Server Invite Code" onInput={onServerInputInput} />
                         </div>
                         <button className={styles.explore_box_server_join_button} onClick={() => onClickServerJoinButton(ServerInput)}>Join Server</button>
@@ -484,6 +477,43 @@ const ExploreBox: React.FC<Props> = ({ createBoxC, setcreateBoxV, closeExploreBo
                             <div className={styles.pad2} />
                             <button className={`${styles.explore_box_join_button} ${styles.explore_box_left_bottom}`} onClick={closeExploreBox}>{"Back"}</button>
                             <button className={`${styles.explore_box_join_button} ${styles.explore_box_right_bottom} ${serverCreateButton.disabled && styles.explore_box_button_disabled}`} onClick={onClickCategoryCreateButton} disabled={serverCreateButton.disabled}>{serverCreateButton.text}</button>
+                        </div>
+                    </div>
+                )}
+                {currents.exploreboxmode === 10 && (
+                    <div className={`${styles.explore_box_full_div} ${styles.ow_hidden_both}`}>
+                        <div className={`${styles.center_both} ${styles.wh_full}`}>
+                            <div className={styles.pad1} />
+                            <p className={styles.fontn}>Friend List</p>
+                            {currents.user?.friends && (
+                                <div style={{overflowY: "scroll", height: "40vh"}}>
+                                    {currents.user.friends.map((friend, idx) => {
+                                        const IsSelected = selectedUsersList.some((user) => user.id === friend.id);
+                                        return (
+                                            <FriendListElement
+                                                user={friend}
+                                                IsSelected={IsSelected}
+                                                onClickUserAvatarWithUserId={onClickUserAvatarWithUserId}
+                                                onSelect={(user: User) => {
+                                                    if (!IsSelected) {
+                                                        setSelectedUsersList((state) => [...state, user]);
+                                                    } else {
+                                                        setSelectedUsersList((state) => state.filter(x => x.id !== user.id));
+                                                    }
+                                                }}
+                                                key={`userSelect-meow-${idx}`}
+                                            />
+                                        );
+                                    })}
+                                </div>
+                            )}
+                            <div className={`${styles.flex_rowa}`} style={{ gap: "16px", marginTop: "auto"}}>
+                                <button className={styles.explore_box_user_select_button} onClick={() => { closeExploreBox(); } /* Close Explore Box */}>Back</button>
+                                <button className={styles.explore_box_user_select_green_button} onClick={() => { SendServerInvites(currents.contextmenu.currentID, selectedUsersList, currents, () => {
+                                    setSelectedUsersList([]);
+                                    closeExploreBox();
+                                }); } /* Send API Call & Show Success Screen */}>Send</button>
+                            </div>
                         </div>
                     </div>
                 )}

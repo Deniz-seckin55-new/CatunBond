@@ -33,6 +33,8 @@ const MainBox: React.FC<Props> = ({ onClickServer, onRightClickServer, onClickEx
         if (!currents.user) return;
 
         setServerList(currents.user.servers ?? []);
+
+        console.log(currents.user.servers);
     }, [currents.user]);
 
     useEffect(() => {

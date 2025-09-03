@@ -17,10 +17,12 @@ export function SyntaxHighlight(
     patterns: SyntaxPattern[],
     text: string,
     styles: Record<string, string>,
+    messageId: string,
     markersEnabled: boolean = false,
+    isReply: boolean = false
 ): JSX.Element[] {
     const tree = parseTree(text, patterns);
-    return renderTree(tree, styles, undefined, markersEnabled);
+    return renderTree(tree, styles, undefined, markersEnabled, messageId, isReply);
 }
 
 function parseTree(text: string, patterns: SyntaxPattern[], depth = 0): SyntaxNode[] {
@@ -83,6 +85,8 @@ function renderTree(
     styles: Record<string, string>,
     keyPrefix = "",
     markersEnabled: boolean,
+    messageId: string,
+    isReply: boolean
 ): React.ReactElement[] {  // Explicitly return array of elements
     return nodes.map((node, i) => {
         const key = `${keyPrefix}-${i}`;
@@ -92,14 +96,16 @@ function renderTree(
         }
 
         const childrenContent = node.children
-            ? renderTree(node.children, styles, key, markersEnabled)
+            ? renderTree(node.children, styles, key, markersEnabled, messageId, isReply)
             : undefined;
 
         const rendered = renderMatchContent(
             node.className!,
             node.match!,
+            messageId,
             childrenContent,
             markersEnabled,
+            isReply
         );
 
         if (React.isValidElement(rendered)) {
