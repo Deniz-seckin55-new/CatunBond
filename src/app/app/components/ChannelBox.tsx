@@ -393,10 +393,10 @@ const ChannelBox: React.FC<Props> = ({ onMessageReply, onMessageReact, onMessage
     }, 250);
 
     const nearestUserMessageIndex = useMemo(() =>  messages.findLastIndex(x => x.authorId === currents.user!.id), [messages.length, currents.user?.id]);
-    const nearestUserMessage = useMemo(() => messages[nearestUserMessageIndex], [messages, currents.user?.id]);
+    const nearestUserMessage = useMemo(() => messages[nearestUserMessageIndex], [messages, nearestUserMessageIndex, currents.user?.id]);
     const nearestUserMessageInfo = useMemo(() => MessageInfos.find(x => x.Message.id === nearestUserMessage.id), [messages, currents.user?.id]);
 
-    const messageBoxOnKeyDown = (ev: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    const messageBoxOnKeyDown = useCallback((ev: React.KeyboardEvent<HTMLTextAreaElement>) => {
         if (!autocompleteDivShown) {
             justPressed.current = (true)
             if (ev.key === "Enter") {
@@ -540,7 +540,7 @@ const ChannelBox: React.FC<Props> = ({ onMessageReply, onMessageReact, onMessage
             }
         }
         onMessageScroll();
-    }
+    }, [autocompleteDivShown, currents.user, scrollPageRef, MessageInfos, nearestUserMessage, nearestUserMessageInfo, kbState, lastCtrlTime, callStackBack, callStackFront, messageBoxRef.current, autocompleteSuggestions, autocompleteselectedIndex, textWritten, suggestionRefs.current])
 
     const _onMessageReply = (message: Message) => {
         messagesState.setreplyingTo(message);
@@ -552,12 +552,20 @@ const ChannelBox: React.FC<Props> = ({ onMessageReply, onMessageReact, onMessage
 
         if (!ct.currentTarget) return;
 
-        const x = ct.currentTarget?.getBoundingClientRect().right;
-        const y = ct.currentTarget?.getBoundingClientRect().y - ct.currentTarget.getBoundingClientRect().height / 4;
+        let x = ct.currentTarget.getBoundingClientRect().right;
+        let y = ct.currentTarget.getBoundingClientRect().top - 8;
+
+        // 350 x 450 Emoji Selector Menu Rects
+
+        y = y - 450 < 0 ? 450 : y
+        y = y > window.innerHeight ? window.innerHeight : y
+
+        x = x - 350 < 0 ? 350 : x
+        x = x > window.innerWidth ? window.innerWidth : x
 
         reactionMenuStore.setmessageId(message.id);
 
-        reactionMenuStore.setPosition(x, y.clamp(10, window.innerHeight - ct.currentTarget.getBoundingClientRect().height - 150));
+        reactionMenuStore.setPosition(x, y);
         reactionMenuStore.setOnSelect((emoji) => {
             if (!kbState.some(x => x.toLowerCase() === "shift")) {
                 reactionMenuStore.setShown(false);

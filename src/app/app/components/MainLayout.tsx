@@ -158,21 +158,21 @@ const MainLayout: React.FC = () => {
 
     }
 
-    const onClickBgBlur = () => {
+    const onClickBgBlur = useCallback(() => {
         currents.setExploreBoxV(false);
         userProfileStore.setisShown(false);
         currents.setBgBlurV(false);
-    }
+    }, [])
 
-    const onClickFB = (status: ViewingFriendsDiv) => {
+    const onClickFB = useCallback((status: ViewingFriendsDiv) => {
         currents.setFriendsDivState(status);
-    }
+    }, [])
 
-    const onClickFriendsButton = () => {
+    const onClickFriendsButton = useCallback(() => {
         currents.setFriendsDivV(true);
-    }
+    }, [])
 
-    const onClickServer = (server: Server) => {
+    const onClickServer = useCallback((server: Server) => {
         try {
             currents.setCategories(server.categories);
 
@@ -198,9 +198,7 @@ const MainLayout: React.FC = () => {
         } catch (err) {
             console.error(err);
         }
-
-        // Add class 'server_list_element_image_active' to server jsx element
-    }
+    }, [persistantUserStorage.serverLastChannelList])
 
     const onRightClickServer = (server: Server, ct: React.MouseEvent<HTMLDivElement, MouseEvent>) => {
         currents.setContextMenuXY(ct.pageX.clamp(10, window.innerWidth - ct.currentTarget.getBoundingClientRect().width - 150), ct.pageY.clamp(10, window.innerHeight - ct.currentTarget.getBoundingClientRect().height - 150));

@@ -10,6 +10,8 @@ interface ReactionMenuStore {
     shown: boolean;
     setShown: (shown: boolean) => void;
     setPosition: (x: number, y: number) => void;
+    ref: HTMLDivElement | null;
+    __setRef: (ref: HTMLDivElement | null) => void;
 }
 
 const useReactionMenuStore = create<ReactionMenuStore>((set) => ({
@@ -21,6 +23,8 @@ const useReactionMenuStore = create<ReactionMenuStore>((set) => ({
     shown: false,
     setShown: (shown) => {if(!shown) set({messageId: undefined}); set({ shown }); },
     setPosition: (x, y) => set({ position: { x, y } }),
+    ref: null,
+    __setRef: (ref) => set({ref})
 }));
 
 export default useReactionMenuStore;
