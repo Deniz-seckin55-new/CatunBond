@@ -3976,8 +3976,10 @@
     justify-content: center;
     align-items: center;
 
-    width: min-content;
-    height: min-content;
+    padding: 2px;
+
+    width: fit-content;
+    height: fit-content;
 
     border-radius: 8px;
     border: 2px solid var(--cb-color-black-transparent-soft);

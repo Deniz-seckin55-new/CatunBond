@@ -4,12 +4,22 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
     "node": "npx tsx server.ts",
-    "vc": "npx tsx new-voice-server.ts"
+    "vc": "npx tsx new-voice-server.ts",
+    "electron-start": "node_modules\\electron\\dist\\electron.exe electron.cjs",
+    "dev": "concurrently \"next dev --turbopack\" \"wait-on http://localhost:3000 && npm run electron-start\""
+  },
+  "dist": "electron-builder",
+  "main": "electron.cjs",
+  "build": {
+    "appId": "com.catunbond.chat",
+    "productName": "Catunbond",
+    "directories": {
+      "output": "dist"
+    }
   },
   "dependencies": {
     "@clerk/nextjs": "^6.9.2",
@@ -21,6 +31,7 @@
     "@socket.io/redis-emitter": "^5.1.0",
     "@supabase/supabase-js": "^2.49.4",
     "@tanstack/react-query": "^5.67.2",
+    "@uidotdev/usehooks": "^2.4.1",
     "@upstash/redis": "^1.34.4",
     "@virtuoso.dev/message-list": "^1.10.1",
     "axios": "^1.8.2",
@@ -74,6 +85,9 @@
     "@types/react-syntax-highlighter": "^15.5.13",
     "@types/uuid4": "^2.0.3",
     "@types/webpack-bundle-analyzer": "^4.7.0",
+    "concurrently": "^9.2.1",
+    "electron": "^38.0.0",
+    "electron-builder": "^26.0.12",
     "eslint": "^8",
     "eslint-config-next": "^15.3.1",
     "eslint-plugin-unused-imports": "^4.1.4",
@@ -82,6 +96,7 @@
     "prisma-zod-generator": "^0.8.13",
     "tsx": "^4.19.2",
     "typescript": "^5",
-    "url-loader": "^4.1.1"
+    "url-loader": "^4.1.1",
+    "wait-on": "^8.0.4"
   }
 }

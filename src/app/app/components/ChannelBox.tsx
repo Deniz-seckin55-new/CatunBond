@@ -33,6 +33,7 @@ import LiveKit from './LiveKit';
 import { useChannelBoxRef } from '@/store/channelBoxRef';
 import uuid4, { valid } from 'uuid4';
 import { useInterval } from 'usehooks-ts';
+import { useThrottle } from "@uidotdev/usehooks";
 
 const VoiceSocketURL = "http://localhost:3002";
 
@@ -347,21 +348,15 @@ const ChannelBox: React.FC<Props> = ({ onMessageReply, onMessageReact, onMessage
 
     const renderTextRef = useRef<HTMLSpanElement>(null);
 
+    const throttledText = useThrottle(textWritten, 50)
+
     const renderText = useMemo(() => {
-        return SyntaxHighlight(AllMessageSyntaxHighlights, textWritten, styles, "localtextbox", true);
-    }, [textWritten]);
+        return SyntaxHighlight(AllMessageSyntaxHighlights, throttledText, styles, "localtextbox", true);
+    }, [throttledText]);
 
     useLayoutEffect(() => {
         setTimeout(onMessageScroll, 25);
     }, [textWritten]);
-
-    const onMessageWriteBoxScroll = (ev: React.UIEvent<HTMLTextAreaElement>) => {
-        const el = ev.currentTarget;
-        const box = renderTextRef.current;
-        if (!box) return;
-
-        box.scrollTop = el.scrollTop;
-    }
 
     const messageBoxOnChange = useCallback((ev: React.ChangeEvent<HTMLTextAreaElement>) => {
         ev.currentTarget.value = parseEmojis(ev.currentTarget.value);
@@ -392,155 +387,176 @@ const ChannelBox: React.FC<Props> = ({ onMessageReply, onMessageReact, onMessage
         }
     }, 250);
 
-    const nearestUserMessageIndex = useMemo(() =>  messages.findLastIndex(x => x.authorId === currents.user!.id), [messages.length, currents.user?.id]);
+    const nearestUserMessageIndex = useMemo(() => messages.findLastIndex(x => x.authorId === currents.user!.id), [messages.length, currents.user?.id]);
     const nearestUserMessage = useMemo(() => messages[nearestUserMessageIndex], [messages, nearestUserMessageIndex, currents.user?.id]);
-    const nearestUserMessageInfo = useMemo(() => MessageInfos.find(x => x.Message.id === nearestUserMessage.id), [messages, currents.user?.id]);
+    const nearestUserMessageInfo = useMemo(() => nearestUserMessage ? MessageInfos.find(x => (x.Message.id === nearestUserMessage.id)) : null, [messages, currents.user?.id]);
+    const editModeMessage = useMemo(() => MessageInfos.find(x => x.editMode === true), [MessageInfos])
+
+    const messageBoxOnKeyDown_ACDnotShown_ArrowUp_Focus = (textarea: HTMLTextAreaElement) => {
+        textarea.focus();
+
+        textarea.selectionEnd = textarea.value.length;
+
+        textarea.selectionStart = kbState.includes("Control") ? 0 : textarea.selectionEnd;
+    }
+
+    const messageBoxOnKeyDown_ACDnotShown_ArrowUp = useCallback((current: VirtuosoHandle) => {
+        current.scrollToIndex(nearestUserMessageIndex);
+        if (editModeMessage)
+            UpdateMessageInfo(editModeMessage.Message, "editMode", false, setMessageInfos);
+        UpdateMessageInfo(nearestUserMessage, "editMode", true, setMessageInfos);
+
+        requestAnimationFrame(() => {
+            if (nearestUserMessageInfo && nearestUserMessageInfo.ref) {
+                const textarea = nearestUserMessageInfo.ref.querySelector("textarea");
+
+                if (textarea) {
+                    messageBoxOnKeyDown_ACDnotShown_ArrowUp_Focus(textarea)
+                }
+            }
+        });
+    }, [nearestUserMessageIndex, nearestUserMessage, nearestUserMessageInfo, editModeMessage])
+
+    const messageBoxOnKeyDown_ACDnotShown_CtrlKey_Z = useCallback((before: string, setvalue: (str: string) => void) => {
+        setcallStackBack(x => {
+            const last = x[x.length - 2];
+            if (last) {
+                setvalue(last);
+                setcallStackFront(f => [...f, before]);
+            }
+            return x.slice(0, x.length - 2);
+        });
+    }, [])
+
+    const messageBoxOnKeyDown_ACDnotShown_CtrlKey_Y = useCallback((before: string, setvalue: (str: string) => void) => {
+        setcallStackFront(x => {
+            const last = x[x.length - 1];
+
+            if (last) {
+                setcallStackBack((state) => [...state, before])
+                setvalue(last)
+            }
+
+            return x.slice(0, x.length - 1)
+        });
+    }, [])
+
+    const messageBoxOnKeyDown_ACDnotShown_CtrlKey = useCallback((ev: React.KeyboardEvent<HTMLTextAreaElement>) => {
+        const doubleTap = Date.now() - lastCtrlTime < 300;
+
+        console.log("CTRLPRESS", (Date.now() - lastCtrlTime), lastCtrlTime);
+
+        const key = ev.code[ev.code.length - 1] || ev.key;
+
+        if (isCharNumber(key)) {
+            if (doubleTap) {
+                console.log("DPTAP");
+                const found = allStyles.find(x => x.shortcut.includes(key));
+                found?.action(ev.shiftKey ? "All" : "Select");
+                ev.preventDefault();
+            } else {
+                const found = allFunctions.find(x => x.shortcut.includes(key));
+                found?.action(ev.shiftKey ? "All" : "Select");
+                ev.preventDefault();
+            }
+        }
+
+        if (["A", "B", "C", "D", "E", "F"].includes(key) && doubleTap) {
+            const found = allStyles.find(x => x.shortcut === "Ctrl+Ctrl+" + key);
+            found?.action(ev.shiftKey ? "All" : "Select");
+            ev.preventDefault();
+        }
+
+        if (ev.ctrlKey && ev.key === "z") {
+            ev.preventDefault();
+
+            messageBoxOnKeyDown_ACDnotShown_CtrlKey_Z(ev.currentTarget.value, (value) => { ev.currentTarget.value = value })
+        }
+
+        if (ev.ctrlKey && ev.key === "y") {
+            ev.preventDefault();
+
+            messageBoxOnKeyDown_ACDnotShown_CtrlKey_Y(ev.currentTarget.value, (value) => { ev.currentTarget.value = value })
+        }
+    }, [lastCtrlTime])
+
+    const messageBoxOnKeyDown_ACDnotShown = useCallback((ev: React.KeyboardEvent<HTMLTextAreaElement>) => {
+        if (ev.key === "Enter") {
+            setcallStackBack([]);
+            setcallStackFront([]);
+        }
+
+        onKeyDownInput(ev);
+
+        if (ev.key === "ArrowUp" && ev.currentTarget.selectionEnd === 0) {
+            if (currents.user && scrollPageRef.current)
+                messageBoxOnKeyDown_ACDnotShown_ArrowUp(scrollPageRef.current)
+        }
+
+        if (ev.ctrlKey) {
+            messageBoxOnKeyDown_ACDnotShown_CtrlKey(ev)
+        }
+    }, [currents.user])
+
+    const messageBoxOnKeyDown_ACDisShown_Enter = (setvalue: (str: string) => void) => {
+        if (matchType === "Emoji") {
+            const newText = parseEmojis(textWritten.replace(showAutoCompleteEmojiRegex, ":" + autocompleteSuggestions[autocompleteselectedIndex] + ":"));
+            setvalue(newText);
+            settextWritten(newText);
+        } else if (matchType === "Mention") {
+            const newText2 = textWritten.replace(showAutoCompleteMentionRegex, "@" + autocompleteSuggestions[autocompleteselectedIndex] + " ");
+            setvalue(newText2);
+            settextWritten(newText2);
+        }
+    }
+
+    const messageBoxOnKeyDown_ACDisShown = useCallback((evKey: string, preventDefault: () => void) => {
+        if (evKey === "ArrowUp") {
+            const s = autocompleteselectedIndex;
+            preventDefault();
+            let newS = s > 0 ? s - 1 : s;
+            if (s - 1 === -1) {
+                newS = autocompleteSuggestions.length - 1;
+            }
+            setautocompleteselectedIndex(newS);
+            if (suggestionRefs && suggestionRefs.current[newS])
+                suggestionRefs.current[newS]!.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'center',
+                });
+        } else if (evKey === "ArrowDown") {
+            preventDefault();
+            const s = autocompleteselectedIndex;
+            let newS = s < autocompleteSuggestions.length - 1 ? s + 1 : s;
+            if (s + 1 === autocompleteSuggestions.length) {
+                newS = 0;
+            }
+            setautocompleteselectedIndex(newS);
+            if (suggestionRefs && suggestionRefs.current[newS])
+                suggestionRefs.current[newS]!.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'center',
+                });
+        } else if (evKey === "Enter") {
+            console.log("Selected suggestion: ", autocompleteSuggestions[autocompleteselectedIndex]);
+            preventDefault();
+            if (messageBoxRef.current)
+                messageBoxOnKeyDown_ACDisShown_Enter((value) => { messageBoxRef.current!.value = value })
+        }
+    }, [autocompleteselectedIndex, suggestionRefs, autocompleteSuggestions])
 
     const messageBoxOnKeyDown = useCallback((ev: React.KeyboardEvent<HTMLTextAreaElement>) => {
         if (!autocompleteDivShown) {
             justPressed.current = (true)
-            if (ev.key === "Enter") {
-                setcallStackBack([]);
-                setcallStackFront([]);
-            }
-
-            onKeyDownInput(ev);
-
-            if (ev.key === "ArrowUp" && ev.currentTarget.selectionEnd === 0) {
-                if (!currents.user) return;
-
-                if (scrollPageRef.current) {
-                    scrollPageRef.current.scrollToIndex(nearestUserMessageIndex);
-                    const editModeMessage = MessageInfos.find(x => x.editMode === true);
-                    if (editModeMessage)
-                        UpdateMessageInfo(editModeMessage.Message, "editMode", false, setMessageInfos);
-                    UpdateMessageInfo(nearestUserMessage, "editMode", true, setMessageInfos);
-
-                    requestAnimationFrame(() => {
-                        if (nearestUserMessageInfo && nearestUserMessageInfo.ref) {
-                            const textarea = nearestUserMessageInfo.ref.querySelector("textarea");
-
-                            if (textarea) {
-                                textarea.focus();
-
-                                textarea.selectionEnd = textarea.value.length;
-
-                                console.log(kbState);
-
-                                textarea.selectionStart = kbState.includes("Control") ? 0 : textarea.selectionEnd;
-                            }
-                        }
-                    });
-                }
-            }
-
-            if (ev.ctrlKey) {
-                const doubleTap = Date.now() - lastCtrlTime < 300;
-
-                console.log("CTRLPRESS", (Date.now() - lastCtrlTime), lastCtrlTime);
-
-                const key = ev.code[ev.code.length - 1] || ev.key;
-
-                if (isCharNumber(key)) {
-                    if (doubleTap) {
-                        console.log("DPTAP");
-                        const found = allStyles.find(x => x.shortcut.includes(key));
-                        found?.action(ev.shiftKey ? "All" : "Select");
-                        ev.preventDefault();
-                    } else {
-                        const found = allFunctions.find(x => x.shortcut.includes(key));
-                        found?.action(ev.shiftKey ? "All" : "Select");
-                        ev.preventDefault();
-                    }
-                }
-
-                if (["A", "B", "C", "D", "E", "F"].includes(key) && doubleTap) {
-                    const found = allStyles.find(x => x.shortcut === "Ctrl+Ctrl+" + key);
-                    found?.action(ev.shiftKey ? "All" : "Select");
-                    ev.preventDefault();
-                }
-
-                if (ev.ctrlKey && ev.key === "z") {
-                    ev.preventDefault();
-
-                    const before = ev.currentTarget.value;
-
-                    const last = callStackBack[callStackBack.length - 2];
-
-                    setcallStackBack(x => x.slice(0, x.length - 2));
-
-                    if (last) {
-                        ev.currentTarget.value = last;
-                        setcallStackFront(x => [...x, before]);
-                        console.log("popping!", last);
-                    }
-
-                    return;
-                }
-
-                if (ev.ctrlKey && ev.key === "y") {
-                    ev.preventDefault();
-
-                    console.log("CSF", callStackFront);
-
-                    const last = callStackFront[callStackFront.length - 1];
-
-                    setcallStackFront(x => x.slice(0, x.length - 1));
-
-                    if (last)
-                        ev.currentTarget.value = last;
-
-                    return;
-                }
-            }
+            messageBoxOnKeyDown_ACDnotShown(ev)
         }
         else {
             if (!ev.target) return;
 
-            if (ev.key === "ArrowUp" && autocompleteDivShown) {
-                const s = autocompleteselectedIndex;
-                ev.preventDefault();
-                let newS = s > 0 ? s - 1 : s;
-                if (s - 1 === -1) {
-                    newS = autocompleteSuggestions.length - 1;
-                }
-                setautocompleteselectedIndex(newS);
-                if (suggestionRefs && suggestionRefs.current[newS])
-                    suggestionRefs.current[newS]!.scrollIntoView({
-                        behavior: 'smooth',
-                        block: 'center',
-                    });
-            } else if (ev.key === "ArrowDown" && autocompleteDivShown) {
-                ev.preventDefault();
-                const s = autocompleteselectedIndex;
-                let newS = s < autocompleteSuggestions.length - 1 ? s + 1 : s;
-                if (s + 1 === autocompleteSuggestions.length) {
-                    newS = 0;
-                }
-                setautocompleteselectedIndex(newS);
-                if (suggestionRefs && suggestionRefs.current[newS])
-                    suggestionRefs.current[newS]!.scrollIntoView({
-                        behavior: 'smooth',
-                        block: 'center',
-                    });
-            } else if (ev.key === "Enter" && autocompleteDivShown) {
-                console.log("Selected suggestion: ", autocompleteSuggestions[autocompleteselectedIndex]);
-                ev.preventDefault();
-                if (messageBoxRef.current) {
-                    if (matchType === "Emoji") {
-                        const newText = parseEmojis(textWritten.replace(showAutoCompleteEmojiRegex, ":" + autocompleteSuggestions[autocompleteselectedIndex] + ":"));
-                        messageBoxRef.current.value = newText;
-                        settextWritten(newText);
-                    } else if (matchType === "Mention") {
-                        const newText2 = textWritten.replace(showAutoCompleteMentionRegex, "@" + autocompleteSuggestions[autocompleteselectedIndex] + " ");
-                        messageBoxRef.current.value = newText2;
-                        settextWritten(newText2);
-                    }
-                }
-            }
+            messageBoxOnKeyDown_ACDisShown(ev.key, ev.preventDefault)
         }
         onMessageScroll();
-    }, [autocompleteDivShown, currents.user, scrollPageRef, MessageInfos, nearestUserMessage, nearestUserMessageInfo, kbState, lastCtrlTime, callStackBack, callStackFront, messageBoxRef.current, autocompleteSuggestions, autocompleteselectedIndex, textWritten, suggestionRefs.current])
+    }, [autocompleteDivShown])
 
     const _onMessageReply = (message: Message) => {
         messagesState.setreplyingTo(message);
@@ -897,6 +913,25 @@ const ChannelBox: React.FC<Props> = ({ onMessageReply, onMessageReact, onMessage
         setElement(chRef.current);
     }, [chRef]);
 
+    const MessageBoxOnKeyUp = useCallback((ev: React.KeyboardEvent) => {
+        if (ev.key === "Control") { setlastCtrlTime(Date.now()) }
+    }, [])
+
+    const textareaProps = useMemo(() => {
+        return {
+            className: `${styles.posr_e} ${styles.contenteditable} ${styles.msg_typer} ${(!currents.channel || (currentChannelInfo && ((currentChannelInfo as ChannelInfo).readOnly))) && styles.msg_disabled}`,
+            disabled: messageBoxDisabled,
+            style: { opacity: 0.25 },
+            onChange: messageBoxOnChange,
+            onKeyDown: messageBoxOnKeyDown,
+            onScroll: onMessageScroll,
+            onContextMenu: (ev: React.MouseEvent) => onContextMenuTextarea(ev),
+            onSelect: (ev: React.SyntheticEvent) => onSelectTextarea(ev),
+            onKeyUp: MessageBoxOnKeyUp,
+            id: "message_box_main",
+        }
+    }, [messageBoxDisabled, currents.channel, currentChannelInfo])
+
     if (currents.isChannelLoading) {
         return (
             <div id="channel-box" className={styles.channel_box}>
@@ -1033,7 +1068,7 @@ const ChannelBox: React.FC<Props> = ({ onMessageReply, onMessageReact, onMessage
 
                             return <MessageElement {...MessageElementProps} key={message.id} />
                         })} */}
-                        <Virtuoso totalCount={messagesLength} overscan={Number.MAX_SAFE_INTEGER} data={messages} initialTopMostItemIndex={messages.length - 1} startReached={onReachStart} endReached={onReachEnd} onScroll={onScrollMessages} ref={scrollPageRef} style={{ width: "100%", height: "100%" }} onLoadedData={() => scrollPageRef.current?.scrollToIndex(messages.length - 1)} itemContent={(i, message) => {
+                        <Virtuoso totalCount={messagesLength} overscan={2000} data={messages} initialTopMostItemIndex={messages.length - 1} startReached={onReachStart} endReached={onReachEnd} onScroll={onScrollMessages} ref={scrollPageRef} style={{ width: "100%", height: "100%" }} onLoadedData={() => scrollPageRef.current?.scrollToIndex(messages.length - 1)} itemContent={(i, message) => {
                             const MessageElementProps = {
                                 message,
                                 hoveredMessageId: hoveredMessageId,
@@ -1097,7 +1132,7 @@ const ChannelBox: React.FC<Props> = ({ onMessageReply, onMessageReact, onMessage
                     )}
                     <div className={`${styles.message_box_wraper} ${messagesState.replyingTo && (styles.message_box_wraper_reply)}`}>
                         <div className={styles.posr_h}>
-                            <textarea className={`${styles.posr_e} ${styles.contenteditable} ${styles.msg_typer} ${(!currents.channel || (currentChannelInfo && ((currentChannelInfo as ChannelInfo).readOnly))) && styles.msg_disabled}`} disabled={messageBoxDisabled} style={{ opacity: 0.25 }} onWheel={onMessageScroll} onChange={messageBoxOnChange} onKeyDown={messageBoxOnKeyDown} onScroll={onMessageWriteBoxScroll} onContextMenu={(ev) => onContextMenuTextarea(ev)} onSelect={(ev) => onSelectTextarea(ev)} onKeyUp={(ev) => { if (ev.key === "Control") { setlastCtrlTime(Date.now()) } }} id="message_box_main" ref={messageBoxRef} />
+                            <textarea {...textareaProps} ref={messageBoxRef} />
                             <span className={`${styles.posr_e} ${styles.msg_overlay} ${styles.no_touch} ${styles.msg_typer}`} style={{ overflow: "hidden", whiteSpace: "pre-wrap" }} ref={renderTextRef}>{renderText}</span>
                         </div>
                         <div className={styles.message_box_actions}>

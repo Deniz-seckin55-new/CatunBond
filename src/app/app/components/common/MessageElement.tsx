@@ -192,8 +192,7 @@ export const MessageElement: React.FC<Props> = memo(({ message, hoveredMessageId
                     return (
                         <div className={`${styles.message_reaction} ${reaction.userReacted ? styles.message_reaction_active : ''}`} key={reaction.id}>
                             <div className={styles.flex_rowa} onMouseOver={(ev) => { onMouseOverTooltipElement(ev, `${getNameOfEmoji(reaction.emojiName)}`, currents) }} onMouseLeave={(ev) => { onMouseLeaveTooltipElement(currents) }} onClick={() => addReactionToMessage(message.id, message.channelId, reaction.emojiName)}>
-                                <span>{parseEmojis(`:${reaction.emojiName}:`)}</span>
-                                <span>{reaction.count}</span>
+                                <span>{parseEmojis(`:${reaction.emojiName}: ${reaction.count}`)}</span>
                             </div>
                         </div>
                     );
