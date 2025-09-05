@@ -389,16 +389,8 @@ const ChannelBox: React.FC<Props> = ({ onMessageReply, onMessageReact, onMessage
 
     const nearestUserMessageIndex = useMemo(() => messages.findLastIndex(x => x.authorId === currents.user!.id), [messages.length, currents.user?.id]);
     const nearestUserMessage = useMemo(() => messages[nearestUserMessageIndex], [messages, nearestUserMessageIndex, currents.user?.id]);
-    const nearestUserMessageInfo = useMemo(() => nearestUserMessage ? MessageInfos.find(x => (x.Message.id === nearestUserMessage.id)) : null, [messages, currents.user?.id]);
+    const nearestUserMessageInfo = useMemo(() => nearestUserMessage ? MessageInfos.find(x => (x.Message.id === nearestUserMessage.id)) : null, [messages, MessageInfos, currents.user?.id]);
     const editModeMessage = useMemo(() => MessageInfos.find(x => x.editMode === true), [MessageInfos])
-
-    const messageBoxOnKeyDown_ACDnotShown_ArrowUp_Focus = (textarea: HTMLTextAreaElement) => {
-        textarea.focus();
-
-        textarea.selectionEnd = textarea.value.length;
-
-        textarea.selectionStart = kbState.includes("Control") ? 0 : textarea.selectionEnd;
-    }
 
     const messageBoxOnKeyDown_ACDnotShown_ArrowUp = useCallback((current: VirtuosoHandle) => {
         current.scrollToIndex(nearestUserMessageIndex);
@@ -407,15 +399,23 @@ const ChannelBox: React.FC<Props> = ({ onMessageReply, onMessageReact, onMessage
         UpdateMessageInfo(nearestUserMessage, "editMode", true, setMessageInfos);
 
         requestAnimationFrame(() => {
+            console.log("textarea",nearestUserMessageInfo?.ref)
             if (nearestUserMessageInfo && nearestUserMessageInfo.ref) {
-                const textarea = nearestUserMessageInfo.ref.querySelector("textarea");
+                let textarea = nearestUserMessageInfo.ref.querySelector("textarea");
 
                 if (textarea) {
-                    messageBoxOnKeyDown_ACDnotShown_ArrowUp_Focus(textarea)
+                    textarea.focus();
+                    console.log("focused on textarea")
+
+                    textarea.selectionEnd = textarea.value.length;
+
+                    textarea.selectionStart = kbState.includes("Control") ? 0 : textarea.selectionEnd;
+                } else {
+                    console.log("no textarea??")                    
                 }
             }
         });
-    }, [nearestUserMessageIndex, nearestUserMessage, nearestUserMessageInfo, editModeMessage])
+    }, [nearestUserMessageIndex, nearestUserMessage, nearestUserMessageInfo, editModeMessage, kbState])
 
     const messageBoxOnKeyDown_ACDnotShown_CtrlKey_Z = useCallback((before: string, setvalue: (str: string) => void) => {
         setcallStackBack(x => {
@@ -480,7 +480,7 @@ const ChannelBox: React.FC<Props> = ({ onMessageReply, onMessageReact, onMessage
         }
     }, [lastCtrlTime])
 
-    const messageBoxOnKeyDown_ACDnotShown = useCallback((ev: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    const messageBoxOnKeyDown_ACDnotShown = (ev: React.KeyboardEvent<HTMLTextAreaElement>) => {
         if (ev.key === "Enter") {
             setcallStackBack([]);
             setcallStackFront([]);
@@ -496,7 +496,7 @@ const ChannelBox: React.FC<Props> = ({ onMessageReply, onMessageReact, onMessage
         if (ev.ctrlKey) {
             messageBoxOnKeyDown_ACDnotShown_CtrlKey(ev)
         }
-    }, [currents.user])
+    }
 
     const messageBoxOnKeyDown_ACDisShown_Enter = (setvalue: (str: string) => void) => {
         if (matchType === "Emoji") {
@@ -510,10 +510,11 @@ const ChannelBox: React.FC<Props> = ({ onMessageReply, onMessageReact, onMessage
         }
     }
 
-    const messageBoxOnKeyDown_ACDisShown = useCallback((evKey: string, preventDefault: () => void) => {
-        if (evKey === "ArrowUp") {
+    const messageBoxOnKeyDown_ACDisShown = useCallback((ev: React.KeyboardEvent<HTMLTextAreaElement>) => {
+        console.log("acdisshown", ev.key)
+        if (ev.key === "ArrowUp") {
             const s = autocompleteselectedIndex;
-            preventDefault();
+            ev.preventDefault();
             let newS = s > 0 ? s - 1 : s;
             if (s - 1 === -1) {
                 newS = autocompleteSuggestions.length - 1;
@@ -524,8 +525,8 @@ const ChannelBox: React.FC<Props> = ({ onMessageReply, onMessageReact, onMessage
                     behavior: 'smooth',
                     block: 'center',
                 });
-        } else if (evKey === "ArrowDown") {
-            preventDefault();
+        } else if (ev.key === "ArrowDown") {
+            ev.preventDefault();
             const s = autocompleteselectedIndex;
             let newS = s < autocompleteSuggestions.length - 1 ? s + 1 : s;
             if (s + 1 === autocompleteSuggestions.length) {
@@ -537,15 +538,16 @@ const ChannelBox: React.FC<Props> = ({ onMessageReply, onMessageReact, onMessage
                     behavior: 'smooth',
                     block: 'center',
                 });
-        } else if (evKey === "Enter") {
+        } else if (ev.key === "Enter") {
             console.log("Selected suggestion: ", autocompleteSuggestions[autocompleteselectedIndex]);
-            preventDefault();
+            ev.preventDefault();
             if (messageBoxRef.current)
                 messageBoxOnKeyDown_ACDisShown_Enter((value) => { messageBoxRef.current!.value = value })
         }
     }, [autocompleteselectedIndex, suggestionRefs, autocompleteSuggestions])
 
-    const messageBoxOnKeyDown = useCallback((ev: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    const messageBoxOnKeyDown = (ev: React.KeyboardEvent<HTMLTextAreaElement>) => {
+        console.log("MSGA", autocompleteDivShown)
         if (!autocompleteDivShown) {
             justPressed.current = (true)
             messageBoxOnKeyDown_ACDnotShown(ev)
@@ -553,10 +555,10 @@ const ChannelBox: React.FC<Props> = ({ onMessageReply, onMessageReact, onMessage
         else {
             if (!ev.target) return;
 
-            messageBoxOnKeyDown_ACDisShown(ev.key, ev.preventDefault)
+            messageBoxOnKeyDown_ACDisShown(ev)
         }
         onMessageScroll();
-    }, [autocompleteDivShown])
+    }
 
     const _onMessageReply = (message: Message) => {
         messagesState.setreplyingTo(message);
@@ -917,21 +919,6 @@ const ChannelBox: React.FC<Props> = ({ onMessageReply, onMessageReact, onMessage
         if (ev.key === "Control") { setlastCtrlTime(Date.now()) }
     }, [])
 
-    const textareaProps = useMemo(() => {
-        return {
-            className: `${styles.posr_e} ${styles.contenteditable} ${styles.msg_typer} ${(!currents.channel || (currentChannelInfo && ((currentChannelInfo as ChannelInfo).readOnly))) && styles.msg_disabled}`,
-            disabled: messageBoxDisabled,
-            style: { opacity: 0.25 },
-            onChange: messageBoxOnChange,
-            onKeyDown: messageBoxOnKeyDown,
-            onScroll: onMessageScroll,
-            onContextMenu: (ev: React.MouseEvent) => onContextMenuTextarea(ev),
-            onSelect: (ev: React.SyntheticEvent) => onSelectTextarea(ev),
-            onKeyUp: MessageBoxOnKeyUp,
-            id: "message_box_main",
-        }
-    }, [messageBoxDisabled, currents.channel, currentChannelInfo])
-
     if (currents.isChannelLoading) {
         return (
             <div id="channel-box" className={styles.channel_box}>
@@ -1132,7 +1119,16 @@ const ChannelBox: React.FC<Props> = ({ onMessageReply, onMessageReact, onMessage
                     )}
                     <div className={`${styles.message_box_wraper} ${messagesState.replyingTo && (styles.message_box_wraper_reply)}`}>
                         <div className={styles.posr_h}>
-                            <textarea {...textareaProps} ref={messageBoxRef} />
+                            <textarea className={`${styles.posr_e} ${styles.contenteditable} ${styles.msg_typer} ${(!currents.channel || (currentChannelInfo && ((currentChannelInfo as ChannelInfo).readOnly))) && styles.msg_disabled}`} disabled={messageBoxDisabled}
+                                style={{ opacity: 0.25 }}
+                                onChange={messageBoxOnChange}
+                                onKeyDown={messageBoxOnKeyDown}
+                                onScroll={onMessageScroll}
+                                onContextMenu={(ev: React.MouseEvent) => onContextMenuTextarea(ev)}
+                                onSelect={(ev: React.SyntheticEvent) => onSelectTextarea(ev)}
+                                onKeyUp={MessageBoxOnKeyUp}
+                                id={"message_box_main"}
+                                ref={messageBoxRef} />
                             <span className={`${styles.posr_e} ${styles.msg_overlay} ${styles.no_touch} ${styles.msg_typer}`} style={{ overflow: "hidden", whiteSpace: "pre-wrap" }} ref={renderTextRef}>{renderText}</span>
                         </div>
                         <div className={styles.message_box_actions}>

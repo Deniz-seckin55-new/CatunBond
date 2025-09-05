@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import styles from '../page.module.css';
 
 import {
@@ -1145,19 +1145,24 @@ const MainLayout: React.FC = () => {
     }
 
     const ips = useImagePreviewStore();
+    const editModeMessage = useMemo(() => MessageInfos.find(x => x.editMode === true), [MessageInfos])
 
-    const onKeyDown = useCallback((event: KeyboardEvent) => {
+    const onKeyDown = (event: KeyboardEvent) => {
         console.log("keydown ", event.key, event.code);
+
+        let intr = false
 
         kb.setkbStateLambda((prev) => [...prev, event.key]);
         if (event.ctrlKey && event.key == 'f') {
             event.preventDefault();
+            intr = true
             if (!currents.ExploreBoxV)
                 onClickSearch();
             else
                 closeExploreBox();
         }
         if (event.key == 'Escape') {
+            intr = true
             closeExploreBox();
             currents.setContextMenuShown(false);
             setcreateBoxV(false);
@@ -1169,13 +1174,29 @@ const MainLayout: React.FC = () => {
         if (event.code == "Space") {
             console.log(ips.shown);
             if (ips.shown) {
+                intr = true
                 ips.setZoomFactor(1);
                 ips.setPos({ x: 0, y: 0 });
 
                 event.preventDefault();
             }
         }
-    }, [ips.shown]);
+
+        intr = intr || ["ArrowDown", "ArrowUp"].includes(event.key) || !!editModeMessage
+
+        console.log("intr", intr)
+
+        if(!intr && currents.channel) {
+            const found = channelInfoStore.getExistingInfo(currents.channel.id)
+
+            if(found && !found.readOnly) {
+                currents.messageboxRef?.focus()
+                console.log("intrf focusing")
+            } else {
+                console.log("intrf",found,found?.readOnly)
+            }
+        }
+    }
 
     useEffect(() => {
         const fn = async () => {
@@ -1217,13 +1238,13 @@ const MainLayout: React.FC = () => {
     useEffect(() => {
         window.addEventListener('keydown', onKeyDown);
         return () => window.removeEventListener('keydown', onKeyDown);
-    }, [currents.ExploreBoxV]);
+    }, [currents.channel, currents.messageboxRef, editModeMessage, ips.shown]);
 
 
     useEffect(() => {
         window.addEventListener('keyup', onKeyUp);
         return () => window.removeEventListener('keyup', onKeyUp);
-    }, [currents.ExploreBoxV]);
+    }, []);
 
     useEffect(() => {
         if (currents.userFetching) return; // Make sure we aren't fetching two times at once
