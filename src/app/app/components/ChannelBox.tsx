@@ -393,6 +393,8 @@ const ChannelBox: React.FC<Props> = ({ onMessageReply, onMessageReact, onMessage
     const editModeMessage = useMemo(() => MessageInfos.find(x => x.editMode === true), [MessageInfos])
 
     const messageBoxOnKeyDown_ACDnotShown_ArrowUp = useCallback((current: VirtuosoHandle) => {
+        if(!nearestUserMessage) return
+
         current.scrollToIndex(nearestUserMessageIndex);
         if (editModeMessage)
             UpdateMessageInfo(editModeMessage.Message, "editMode", false, setMessageInfos);

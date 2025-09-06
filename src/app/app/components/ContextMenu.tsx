@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import styles from '../page.module.css';
 import {
     ExploreBoxMode,
@@ -108,7 +108,7 @@ const ContextMenu: React.FC<Props> = (props) => {
         }
     }
 
-    useEffect(() => {
+    useLayoutEffect(() => {
         if (!currents.contextmenu.shown) return;
 
         if (ContextMenuRef.current) {
@@ -116,7 +116,7 @@ const ContextMenu: React.FC<Props> = (props) => {
         } else {
             CheckRectWait();
         }
-    }, [ContextMenuRef.current, currents.contextmenu.shown, currents.contextmenu.x, currents.contextmenu.y]);
+    }, [!!ContextMenuRef.current, currents.contextmenu.shown, currents.contextmenu.x, currents.contextmenu.y]);
 
     const UserViewProfile = useCallback(() => {
         currents.setBgBlurV(true);
@@ -127,7 +127,8 @@ const ContextMenu: React.FC<Props> = (props) => {
         currents.setContextMenuShown(false);
     }, [currents.contextmenu.currentID]);
     const UserCall = useCallback(() => {
-        const currentUser: User | null = isObjectNotNull(currents.contextmenu.currentObject) ? currents.contextmenu.currentObject as User : null;
+        const currentUser: User | null = (currents.contextmenu.currentObject as any).author ?? currents.contextmenu.currentObject
+        console.log("WUSS",currentUser)
 
         if (!currentUser) return;
 

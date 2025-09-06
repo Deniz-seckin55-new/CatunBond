@@ -7,7 +7,7 @@ import React, { memo, useCallback, useEffect, useMemo, useRef } from "react";
 import styles from "../../page.module.css";
 import { Attachment, JsonAttachments, Message } from "../../utils/socket_utils";
 import { SyntaxHighlight } from "../../utils/syntax";
-import { AllMessageSyntaxHighlights, getEmojiOfName, getIconOfFileExtension, GetMessageDateString, getNameOfEmoji, MessageInfo, onMouseLeaveTooltipElement, onMouseOverTooltipElement, parseEmojis } from "../../utils/utils";
+import { allEmojiDataList, AllMessageSyntaxHighlights, getEmojiOfName, getIconOfFileExtension, GetMessageDateString, getNameOfEmoji, MessageInfo, onMouseLeaveTooltipElement, onMouseOverTooltipElement, parseEmojis } from "../../utils/utils";
 import useReactionMenuStore from "@/store/reactionMenu";
 import emojiList from "@/data/emojiList.json";
 import Image from "next/image";
@@ -43,6 +43,8 @@ export const MessageElement: React.FC<Props> = memo(({ message, hoveredMessageId
     const [_, copyToClipboard] = useCopyToClipboard();
 
     const downloadFile = useDownload();
+
+    console.log(`🔄 message ${message.id} re-rendered`);
 
     const ref = useRef<HTMLDivElement | null>(null);
     // useEffect(() => {
@@ -93,12 +95,12 @@ export const MessageElement: React.FC<Props> = memo(({ message, hoveredMessageId
         currents.setContextMenuShown(true);
     }
 
-    const messageinfo: MessageInfo = {
+    const messageinfo_ref = useRef<MessageInfo>({
         deleteConfirm: false,
         editMode: false,
         Message: message,
         ref: null
-    };
+    });
     // useEffect(() => {
     //     console.log("Setting message info for message", messageinfo.Message.id);
     //     setMessageInfos((prev: MessageInfo[]) => [...prev, messageinfo]);
@@ -106,9 +108,9 @@ export const MessageElement: React.FC<Props> = memo(({ message, hoveredMessageId
 
     useEffect(() => {
         if (ref.current) {
-            messageinfo.ref = ref.current;
+            messageinfo_ref.current.ref = ref.current;
 
-            setMessageInfos((prev) => (prev.findIndex(x => x.Message.id === message.id) !== -1) ? prev.map(x => x.Message.id === messageinfo.Message.id ? messageinfo : x) : [...prev, messageinfo]);
+            setMessageInfos((prev) => (prev.findIndex(x => x.Message.id === message.id) !== -1) ? prev.map(x => x.Message.id === messageinfo_ref.current.Message.id ? messageinfo_ref.current : x) : [...prev, messageinfo_ref.current]);
 
             console.log("Added message ", message.id, " to MessageInfos", { MessageInfos });
         }
@@ -192,7 +194,7 @@ export const MessageElement: React.FC<Props> = memo(({ message, hoveredMessageId
                     return (
                         <div className={`${styles.message_reaction} ${reaction.userReacted ? styles.message_reaction_active : ''}`} key={reaction.id}>
                             <div className={styles.flex_rowa} onMouseOver={(ev) => { onMouseOverTooltipElement(ev, `${getNameOfEmoji(reaction.emojiName)}`, currents) }} onMouseLeave={(ev) => { onMouseLeaveTooltipElement(currents) }} onClick={() => addReactionToMessage(message.id, message.channelId, reaction.emojiName)}>
-                                <span>{parseEmojis(`:${reaction.emojiName}: ${reaction.count}`)}</span>
+                                <span>{allEmojiDataList.find(x => x.name === reaction.emojiName)?.emoji} {reaction.count}</span>
                             </div>
                         </div>
                     );
@@ -204,10 +206,10 @@ export const MessageElement: React.FC<Props> = memo(({ message, hoveredMessageId
     const messageIsMentioned = useMemo(() => { return currents.user ? message.mentions.includes(currents.user.username) : false }, [currents.user, message]);
 
     const fmessageInfo = useMemo(() => MessageInfos.find(x => x.Message.id === message.id), [MessageInfos, message.id])
-
+    
     const render = useMemo(() => {
         return <div style={{fontSize: (variables.channelFontSize ?? DefaultUserVariables.channelFontSize) + 4}}>{SyntaxHighlight(AllMessageSyntaxHighlights, message.content, styles, message.id)}</div>
-    }, [message.content, AllMessageSyntaxHighlights, styles]);
+    }, [message.content]);
 
     return (
         <>
@@ -225,7 +227,7 @@ export const MessageElement: React.FC<Props> = memo(({ message, hoveredMessageId
                                     <path d="M 4 54 q 0 -50 50 -50" fill="none" stroke="black" strokeWidth="4" />
                                     <path d="M 54 4 l 50 0" fill="none" stroke="black" strokeWidth="4" />
                                 </svg>
-                                <div className={styles.message_reply_inner_holder} onClick={(ev: React.MouseEvent<HTMLDivElement, MouseEvent>) => { onClickReplyMessage(ev, messageinfo) }}>
+                                <div className={styles.message_reply_inner_holder} onClick={(ev: React.MouseEvent<HTMLDivElement, MouseEvent>) => { onClickReplyMessage(ev, messageinfo_ref.current) }}>
                                     <div className={styles.message_reply_useravatar_holder}>
                                         <img className={styles.message_useravatar} src={`${replyMsg.author.avatarUrl/*https://cat-storage-server.web.app/data/cat1.jpeg"*/}`} />
                                     </div>
@@ -255,7 +257,7 @@ export const MessageElement: React.FC<Props> = memo(({ message, hoveredMessageId
                                         {message.author.id === currents.user?.id && (
                                             <>
                                                 <div className={styles.vl}> </div>
-                                                <div className={styles.message_action} onClick={(ev: React.MouseEvent) => { onMessageEdit(messageinfo) }}>
+                                                <div className={styles.message_action} onClick={(ev: React.MouseEvent) => { onMessageEdit(messageinfo_ref.current) }}>
                                                     <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24" id="edit">
                                                         <path fill="none" d="M0 0h24v24H0V0z"></path>
                                                         <path d="M3 17.46v3.04c0 .28.22.5.5.5h3.04c.13 0 .26-.05.35-.15L17.81 9.94l-3.75-3.75L3.15 17.1c-.1.1-.15.22-.15.36zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" fill="#F0F7EE"></path>
@@ -348,7 +350,7 @@ export const MessageElement: React.FC<Props> = memo(({ message, hoveredMessageId
                             {message.author.id === currents.user?.id && (
                                 <>
                                     <div className={styles.vl}> </div>
-                                    <div className={styles.message_action} onClick={(ev: React.MouseEvent) => { onMessageEdit(messageinfo) }}>
+                                    <div className={styles.message_action} onClick={(ev: React.MouseEvent) => { onMessageEdit(messageinfo_ref.current) }}>
                                         <svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" viewBox="0 0 24 24" id="edit">
                                             <path fill="none" d="M0 0h24v24H0V0z"></path>
                                             <path d="M3 17.46v3.04c0 .28.22.5.5.5h3.04c.13 0 .26-.05.35-.15L17.81 9.94l-3.75-3.75L3.15 17.1c-.1.1-.15.22-.15.36zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" fill="#F0F7EE"></path>

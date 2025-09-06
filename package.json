@@ -19,7 +19,10 @@
     "productName": "Catunbond",
     "directories": {
       "output": "dist"
-    }
+    },
+    "files": [
+      "build/*"
+    ]
   },
   "dependencies": {
     "@clerk/nextjs": "^6.9.2",

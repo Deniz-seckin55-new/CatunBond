@@ -23,9 +23,11 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
     try {
         const user = await currentUser();
-        const data = await request.json();
+        const data = await request.text();
         const blockUserId = data;
         if (!user) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+
+        if(blockUserId === user.id) return NextResponse.json({message: "Can't block self"}, {status: 400})
 
 
         const getUser = await db.user.findUnique({ where: { id: user.id } });

@@ -1,9 +1,11 @@
 const { app, BrowserWindow, Menu } = require("electron");
 const path = require("path");
+const iconPath = path.join(__dirname, "build", "icon.png");
 
 let win;
 
 function createWindow() {
+  const isDevelopment = !app.isPackaged;
   win = new BrowserWindow({
     width: 1200,
     height: 800,
@@ -13,6 +15,7 @@ function createWindow() {
       preload: path.join(__dirname, "preload.cjs"),
       partition: 'persist:app'
     },
+    icon: isDevelopment ? path.join(__dirname, "icon.png") : iconPath
   });
 
   app.commandLine.appendSwitch("enable-gpu-rasterization");

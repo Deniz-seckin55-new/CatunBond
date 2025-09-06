@@ -54,6 +54,7 @@ import InvisibleHolder from "./InvisibleHolder";
 import { HoveringElement } from "./HoveringElement";
 import { NextResponse } from "next/server";
 import { HelpMenu } from "./common/HelpMenu";
+import { themeMap, themeSelect } from "./settings/AppThemes";
 
 // const fetchLocalUser = async () => {
 //     const data = await axios.get("/api/v1/user");
@@ -700,7 +701,7 @@ const MainLayout: React.FC = () => {
                 currents.setContextMenuShown(false);
         }
 
-        if (target.id != "user-profile-sub-menu" && target.id != "user-profile-other-actions-button") {
+        if (!parentHasId(target, "user-profile-sub-menu") && !parentHasId(target, "user-profile-other-actions-button")) {
             if (event.button === 0) {
                 useUserProfileStore.getState().setIsSubMenuShown(false);
             }
@@ -868,9 +869,8 @@ const MainLayout: React.FC = () => {
         openDirectMessage(user);
     }
 
-    const onClickDirectMessageWithCallback = (user: User, fn: Function) => {
-        openDirectMessage(user);
-        fn();
+    const onClickDirectMessageWithCallback = (user: User, fn: () => void) => {
+        openDirectMessage(user, () => {fn()});
     }
 
     useEffect(() => {
@@ -974,7 +974,7 @@ const MainLayout: React.FC = () => {
         socket?.emit("writing_event", socketData);
     }
 
-    const openDirectMessage = (withUser: User) => {
+    const openDirectMessage = (withUser: User, callback?: () => void) => {
         if (withUser.id === currents.user?.id) return;
 
         // Open or create direct message
@@ -1014,6 +1014,7 @@ const MainLayout: React.FC = () => {
                             // console.log("Messages: ", messageList);
 
                             currents.setChannel({ categoryId: null, channelType: "DIRECTMESSAGE", id: directMessage.id, name: directMessage.directMsgFor.filter(x => x.id !== currents.user?.id)[0].username });
+                            callback?.()
                         });
                     })
                 } catch (err) {
@@ -1334,6 +1335,16 @@ const MainLayout: React.FC = () => {
     useEffect(() => {
         fetch("/api/v1/app/checkUser");
     }, []);
+
+    useEffect(() => {
+        const theme = localStorage.getItem("theme") ?? "Default"
+
+        if(theme === "Custom") {
+            const custom = localStorage.getItem("theme-custom")
+            themeSelect(custom ? JSON.parse(custom) : themeMap["Default"], "Custom")
+        } else
+            themeSelect(themeMap[theme], theme)
+    }, [])
 
     // For debug remove later
     const Debugging = async () => {

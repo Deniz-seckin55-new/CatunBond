@@ -173,18 +173,18 @@ export const UserProfile: React.FC<Props> = (props) => {
                 <div className={styles.user_profile_full}>
                     <div className={styles.user_profile_actions}>
                         { /* Options Menu && Add Friend */}
-                        <button onMouseLeave={() => onMouseLeaveTooltipElement(currents)}
+                        {(profile.renderingUser.id !== currents.user.id && !currents.user.friends.find(x => x.id === profile.renderingUser?.id)) && (<button onMouseLeave={() => onMouseLeaveTooltipElement(currents)}
                             onMouseOver={(ev) => onMouseOverTooltipElement(ev, "Send Friend Request", currents)}
                             className={styles.normal_icon} style={{ width: 32, height: 32 }} onClick={() => onClickAddFriendRequest(profile.userProfile)}>
                             <img alt={"Friend Request"} src={"/add-person-white.svg"} width={32} height={32} />
-                        </button>
-                        <button id="user-profile-other-actions-button" onMouseLeave={() => onMouseLeaveTooltipElement(currents)}
+                        </button>)}
+                        {profile.renderingUser.id !== currents.user.id && (<button id="user-profile-other-actions-button" onMouseLeave={() => onMouseLeaveTooltipElement(currents)}
                             onMouseOver={(ev) => onMouseOverTooltipElement(ev, "Other Actions...", currents)}
                             className={styles.normal_icon} style={{ width: 32, height: 32 }} onClick={onClickOtherActions}>
                             <img id="user-profile-other-actions-button" alt={"Other Actions"} src={"/dots-three-white.svg"} width={32} height={32}
                                 onClick={() => {
                                 }} />
-                        </button>
+                        </button>)}
                     </div>
                     <div className={styles.user_profile_content}>
                         <div className={styles.user_profile_pad}>
@@ -247,18 +247,19 @@ interface OtherProps {
 }
 
 const UserProfileOtherActionsMenu: React.FC<OtherProps> = (props) => {
-    const { isSubMenuShown: Shown, subMenuPosition: Position } = useUserProfileStore();
+    const { isSubMenuShown: Shown, subMenuPosition: Position, renderingUser, ...ups  } = useUserProfileStore();
     const currents = useCurrents();
 
     const UserCall = useCallback(() => {
-        const currentUser: User | null = isObjectNotNull(currents.contextmenu.currentObject) ? currents.contextmenu.currentObject as User : null;
+        if (!renderingUser) return;
 
-        if (!currentUser) return;
-
-        props.onClickDirectMessageWithCallback(currentUser, () => {
+        props.onClickDirectMessageWithCallback(renderingUser, () => {
             currents.setServer(null);
             currents.setCategories([]);
             props.onClickCall();
+            ups.setisShown(false)
+            ups.setIsSubMenuShown(false)
+            currents.setBgBlurV(false)
         });
     }, [currents.contextmenu.currentObject, props.onClickDirectMessageWithCallback, currents.setServer, currents.setCategories, props.onClickCall]);
 

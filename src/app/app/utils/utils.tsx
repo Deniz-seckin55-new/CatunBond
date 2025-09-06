@@ -252,6 +252,7 @@ import AppLayout from "../components/settings/AppLayout";
 import { toast } from "react-toastify";
 import { useCurrents } from "@/store/currents";
 import { useCopyToClipboard } from "usehooks-ts";
+import { AppThemes } from "../components/settings/AppThemes";
 export function renderMatchContent(
     className: string,
     match: RegExpMatchArray,
@@ -425,6 +426,7 @@ export const componentMap: Map<string, React.FC<SettingsProps>> = new Map([
     ["Channel Information", ChannelInformation],
     ["Channel Rules", ChannelRules],
     ["App Appearance", AppLayout],
+    ["Themes", AppThemes]
 ]);
 
 export function getLocale() {

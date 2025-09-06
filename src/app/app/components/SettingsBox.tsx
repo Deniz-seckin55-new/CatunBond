@@ -35,6 +35,7 @@ const SettingsBox: React.FC = () => {
         "Text & Images",
         "App Appearance",
         "Notifications",
+        "Themes",
         "Keybinds",
         "Language",
         "Modes",
