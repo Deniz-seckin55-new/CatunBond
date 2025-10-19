@@ -5,7 +5,6 @@ import { Category, Channel, Server, User } from '../utils/socket_utils';
 import { toast } from 'react-toastify';
 import { useCurrents } from '@/store/currents';
 import axios from 'axios';
-import { Virtuoso } from 'react-virtuoso';
 import { FriendListElement } from './common/FriendListElement';
 import { getFileDataUrl, SendServerInvites } from '../utils/utils';
 

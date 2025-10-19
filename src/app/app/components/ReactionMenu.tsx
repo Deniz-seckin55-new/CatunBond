@@ -2,7 +2,7 @@ import styles from "@/app/app/page.module.css";
 import { useCurrents } from "@/store/currents";
 import useReactionMenuStore from "@/store/reactionMenu";
 import EmojiPicker, { Theme } from 'emoji-picker-react';
-import { useCallback, useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 
 const ReactionMenu: React.FC = () => {
     const reactionMenu = useReactionMenuStore();

@@ -5,20 +5,16 @@ import {
     OpenConfirmationMenu,
     SettingsMode,
     UpdateMessageInfo,
-    isObjectNotNull,
     OpenConfirmationMenuWithRetype
 } from '../utils/utils';
 import { useCurrents } from '@/store/currents';
 import axios from 'axios';
 import { toast } from 'react-toastify';
 import {
-    AllowedTypes,
     Channel,
     DetailedDBUser,
     Message,
     Server,
-    SocketData,
-    SocketInformationType,
     User
 } from '../utils/socket_utils';
 import useUserProfileStore from '@/store/userProfile';

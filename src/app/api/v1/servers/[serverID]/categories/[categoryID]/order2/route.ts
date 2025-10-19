@@ -13,7 +13,7 @@ export async function PUT(request: NextRequest, { params }: { params: { category
         const getCategory = await db.category.findUnique({ where: { id: categoryID }, select: { channels: true } });
         if (!getCategory) return NextResponse.json({ message: "Category not found" }, { status: 404 });
 
-        const newChannelOrder = order.map((channelId, index) => {
+        const _newChannelOrder = order.map((channelId, index) => {
             const newChannel = getCategory.channels.find(x => x.id === channelId);
 
             if (!newChannel) {

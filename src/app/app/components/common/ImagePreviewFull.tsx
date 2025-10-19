@@ -2,8 +2,7 @@ import styles from "@/app/app/page.module.css";
 import { useCurrents } from "@/store/currents";
 import { useImagePreviewStore } from "@/store/imagepreviewstore";
 import { DefaultUserVariables } from "@/store/variablesStore";
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { number } from "zod";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 export const ImagePreview: React.FC<{}> = () => {
     const currents = useCurrents();

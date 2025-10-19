@@ -2,6 +2,12 @@ const { app, BrowserWindow, Menu } = require("electron");
 const path = require("path");
 const iconPath = path.join(__dirname, "build", "icon.png");
 
+const { ipcMain, Notification } = require("electron");
+
+ipcMain.on("notify", (_, options) => {
+  new Notification(options).show();
+});
+
 let win;
 
 function createWindow() {
@@ -11,12 +17,15 @@ function createWindow() {
     height: 800,
     webPreferences: {
       nodeIntegration: false,
+      nodeIntegrationInWorker: true,
       contextIsolation: true,
       preload: path.join(__dirname, "preload.cjs"),
       partition: 'persist:app'
     },
     icon: isDevelopment ? path.join(__dirname, "icon.png") : iconPath
   });
+
+  win.webContents.openDevTools()
 
   app.commandLine.appendSwitch("enable-gpu-rasterization");
   app.commandLine.appendSwitch("enable-zero-copy");

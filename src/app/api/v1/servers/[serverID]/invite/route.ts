@@ -1,4 +1,4 @@
-import { ServerInfo, User } from "@/app/app/utils/socket_utils";
+import { User } from "@/app/app/utils/socket_utils";
 import { db } from "@/lib/prisma";
 import { currentUser } from "@clerk/nextjs/server";
 import { NextRequest, NextResponse } from "next/server";

@@ -6,7 +6,6 @@ import equal from "fast-deep-equal";
 import React, { useEffect, useState } from "react";
 import Switch from "react-switch";
 import styles from "../../page.module.css";
-import { channelParse } from "../../utils/schemas";
 import { Channel, ChannelInfo, DetailedDBUser } from "../../utils/socket_utils";
 import { OpenConfirmationMenu, SettingsProps } from "../../utils/utils";
 

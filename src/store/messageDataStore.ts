@@ -12,7 +12,7 @@ export const useMessageDataStore = create<MessageDataStore>((set, get) => ({
         return get().dataStorage[key];
     },
     setData(key, data) {
-        let dt = get().dataStorage;
+        const dt = get().dataStorage;
         dt[key] = data;
 
         set({dataStorage: dt});

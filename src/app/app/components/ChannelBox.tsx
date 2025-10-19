@@ -14,28 +14,24 @@ import { useWritingUsers } from '@/store/writingusers';
 import axios from 'axios';
 import interact from 'interactjs';
 import Image from 'next/image';
-import { MediaConnection, Peer } from 'peerjs';
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from 'react';
+import React, { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { toast } from 'react-toastify';
 import { Virtuoso, VirtuosoHandle } from 'react-virtuoso';
-import { io, Socket } from 'socket.io-client';
 import { MESSAGE_LOAD_DEFAULT_AMOUNT } from '../utils/constants';
-import { Channel, ChannelInfo, DetailedDBUser, Message, User } from '../utils/socket_utils';
+import { Channel, ChannelInfo, DetailedDBUser, Message } from '../utils/socket_utils';
 import { SyntaxHighlight } from '../utils/syntax';
-import { allFunctions, AllMessageSyntaxHighlights, allStyles, GetMessageDateString, isCharNumber, MessageInfo, onMouseLeaveTooltipElement, onMouseOverTooltipElement, parseEmojis, showAutoCompleteMentionRegex, ToUserSmall, UpdateMessageInfo } from '../utils/utils';
+import { allFunctions, AllMessageSyntaxHighlights, allStyles, GetMessageDateString, isCharNumber, MessageInfo, parseEmojis, showAutoCompleteMentionRegex, UpdateMessageInfo } from '../utils/utils';
 import { useGetUserByUsernameSync, useGetUserInfo } from './common/GetUser';
 import { MessageElement } from './common/MessageElement';
 import ScrollToBottomButton from './common/ScrollToBottomButton';
-import { DefaultUserVariables, useVariablesStore } from '@/store/variablesStore';
-import { useVoiceChatState } from '@/store/voiceChatState';
 import LiveKit from './LiveKit';
 import { useChannelBoxRef } from '@/store/channelBoxRef';
-import uuid4, { valid } from 'uuid4';
+import uuid4 from 'uuid4';
 import { useInterval } from 'usehooks-ts';
 import { useThrottle } from "@uidotdev/usehooks";
 
-const VoiceSocketURL = "http://localhost:3002";
+const MessageBoxLazy = lazy(() => import("./MessageBox"))
 
 interface Props {
     onInputTextarea: (event: React.ChangeEvent<HTMLTextAreaElement>) => void;
@@ -51,15 +47,6 @@ interface Props {
     onRightClickUserAvatar: (messageId: string | null, event: React.MouseEvent) => void;
     addReactionToMessage: (messageId: string, channelId: string, emojiName: string) => void;
     sendMessageWithTextarea: (message: string, ch: Channel, usr: DetailedDBUser, textarea: HTMLTextAreaElement) => void;
-    onClickMicrophone: () => void;
-    onClickLeaveCall: () => void;
-    voicesocket: Socket | undefined;
-    userStreams: { [userId: string]: MediaStream };
-    setUserStreams: React.Dispatch<React.SetStateAction<{ [userId: string]: MediaStream }>>;
-    calls: Record<string, MediaConnection>;
-    setcalls: React.Dispatch<React.SetStateAction<Record<string, MediaConnection>>>;
-    peer: Peer | null;
-    microphoneState: boolean;
 }
 
 function splitName(fullName: string) {
@@ -73,8 +60,6 @@ function splitName(fullName: string) {
         fileExtension: fullName.slice(idx + 1),
     };
 }
-
-let voicesocket: Socket | undefined;
 
 function getVolume(stream: MediaStream) {
     const audioContext = new AudioContext();
@@ -102,7 +87,7 @@ function getVolume(stream: MediaStream) {
 const ReplyMessageAnimationKeyframes = [{ backgroundColor: 'var(--cb-color-red)' }, { backgroundColor: 'transparent' }];
 const ReplyMessageAnimationOptions: KeyframeAnimationOptions = { duration: 500, easing: 'ease-in-out', iterations: 1, fill: 'none' };
 
-const ChannelBox: React.FC<Props> = ({ onMessageReply, onMessageReact, onMessageEdit, onMessageDelete, onEditInput, onKeyDownInput, onClickUserAvatar, onClickUserAvatarWithUserId, onRightClickUserAvatar, addReactionToMessage, sendMessageWithTextarea, onClickMicrophone, onClickLeaveCall, userStreams, setUserStreams, calls, setcalls, peer, microphoneState }) => {
+const ChannelBox: React.FC<Props> = ({ onMessageReply, onMessageReact, onMessageEdit, onMessageDelete, onEditInput, onKeyDownInput, onClickUserAvatar, onClickUserAvatarWithUserId, onRightClickUserAvatar, addReactionToMessage, sendMessageWithTextarea }) => {
     const { writingUsers } = useWritingUsers();
     const { messages, ...messagesState } = useMessagesStore();
     const { MessageInfos, setMessageInfos } = useMessageInfoStore();
@@ -365,8 +350,8 @@ const ChannelBox: React.FC<Props> = ({ onMessageReply, onMessageReact, onMessage
 
     const [lastCtrlTime, setlastCtrlTime] = useState<number>(0);
 
-    let [callStackBack, setcallStackBack] = useState<string[]>([]);
-    let [callStackFront, setcallStackFront] = useState<string[]>([]);
+    const [callStackBack, setcallStackBack] = useState<string[]>([]);
+    const [callStackFront, setcallStackFront] = useState<string[]>([]);
 
     const justPressed = useRef<boolean>(false)
 
@@ -393,7 +378,7 @@ const ChannelBox: React.FC<Props> = ({ onMessageReply, onMessageReact, onMessage
     const editModeMessage = useMemo(() => MessageInfos.find(x => x.editMode === true), [MessageInfos])
 
     const messageBoxOnKeyDown_ACDnotShown_ArrowUp = useCallback((current: VirtuosoHandle) => {
-        if(!nearestUserMessage) return
+        if (!nearestUserMessage) return
 
         current.scrollToIndex(nearestUserMessageIndex);
         if (editModeMessage)
@@ -401,9 +386,9 @@ const ChannelBox: React.FC<Props> = ({ onMessageReply, onMessageReact, onMessage
         UpdateMessageInfo(nearestUserMessage, "editMode", true, setMessageInfos);
 
         requestAnimationFrame(() => {
-            console.log("textarea",nearestUserMessageInfo?.ref)
+            console.log("textarea", nearestUserMessageInfo?.ref)
             if (nearestUserMessageInfo && nearestUserMessageInfo.ref) {
-                let textarea = nearestUserMessageInfo.ref.querySelector("textarea");
+                const textarea = nearestUserMessageInfo.ref.querySelector("textarea");
 
                 if (textarea) {
                     textarea.focus();
@@ -413,7 +398,7 @@ const ChannelBox: React.FC<Props> = ({ onMessageReply, onMessageReact, onMessage
 
                     textarea.selectionStart = kbState.includes("Control") ? 0 : textarea.selectionEnd;
                 } else {
-                    console.log("no textarea??")                    
+                    console.log("no textarea??")
                 }
             }
         });
@@ -814,9 +799,9 @@ const ChannelBox: React.FC<Props> = ({ onMessageReply, onMessageReact, onMessage
                 ],
                 listeners: {
                     move(event) {
-                        var target = event.target
-                        var x = (parseFloat(target.getAttribute('data-x')) || 0)
-                        var y = (parseFloat(target.getAttribute('data-y')) || 0)
+                        const target = event.target
+                        let x = (parseFloat(target.getAttribute('data-x')) || 0)
+                        let y = (parseFloat(target.getAttribute('data-y')) || 0)
 
                         // update the element's style
                         target.style.width = event.rect.width + 'px'
@@ -841,18 +826,6 @@ const ChannelBox: React.FC<Props> = ({ onMessageReply, onMessageReact, onMessage
     const settooltipText = (text: string) => {
         currents.setTooltipText(text);
     }
-
-    /// Voice Chat
-
-    // useEffect(() => {
-    // console.log("Connected Users: ", VoiceChat.GetConnectedUsers());
-    // }, [VoiceChat.consumers]);
-
-    /// Voice Chat End
-
-    useEffect(() => {
-        console.log(userStreams);
-    }, [userStreams]);
 
     useEffect(() => {
         if (messageBoxRef.current) {
@@ -1120,19 +1093,19 @@ const ChannelBox: React.FC<Props> = ({ onMessageReply, onMessageReact, onMessage
                         </div>
                     )}
                     <div className={`${styles.message_box_wraper} ${messagesState.replyingTo && (styles.message_box_wraper_reply)}`}>
-                        <div className={styles.posr_h}>
-                            <textarea className={`${styles.posr_e} ${styles.contenteditable} ${styles.msg_typer} ${(!currents.channel || (currentChannelInfo && ((currentChannelInfo as ChannelInfo).readOnly))) && styles.msg_disabled}`} disabled={messageBoxDisabled}
-                                style={{ opacity: 0.25 }}
-                                onChange={messageBoxOnChange}
-                                onKeyDown={messageBoxOnKeyDown}
-                                onScroll={onMessageScroll}
-                                onContextMenu={(ev: React.MouseEvent) => onContextMenuTextarea(ev)}
-                                onSelect={(ev: React.SyntheticEvent) => onSelectTextarea(ev)}
-                                onKeyUp={MessageBoxOnKeyUp}
-                                id={"message_box_main"}
-                                ref={messageBoxRef} />
-                            <span className={`${styles.posr_e} ${styles.msg_overlay} ${styles.no_touch} ${styles.msg_typer}`} style={{ overflow: "hidden", whiteSpace: "pre-wrap" }} ref={renderTextRef}>{renderText}</span>
-                        </div>
+                        <Suspense>
+                            <MessageBoxLazy className={`${styles.posr_e} ${styles.contenteditable} ${styles.msg_typer} ${(!currents.channel || (currentChannelInfo && ((currentChannelInfo as ChannelInfo).readOnly))) && styles.msg_disabled}`}
+                                messageBoxDisabled={messageBoxDisabled ?? true}
+                                messageBoxOnChange={messageBoxOnChange}
+                                messageBoxOnKeyDown={messageBoxOnKeyDown}
+                                onMessageScroll={onMessageScroll}
+                                onContextMenuTextarea={(ev: React.MouseEvent) => onContextMenuTextarea(ev)}
+                                onSelectTextarea={(ev: React.SyntheticEvent) => onSelectTextarea(ev)}
+                                MessageBoxOnKeyUp={MessageBoxOnKeyUp}
+                                messageBoxRef={messageBoxRef}
+                                renderText={renderText}
+                                renderTextRef={renderTextRef} />
+                        </Suspense>
                         <div className={styles.message_box_actions}>
                             <button className={`${`${styles.message_box_action} ${styles.normal_icon_s}`} ${messageActionsDisabled ? styles.msg_action_disabled : ''}`} disabled={messageActionsDisabled} onClick={() => { if (messageBoxRef.current) { sendMessageWithTextarea(messageBoxRef.current.value, currents.channel!, currents.user!, messageBoxRef.current); } }}>
                                 <svg xmlns="http://www.w3.org/2000/svg" className={`${messageActionsDisabled ? styles.msg_action_disabled : ''}`} width="24" height="24" viewBox="0 0 24 24" id="send">

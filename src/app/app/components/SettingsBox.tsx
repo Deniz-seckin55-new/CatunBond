@@ -10,7 +10,6 @@ import React, { useEffect, useState } from "react";
 import styles from "../page.module.css";
 import { Channel, ChannelInfo, ServerInfo, ServerInvites, UserInfo } from "../utils/socket_utils";
 import { componentMap, SettingsProps, SettingUpdateType } from "../utils/utils";
-import { ChannelSchema } from "../utils/schemas";
 import { DefaultUserVariables, UserVariables, useVariablesStore } from "@/store/variablesStore";
 
 const SettingsBox: React.FC = () => {

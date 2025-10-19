@@ -1,5 +1,4 @@
 import styles from "@/app/app/page.module.css";
-import { useCurrents } from "@/store/currents";
 import { User } from "../../utils/socket_utils";
 
 interface Props {

@@ -4,7 +4,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { defaultServerGet } from "../../utils/utils";
 export async function GET(request: NextRequest, { params }: { params: { serverID: string } }) {
     try {
-        const user = await currentUser();
         const { serverID } = await params;
 
         if (!serverID) return NextResponse.json({ message: "Server ID is required" }, { status: 400 });

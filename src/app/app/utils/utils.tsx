@@ -1,7 +1,7 @@
-import React, { JSX } from "react";
+import React from "react";
 import { Prisma } from '@prisma/client';
 import Appearance from "../components/settings/Appearance";
-import { Category, Channel, ChannelInfo, DirectMessage, Message, SendMessageI, Server, ServerInfo, ServerInvites as SI, User, UserInfo, VoiceChatInformation } from "./socket_utils";
+import { Category, Channel, ChannelInfo, DirectMessage, Message, Server, ServerInfo, ServerInvites as SI, User, UserInfo, VoiceChatInformation } from "./socket_utils";
 import { DetailedDBUser } from "./socket_utils";
 import emojiNames from "@/data/emojiList.json";
 import { genInvite } from "@/app/api/v1/utils/utils";
@@ -251,7 +251,6 @@ import { UserVariables } from "@/store/variablesStore";
 import AppLayout from "../components/settings/AppLayout";
 import { toast } from "react-toastify";
 import { useCurrents } from "@/store/currents";
-import { useCopyToClipboard } from "usehooks-ts";
 import { AppThemes } from "../components/settings/AppThemes";
 export function renderMatchContent(
     className: string,
@@ -843,7 +842,7 @@ export function getFileDataUrl(file: File) {
 }
 
 export function hexToRgb(hex: string) {
-    var result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
     return result ? {
         r: parseInt(result[1], 16),
         g: parseInt(result[2], 16),
@@ -880,7 +879,8 @@ export function isGrayscale(r: number, g: number, b: number, tolerance = 15) {
 export function rgbToHsl(r: number, g: number, b: number) {
     r /= 255; g /= 255; b /= 255;
     const max = Math.max(r, g, b), min = Math.min(r, g, b);
-    let h = 0, s = 0, l = (max + min) / 2;
+    let h = 0, s = 0;
+    const l = (max + min) / 2;
 
     if (max !== min) {
         const d = max - min;
@@ -970,10 +970,10 @@ export async function getTopDistinctColorsFromUrl(
         }
 
         return distinctColors.map((c) => {
-            let meow = rgbToHsl(c.r, c.g, c.b);
+            const meow = rgbToHsl(c.r, c.g, c.b);
             meow.s *= 10;
 
-            let meow2 = hslToRgb(meow.h, meow.s, meow.l);
+            const meow2 = hslToRgb(meow.h, meow.s, meow.l);
 
             return `rgb(${meow2.r},${meow2.g},${meow2.b})`;
         });
@@ -1121,3 +1121,8 @@ export const allStyles: { label: string, shortcut: string, action: (mode: 'Selec
 export function isCharNumber(c: string) {
   return c >= '0' && c[0] <= '9';
 }
+
+export const isElectron = () => {
+  // Preload only exists in Electron
+  return !!(window as any).electronAPI;
+};

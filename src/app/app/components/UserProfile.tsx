@@ -6,7 +6,7 @@ import { useGetUser, useGetUserInfo, useGetUserNotes } from "./common/GetUser";
 import { User } from "../utils/socket_utils";
 import axios from "axios";
 import { useUserNotesStore } from "@/store/userNotes";
-import { ExploreBoxMode, isObjectNotNull, onMouseLeaveTooltipElement, onMouseOverTooltipElement } from "@/app/app/utils/utils";
+import { ExploreBoxMode, onMouseLeaveTooltipElement, onMouseOverTooltipElement } from "@/app/app/utils/utils";
 import { toast } from "react-toastify";
 import { useUserInfoStore } from "@/store/userInfos";
 

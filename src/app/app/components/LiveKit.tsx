@@ -4,22 +4,17 @@ import styles from '@/app/app/page.module.css';
 
 import {
   ControlBar,
-  GridLayout,
-  ParticipantTile,
   RoomAudioRenderer,
   useTracks,
   RoomContext,
-  VideoTrack,
 } from '@livekit/components-react';
 import { LocalVideoTrack, RemoteVideoTrack, Room, Track } from 'livekit-client';
 import '@livekit/components-styles';
-import React, { ReactNode, use, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useCurrents } from '@/store/currents';
 import { useGetUserByUsername, useGetUserByUsernameSync, useGetUserInfo } from './common/GetUser';
 import uuid4 from 'uuid4';
 import { useUserInfoStore } from '@/store/userInfos';
-import { hexToRgb } from '../utils/utils';
-import { createPortal } from 'react-dom';
 
 interface Props {
   height?: string;
@@ -161,12 +156,12 @@ const MyVideoConference: React.FC<Props> = (props) => {
   }
 
   function setupMainDivVideo(vid: HTMLMediaElement, clearVideo: () => void, isMirrored: boolean, userImageURL: string) {
-    let mainDiv = document.createElement('div');
+    const mainDiv = document.createElement('div');
 
     mainDiv.style.position = "relative";
 
-    let max_button = document.createElement('button');
-    let user_avatar = document.createElement('img');
+    const max_button = document.createElement('button');
+    const user_avatar = document.createElement('img');
 
     max_button.style.position = "absolute";
     const svgElem = document.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -227,7 +222,7 @@ const MyVideoConference: React.FC<Props> = (props) => {
       currents.setFsvReturnFunction((w) => {
         currents.setFullScreenVideo(null);
         if (gridRef.current) {
-          let mainDiv = setupMainDivVideo(w, clearVideo, isMirrored, userImageURL);
+          const mainDiv = setupMainDivVideo(w, clearVideo, isMirrored, userImageURL);
           gridRef.current.appendChild(mainDiv);
           setholders(x => [...x, (mainDiv)]);
         }
@@ -314,11 +309,11 @@ const MyVideoConference: React.FC<Props> = (props) => {
         setvideoAutoUpdate(!videoAutoUpdate);
       });
 
-      let vid = track.publication?.videoTrack?.attach();
+      const vid = track.publication?.videoTrack?.attach();
 
-      let isMirrored = track.participant.attributes["isMirrored"] == "true" && track.source === Track.Source.Camera;
+      const isMirrored = track.participant.attributes["isMirrored"] == "true" && track.source === Track.Source.Camera;
 
-      let mainDiv = setupMainDivVideo(vid, () => endVid(vid), isMirrored, (() => {
+      const mainDiv = setupMainDivVideo(vid, () => endVid(vid), isMirrored, (() => {
         getUserInfoA(track.participant.identity);
         const pUser = getUserInfo(track.participant.identity) || null;
         const pUserCustoms = pUser ? useUserInfoStore.getState().getExistingUserInfo(pUser.id) || null : null;

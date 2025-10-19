@@ -7,12 +7,10 @@ import React, { memo, useCallback, useEffect, useMemo, useRef } from "react";
 import styles from "../../page.module.css";
 import { Attachment, JsonAttachments, Message } from "../../utils/socket_utils";
 import { SyntaxHighlight } from "../../utils/syntax";
-import { allEmojiDataList, AllMessageSyntaxHighlights, getEmojiOfName, getIconOfFileExtension, GetMessageDateString, getNameOfEmoji, MessageInfo, onMouseLeaveTooltipElement, onMouseOverTooltipElement, parseEmojis } from "../../utils/utils";
+import { allEmojiDataList, AllMessageSyntaxHighlights, getEmojiOfName, GetMessageDateString, getNameOfEmoji, MessageInfo, onMouseLeaveTooltipElement, onMouseOverTooltipElement } from "../../utils/utils";
 import useReactionMenuStore from "@/store/reactionMenu";
-import emojiList from "@/data/emojiList.json";
-import Image from "next/image";
 import { useDownload } from "./DownloadFile";
-import { DefaultUserVariables, useVariables } from "@/store/variablesStore";
+import { DefaultUserVariables } from "@/store/variablesStore";
 import { FILE_PREVIEW_SUPPORTED_IMAGE_FORMAT_LIST } from "../../utils/constants";
 import { FilePreview } from "./FilePreview";
 import { useCopyToClipboard } from "usehooks-ts";
@@ -44,7 +42,7 @@ export const MessageElement: React.FC<Props> = memo(({ message, hoveredMessageId
 
     const downloadFile = useDownload();
 
-    console.log(`🔄 message ${message.id} re-rendered`);
+    // console.log(`🔄 message ${message.id} re-rendered`);
 
     const ref = useRef<HTMLDivElement | null>(null);
     // useEffect(() => {
@@ -174,7 +172,7 @@ export const MessageElement: React.FC<Props> = memo(({ message, hoveredMessageId
 
         if (reactions.length <= 0) return (<></>);
 
-        let groupedReactions = new Map<string, { emoji: string, emojiName: string, id: string, userReacted: boolean, count: number }>();
+        const groupedReactions = new Map<string, { emoji: string, emojiName: string, id: string, userReacted: boolean, count: number }>();
 
         reactions.forEach((r) => {
             const currentCount = groupedReactions.values.length > 0 ? (groupedReactions.get(r.emojiName)?.count ?? 0) : 0;

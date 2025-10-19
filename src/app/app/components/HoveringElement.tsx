@@ -2,9 +2,7 @@ import { useHoveringElement } from "@/store/hoveringElement";
 import styles from '@/app/app/page.module.css';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
-import Youtube from 'react-youtube';
 import interact from "interactjs";
-import { useInterval } from "usehooks-ts";
 import { getTopDistinctColorsFromUrl } from "../utils/utils";
 
 interface Props {
@@ -87,7 +85,7 @@ export const HoveringElement: React.FC<Props> = (props) => {
 
                         // call this function on every dragend event
                         end(event) {
-                            var textEl = event.target.querySelector('p')
+                            const textEl = event.target.querySelector('p')
 
                             textEl && (textEl.textContent =
                                 'moved a distance of ' +
@@ -98,11 +96,11 @@ export const HoveringElement: React.FC<Props> = (props) => {
                     }
                 })
             function dragMoveListener(event: any) {
-                var target = event.target!
-                var targetdiv: HTMLDivElement = target
+                const target = event.target!
+                const targetdiv: HTMLDivElement = target
                 // keep the dragged position in the data-x/data-y attributes
-                var x = (parseFloat(target.getAttribute('data-x')) || 0) + event.dx
-                var y = (parseFloat(target.getAttribute('data-y')) || 0) + event.dy
+                let x = (parseFloat(target.getAttribute('data-x')) || 0) + event.dx
+                let y = (parseFloat(target.getAttribute('data-y')) || 0) + event.dy
 
                 x = x > (window.innerWidth - targetdiv.getBoundingClientRect().width) ? window.innerWidth - targetdiv.getBoundingClientRect().width : x
                 y = y > (window.innerHeight - targetdiv.getBoundingClientRect().height) ? window.innerHeight - targetdiv.getBoundingClientRect().height : y
@@ -125,9 +123,9 @@ export const HoveringElement: React.FC<Props> = (props) => {
 
                     listeners: {
                         move(event) {
-                            var target = event.target
-                            var x = (parseFloat(target.getAttribute('data-x')) || 0)
-                            var y = (parseFloat(target.getAttribute('data-y')) || 0)
+                            const target = event.target
+                            let x = (parseFloat(target.getAttribute('data-x')) || 0)
+                            let y = (parseFloat(target.getAttribute('data-y')) || 0)
 
                             // update the element's style
                             target.style.width = event.rect.width + 'px'
@@ -176,7 +174,7 @@ export const HoveringElement: React.FC<Props> = (props) => {
     useEffect(() => {
         async function run() {
             if (hover.videoId) {
-                let dist = await getTopDistinctColorsFromUrl(`http://img.youtube.com/vi/${hover.videoId}/${0}.jpg`, 2, 150);
+                const dist = await getTopDistinctColorsFromUrl(`http://img.youtube.com/vi/${hover.videoId}/${0}.jpg`, 2, 150);
                 console.log(dist);
                 setfirstColor(dist[0]);
                 setsecondColor(dist[1]);

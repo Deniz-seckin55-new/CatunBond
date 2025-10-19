@@ -8,10 +8,11 @@ import { useChannelInfoStore } from "./channelInfos";
 import { useCurrents } from "./currents";
 import { useMessagesStore } from "./messages";
 import { useWritingUsers } from "./writingusers";
+import { isElectron } from "@/app/app/utils/utils";
 
 interface SocketStore {
     socket: Socket | undefined;
-    connect: () => Socket;
+    connect: () => Socket | undefined;
     disconnect: () => void;
     getSocket: () => Socket | undefined;
 }
@@ -22,20 +23,82 @@ export const useSocketStore = create<SocketStore>((set, get) => ({
         return get().socket;
     },
     connect: () => {
-        const SocketURL = `http://${window.location.hostname}:3001`;
-        const initSocket = io(SocketURL, { query: { id: useCurrents.getState().user?.id } }); set({ socket: initSocket }); return initSocket;
+        const userId = useCurrents.getState().user?.id;
+
+        let initSocket = undefined;
+        if (isElectron()) {
+            // electron path
+            // @ts-ignore
+            (window as any).electronAPI.connect(userId);
+
+            isElectronSocket = true
+
+            console.log("Electron detected", initSocket)
+        } else {
+            console.log("No electron detected; on web")
+            // web path
+            const SocketURL = `http://${window.location.hostname}:3001`;
+            initSocket = io(SocketURL, {
+                query: { id: userId },
+                transports: ["websocket", "polling"],
+            });
+        }
+
+        set({ socket: initSocket });
+        return initSocket;
     },
     disconnect: () => {
         const { socket } = useSocketStore.getState();
-        if (socket) {
-            socket.disconnect();
-            set({ socket: undefined });
+        if (isElectron()) {
+            // @ts-ignore
+            (window as any).electronAPI.disconnect();
+        } else {
+            socket?.disconnect();
         }
-    },
+        set({ socket: undefined });
+    }
 }))
 
-let awaitingDeletionMessages: string[] = [];
-let awaitingEditionMessages: socketutils.EditContext[] = [];
+const awaitingDeletionMessages: string[] = [];
+const awaitingEditionMessages: socketutils.EditContext[] = [];
+
+let isElectronSocket = false
+
+export const socketOn = (ev: string, fn: any) => {
+    if (isElectronSocket) {
+        // @ts-ignore
+        (window as any).electronAPI.on(ev, fn);
+    } else {
+        useSocketStore.getState().socket?.on(ev, fn)
+    }
+}
+
+interface ElectronAPI {
+    emit: (event: string, ...args: any[]) => void;
+    on: (event: string, listener: (...args: any[]) => void) => void;
+    connect: (userId: string) => void;
+    disconnect: () => void;
+}
+
+type SocketEmitFn = (...args: any[]) => void;
+
+export const socketEmit = (ev: string, ...fn: any[]): void => {
+    if (isElectronSocket) {
+        // @ts-ignore
+        (window as any).electronAPI.emit(ev, ...fn);
+    } else {
+        useSocketStore.getState().socket?.emit(ev, ...fn);
+    }
+}
+
+export const socketOff = (ev: string): void => {
+    if (isElectronSocket) {
+        // @ts-ignore
+        (window as any).electronAPI.off(ev);
+    } else {
+        useSocketStore.getState().socket?.off(ev);
+    }
+}
 
 export const useSocket = () => {
     const { socket, connect, disconnect } = useSocketStore();
@@ -46,7 +109,7 @@ export const useSocket = () => {
     const chStore = useChannelBoxStore();
     const channelInfoStore = useChannelInfoStore();
 
-    const GetUser = socketutils.usegetUserSR;
+    // const GetUser = socketutils.usegetUserSR;
 
     useEffect(() => {
         console.log(`${window.location.hostname}:3001 as socketio port 3001`);
@@ -66,7 +129,7 @@ export const useSocket = () => {
     useEffect(() => {
         if (socket && user) {
             // Listen for socket events
-            socket.on("message", (recievedMessage: socketutils.Message) => {
+            socketOn("message", (recievedMessage: socketutils.Message) => {
                 console.log("message data recieved ", recievedMessage);
 
                 if (!user.blocked.includes(recievedMessage.author.id)) {
@@ -74,28 +137,28 @@ export const useSocket = () => {
                     chStore.setendMessageId(recievedMessage.id);
                 }
             });
-            socket.on("delete_message", (messageId: string) => {
+            socketOn("delete_message", (messageId: string) => {
                 console.log("delete message ", messageId);
                 removeMessage(messageId);
             });
-            socket.on("edit_message", (messageId: string, messageUpdate: socketutils.MessageUpdate) => {
+            socketOn("edit_message", (messageId: string, messageUpdate: socketutils.MessageUpdate) => {
                 setMessagesLambda((prevMessages) =>
                     prevMessages.map((msg) =>
                         msg.id === messageId ? { ...msg, ...messageUpdate } : msg
                     )
                 );
             });
-            socket.on("user_mentioned", (serverId: string, channel: socketutils.Channel, mentioner: socketutils.User) => {
-                if(currents.channel?.id !== channel.id)
+            socketOn("user_mentioned", (serverId: string, channel: socketutils.Channel, mentioner: socketutils.User) => {
+                if (currents.channel?.id !== channel.id)
                     toast(`${mentioner.username} mentioned you on ${channel.name}`); // Make it so when clicked goes to message
             });
-            // socket.on("friend_request_send", (friendRequest: socketutils.PendingFriendRequest) => {
+            // socketOn("friend_request_send", (friendRequest: socketutils.PendingFriendRequest) => {
             //     if (friendRequest.receiverId == user.id) {
             //         Notification
             //         toast(`${friendRequest.sender.username} sent you a friend request`);
             //     }
             // });
-            // socket.on("friend_request_answer", (data: socketutils.FriendRequestAnswer) => {
+            // socketOn("friend_request_answer", (data: socketutils.FriendRequestAnswer) => {
             //     const { friendRequest, answer } = data;
             //     console.log("friend_request_answer", friendRequest, answer);
             //     GetUser(friendRequest.senderId).then((sender) => {
@@ -112,7 +175,7 @@ export const useSocket = () => {
             //         }
             //     })
             // });
-            socket.on("writing_event", (eventUser: socketutils.User, eventType: string) => {
+            socketOn("writing_event", (eventUser: socketutils.User, eventType: string) => {
                 if (eventUser.id !== currents.user?.id) {
                     if (eventType === "start") {
                         writingUsers.addUser(eventUser.id);
@@ -121,7 +184,7 @@ export const useSocket = () => {
                     }
                 }
             });
-            socket.on("category_channel_order_change", (serverId: string, data: { id: string, channels: string[] }[]) => {
+            socketOn("category_channel_order_change", (serverId: string, data: { id: string, channels: string[] }[]) => {
                 console.log("recieved category_channel_order_change", [serverId, data]);
                 console.log("Current server", currents.server);
                 const currentServer = currents.server;
@@ -156,23 +219,24 @@ export const useSocket = () => {
                 console.log({ newCategories });
             });
 
-            socket.on("channel_info_update", (data: socketutils.ChannelInfo) => {
+            socketOn("channel_info_update", (data: socketutils.ChannelInfo) => {
                 channelInfoStore.replaceInfo(data.channelId, data);
             });
 
-            socket.on("reaction_message", (messageId: string, data: socketutils.MessageReactionUpdate) => {
+            socketOn("reaction_message", (messageId: string, data: socketutils.MessageReactionUpdate) => {
                 replaceMessageLambda(messageId, (state) => {
-                    return { ...state,
+                    return {
+                        ...state,
                         reactions: data.reactions,
                     }
                 });
             });
 
-            socket.on("nya", (data: string) => {
-                console.log("Recieved a nya! ",data);
+            socketOn("nya", (data: string) => {
+                console.log("Recieved a nya! ", data);
             })
 
-            socket.on("reconnect", () => {
+            socketOn("reconnect", () => {
                 const data: socketutils.ReconnectData = {
                     channelId: currents.channel?.id,
                     lastSeenMessageTimestamp: (messages.length > 0) ? messages[messages.length - 1].timestamp : undefined,
@@ -185,7 +249,7 @@ export const useSocket = () => {
 
                 console.log("client reconnected", data);
 
-                socket.emit("client_reconnect", packet, (response: { newMessagesSentSince: socketutils.Message[] }) => {
+                socketEmit("client_reconnect", packet, (response: { newMessagesSentSince: socketutils.Message[] }) => {
                     console.log("reconnect response", response);
                     setMessagesLambda((prev) => [...prev, ...response.newMessagesSentSince]);
                 });

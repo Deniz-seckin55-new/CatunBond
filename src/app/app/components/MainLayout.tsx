@@ -1,15 +1,11 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import styles from '../page.module.css';
 
-import {
-    useLocalParticipant,
-} from '@livekit/components-react';
 
 import { useChannelInfoStore } from "@/store/channelInfos";
 import { useCurrents } from "@/store/currents";
-import { useDirectMessageStore } from "@/store/directmessages";
 import { useKBState } from "@/store/kbState";
 import { useMessageInfoStore } from "@/store/messageInfos";
 import { useMessagesStore } from "@/store/messages";
@@ -18,14 +14,11 @@ import useUserProfileStore from "@/store/userProfile";
 import { useUser } from "@clerk/nextjs";
 import axios, { AxiosError } from "axios";
 import { useRouter } from "next/navigation";
-import Peer, { MediaConnection } from "peerjs";
 import { toast } from "react-toastify";
-import { io, Socket } from 'socket.io-client';
 import { MESSAGES_FIRST_LOAD_MAX_AMOUNT } from "../utils/constants";
-import { AllowedTypes, Category, Channel, ChannelInfo, DetailedDBUser, DirectMessage, EditContext, JsonAttachments, Message, MessageCreate, MessageUpdate, PendingFriendRequest, SendMessageI, Server, SocketData, SocketInformationType, User, VoiceChatInformation, WritingEvent } from "../utils/socket_utils";
-import { DBVoiceChatWithMembers, ExploreBoxMode, fetchChannelInfo, MessageInfo, SettingsMode, ToUserSmall, ToVCInfo, UpdateMessageInfo, ViewingFriendsDiv } from "../utils/utils";
+import { AllowedTypes, Category, Channel, ChannelInfo, DetailedDBUser, DirectMessage, JsonAttachments, Message, MessageCreate, MessageUpdate, PendingFriendRequest, Server, SocketData, SocketInformationType, User, WritingEvent } from "../utils/socket_utils";
+import { ExploreBoxMode, fetchChannelInfo, MessageInfo, SettingsMode, ToUserSmall, UpdateMessageInfo, ViewingFriendsDiv } from "../utils/utils";
 import BackgroundBlur from './BackgroundBlur';
-import ChannelBox from "./ChannelBox";
 import ChannelBoxInfo from "./ChannelBoxInfo";
 import Tooltip from "./common/Tooltip";
 import UsersHandler from "./common/UsersHandler";
@@ -47,12 +40,10 @@ import { Reaction } from "@prisma/client";
 import { useVariablesStore } from "@/store/variablesStore";
 import { ImagePreview } from "./common/ImagePreviewFull";
 import { useImagePreviewStore } from "@/store/imagepreviewstore";
-import LiveKit from "./LiveKit";
 import FullScreenVideo from "./common/FullScreenVideo";
 import { usePersistantUserStorage } from "@/store/persistantUserStorage";
 import InvisibleHolder from "./InvisibleHolder";
 import { HoveringElement } from "./HoveringElement";
-import { NextResponse } from "next/server";
 import { HelpMenu } from "./common/HelpMenu";
 import { themeMap, themeSelect } from "./settings/AppThemes";
 
@@ -63,11 +54,10 @@ import { themeMap, themeSelect } from "./settings/AppThemes";
 //     return data.data.data as DetailedDBUser; // Funny
 // }
 
-let voicesocket: Socket | undefined;
+const ChannelBoxLazy = lazy(() => import("./ChannelBox"))
 
 const MainLayout: React.FC = () => {
     const { socket } = useSocketStore();
-    const { directmessages, setDirectMessages } = useDirectMessageStore();
     const messageStore = useMessagesStore();
     const userProfileStore = useUserProfileStore();
     // const ls = useLocalStore();
@@ -83,10 +73,6 @@ const MainLayout: React.FC = () => {
     // const [appGridRows, setappGridRows] = useState<string>(`repeat(32, 1fr)`);
     const [appGridColumns, setappGridColumns] = useState<string>(`repeat(32, 1fr)`);
     const [pendingSentRequests, setpendingSentRequests] = useState<PendingFriendRequest[]>([]);
-    const [userStreams, setUserStreams] = useState<{ [userId: string]: MediaStream }>({});
-    const [peer, setpeer] = useState<Peer | null>(null);
-    const [calls, setcalls] = useState<Record<string, MediaConnection>>({});
-    const [microphoneState, setmicrophoneState] = useState<boolean>(true);
     const [appLoaded, setappLoaded] = useState<boolean>(false);
     const [createBoxC, setcreateBoxC] = useState<Category | null>(null);
     const [createBoxV, setcreateBoxV] = useState<boolean>(false);
@@ -113,42 +99,6 @@ const MainLayout: React.FC = () => {
 
     const user = useUser();
 
-    // const { data: localUser, isFetched: localUserReady } = useQuery({
-    //     queryKey: ['userData'],
-    //     queryFn: fetchLocalUser,
-    // });
-
-    const [TextareaInitalConstNumber, setTextareaInitalConstNumber] = useState(0);
-
-    // const [localStream, setlocalStream] = useState<MediaStream | null>(null);
-
-    // const getMediaStream = useCallback(async () => {
-    //     if (localStream) return localStream;
-
-    //     try {
-    //         // const devices = await navigator.mediaDevices.enumerateDevices();
-    //         // const audioDevices = devices.filter(x => x.kind === "audioinput");
-
-    //         const stream = await navigator.mediaDevices.getUserMedia({
-    //             audio: {
-    //                 echoCancellation: false,
-    //                 noiseSuppression: true,
-    //                 channelCount: 2
-    //             },
-    //             video: false,
-    //         });
-
-    //         setlocalStream(stream);
-    //         return stream;
-    //     } catch (err) {
-    //         console.error(err);
-    //     }
-    // }, []);
-
-    // const toggleFriendsDivVisibility = () => {
-    //     currents.setFriendsDivV(!currents.friendsdiv.visible);
-    // }
-
     const openExploreBox = (mode: ExploreBoxMode) => {
         currents.setExploreBoxMode(mode);
         currents.setExploreBoxV(true);
@@ -173,7 +123,7 @@ const MainLayout: React.FC = () => {
         currents.setFriendsDivV(true);
     }, [])
 
-    const onClickServer = useCallback((server: Server) => {
+    const onClickServer = (server: Server) => {
         try {
             currents.setCategories(server.categories);
 
@@ -186,22 +136,22 @@ const MainLayout: React.FC = () => {
             currents.setServer(server);
 
             setTimeout(() => {
-                let found = persistantUserStorage.serverLastChannelList[server.id];
+                const found = persistantUserStorage.serverLastChannelList[server.id];
 
                 console.log("found server", found);
 
                 if (found) {
                     console.log("Auto loading channel");
 
-                    onClickChannel(found);
+                    requestAnimationFrame(() => onClickChannel(found))
                 }
             }, 10);
         } catch (err) {
             console.error(err);
         }
-    }, [persistantUserStorage.serverLastChannelList])
+    }
 
-    const onRightClickServer = (server: Server, ct: React.MouseEvent<HTMLDivElement, MouseEvent>) => {
+    const onRightClickServer = useCallback((server: Server, ct: React.MouseEvent<HTMLDivElement, MouseEvent>) => {
         currents.setContextMenuXY(ct.pageX.clamp(10, window.innerWidth - ct.currentTarget.getBoundingClientRect().width - 150), ct.pageY.clamp(10, window.innerHeight - ct.currentTarget.getBoundingClientRect().height - 150));
         currents.setContextMenuObject(server);
         currents.setContextMenuIncludes([]);
@@ -210,9 +160,9 @@ const MainLayout: React.FC = () => {
         currents.setContextMenuShown(true);
 
         return false;
-    }
+    }, [])
 
-    const onRightClickChannel = (channel: Channel, ct: React.MouseEvent<HTMLDivElement, MouseEvent>) => {
+    const onRightClickChannel = useCallback((channel: Channel, ct: React.MouseEvent<HTMLDivElement, MouseEvent>) => {
         console.log("CHANNELRIGHTCLICK", channel, ct);
         currents.setContextMenuXY(ct.pageX.clamp(10, window.innerWidth - ct.currentTarget.getBoundingClientRect().width - 150), ct.pageY.clamp(10, window.innerHeight - ct.currentTarget.getBoundingClientRect().height - 150));
         currents.setContextMenuObject(channel);
@@ -222,13 +172,13 @@ const MainLayout: React.FC = () => {
         currents.setContextMenuShown(true);
 
         return false;
-    }
+    }, [])
 
     const isInterrupted = useRef(false);
 
-    const setChannelInterrupted = (val: boolean) => {
-        isInterrupted.current = val;
-    };
+    // const setChannelInterrupted = (val: boolean) => {
+    //     isInterrupted.current = val;
+    // };
 
     const onClickChannel = (channel: (Channel | string)) => {
         try {
@@ -239,9 +189,11 @@ const MainLayout: React.FC = () => {
                 channelId = channel.id;
             }
 
-            if (currents.channel?.id === channelId) { return; }
+            if (currents.channel?.id === channelId) { console.log("currchannel"); return; }
 
             currents.setisChannelLoading(true);
+
+            console.log("CHCLICK", channelId)
 
             fetch(`api/v1/channels/${channelId}/messages?limit=${MESSAGES_FIRST_LOAD_MAX_AMOUNT}`).then((res) => {
                 if (res.status != 200) {
@@ -283,7 +235,7 @@ const MainLayout: React.FC = () => {
                                 requestAnimationFrame(() => {
                                     console.log("DW1", persistantUserStorage.serverLastChannelList);
                                 });
-                            }, 20);
+                            }, 250);
                         if (typeof channel !== "string")
                             currents.setChannel(channel);
                         else {
@@ -453,51 +405,37 @@ const MainLayout: React.FC = () => {
         currents.setBgBlurV(false);
     }
 
-    const onInputTextarea = () => {
-        // const textarea = event.target;
-    }
+    // const sendMessageWithoutTextarea = async (messageText: string, channel: Channel, user: DetailedDBUser) => {
+    //     const sentDateTime = new Date();
 
-    const onLoadTextarea = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
-        if (TextareaInitalConstNumber)
-            return;
-        const textarea = event.target;
-        const height = textarea.scrollHeight;
+    //     if (messageText.trimEnd() === "") return;
 
-        setTextareaInitalConstNumber(height);
-        console.log("Inital constant: " + height);
-    }
+    //     const ReplyingToMessage = messageStore.replyingTo;
 
-    const sendMessageWithoutTextarea = async (messageText: string, channel: Channel, user: DetailedDBUser) => {
-        const sentDateTime = new Date();
+    //     const chInfo = await fetchChannelInfo(channel.id, channelInfoStore);
 
-        if (messageText.trimEnd() === "") return;
+    //     const chCheck = okdi_handleSendMessage_chInfoCheck(chInfo, sentDateTime);
 
-        const ReplyingToMessage = messageStore.replyingTo;
+    //     if (!chCheck) return;
 
-        const chInfo = await fetchChannelInfo(channel.id, channelInfoStore);
+    //     const message: MessageCreate = {
+    //         content: messageText,
+    //         attachments: chStore.acceptedFiles.map(x => x.name),
+    //         repliedToId: ReplyingToMessage?.id ?? null,
+    //     }
 
-        const chCheck = okdi_handleSendMessage_chInfoCheck(chInfo, sentDateTime);
+    //     const acceptedFiles = chStore.acceptedFiles;
 
-        if (!chCheck) return;
+    //     // okdi_handleSendMessage_clearData(textarea, sentDateTime);
 
-        const message: MessageCreate = {
-            content: messageText,
-            attachments: chStore.acceptedFiles.map(x => x.name),
-            repliedToId: ReplyingToMessage?.id ?? null,
-        }
+    //     const post = await okdi_handleSendMessage_post(channel.id, message);
 
-        const acceptedFiles = chStore.acceptedFiles;
+    //     if (post.success) {
+    //         await okdi_handleSendMessage_submitFiles(channel.id, post.data.id as string, acceptedFiles);
+    //     }
 
-        // okdi_handleSendMessage_clearData(textarea, sentDateTime);
-
-        const post = await okdi_handleSendMessage_post(channel.id, message);
-
-        if (post.success) {
-            await okdi_handleSendMessage_submitFiles(channel.id, post.data.id as string, acceptedFiles);
-        }
-
-        return post;
-    }
+    //     return post;
+    // }
 
     const sendMessageWithTextarea = async (messageText: string, channel: Channel, user: DetailedDBUser, textarea: HTMLTextAreaElement) => {
         const sentDateTime = new Date();
@@ -545,7 +483,7 @@ const MainLayout: React.FC = () => {
         }
     }
 
-    const okdi_handleSendMessage_chInfoCheck = (chInfo: ChannelInfo, sentDateTime: Date) => {
+    const okdi_handleSendMessage_chInfoCheck = useCallback((chInfo: ChannelInfo, sentDateTime: Date) => {
         if (chInfo.slowMode !== 0) {
             console.log((sentDateTime.getTime() - (lastMessageSentDate + 200)) / 1000);
             if (sentDateTime.getTime() - lastMessageSentDate <= chInfo.slowMode * 1000) {
@@ -560,9 +498,9 @@ const MainLayout: React.FC = () => {
         }
 
         return true;
-    }
+    }, [lastMessageSentDate])
 
-    const okdi_handleSendMessage_post = async (channelId: string, message: MessageCreate) => {
+    const okdi_handleSendMessage_post = useCallback(async (channelId: string, message: MessageCreate) => {
         // const resp = await axios.post(`api/v1/channels/${channelId}/messages/`, message);
 
         const resp = await axios.post(`api/v1/channels/${channelId}/messages/`, message);
@@ -592,16 +530,16 @@ const MainLayout: React.FC = () => {
         //         });
         //     });
         // });
-    }
+    }, [])
 
-    const okdi_handleSendMessage_clearData = (textarea: HTMLTextAreaElement, sentDateTime: Date) => {
+    const okdi_handleSendMessage_clearData = useCallback((textarea: HTMLTextAreaElement, sentDateTime: Date) => {
         setlastMessageSentDate(sentDateTime.getTime());
         messageStore.setreplyingTo(null);
         textarea.value = "";
         chStore.setacceptedFiles([]);
-    }
+    }, [])
 
-    const okdi_handleSendMessage_submitFiles = async (channelId: string, messageId: string, files: File[]) => {
+    const okdi_handleSendMessage_submitFiles = useCallback(async (channelId: string, messageId: string, files: File[]) => {
         if (files.length <= 0) return;
 
         const formData = new FormData();
@@ -616,7 +554,7 @@ const MainLayout: React.FC = () => {
         } else {
             return { success: false, message: resp.data.message };
         }
-    }
+    }, [])
 
     const okdi_handleSendMessage = async (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
         if (!currents.channel) return;
@@ -624,7 +562,6 @@ const MainLayout: React.FC = () => {
 
         const sentDateTime = new Date();
         const channel = currents.channel;
-        const user = currents.user;
 
         if (event.key === "Enter" && !event.shiftKey) {
             event.preventDefault();
@@ -675,7 +612,7 @@ const MainLayout: React.FC = () => {
         okdi_handleSendMessage(event);
     }
 
-    const parentHasId = (target: HTMLElement, id: string) => {
+    const parentHasId = useCallback((target: HTMLElement, id: string) => {
         let current = target;
 
         while (true) {
@@ -690,9 +627,9 @@ const MainLayout: React.FC = () => {
         }
 
         return false;
-    }
+    }, [])
 
-    const onMouseDown = (event: MouseEvent) => {
+    const onMouseDown = useCallback((event: MouseEvent) => {
         const target = event.target as HTMLElement;
         console.log(target.classList, target.id);
 
@@ -718,25 +655,22 @@ const MainLayout: React.FC = () => {
                 currents.sethelpmenuShown(false);
             }
         }
-    }
+    }, [])
 
     // const onMessageReply = (message: Message) => {
 
     // }
 
-    const onMessageEdit = (message: MessageInfo) => {
+    const onMessageEdit = useCallback((message: MessageInfo) => {
         /*if (message.editRef) {
             message.editRef.style.height = "auto";
             message.editRef.style.height = message.editRef.scrollHeight + "px";
         }*/
 
-        if (!user.user) {
-            return;
-        }
+        if (!user.user) return
 
-        if (message.Message.author.id !== user.user.id) {
-            return;
-        }
+
+        if (message.Message.author.id !== user.user.id) return
 
         const currentMessageInfo = MessageInfos.find(x => x.Message.id === message.Message.id);
 
@@ -773,11 +707,7 @@ const MainLayout: React.FC = () => {
             });
         }
         console.log(message);
-    }
-
-    const onMessageReact = (message: Message) => {
-
-    }
+    }, [])
 
     const onMessageDelete = (message: Message) => {
         deleteMessage(message);
@@ -873,26 +803,6 @@ const MainLayout: React.FC = () => {
         openDirectMessage(user, () => {fn()});
     }
 
-    useEffect(() => {
-        if (!currents.user) return;
-        if (voicesocket) return;
-
-        let thisUser = currents.user;
-
-        // Initialize voice socket connection
-        voicesocket = io("http://localhost:3002", {
-            query: {
-                info: [
-                    thisUser.id,
-                    thisUser.username,
-                    thisUser.avatarUrl,
-                ]
-            }
-        });
-
-
-    }, [currents.user]);
-
     // const { onClickCallButton } = useCallHandler();
 
     const onClickCall = useCallback(() => {
@@ -921,14 +831,14 @@ const MainLayout: React.FC = () => {
         console.log(currents.contextmenu);
     }
 
-    const deleteMessage = async (message: Message) => {
+    const deleteMessage = useCallback(async (message: Message) => {
         const resp = await axios.delete(`api/v1/channels/${message.channelId}/messages/${message.id}`);
         if (resp.status === 200) {
             return { success: true, message: resp.data.message };
         } else {
             return { success: false, message: resp.data.message };
         }
-    }
+    }, [])
 
     const editMessage = async (newMessage: Message, message: Message) => {
         const data: MessageUpdate = newMessage;
@@ -1040,7 +950,6 @@ const MainLayout: React.FC = () => {
         setcreateBoxV: setcreateBoxV,
         createBoxV: createBoxV,
         createBoxC: createBoxC,
-        directmessages: directmessages,
         Currents: currents,
     }
 
@@ -1066,11 +975,11 @@ const MainLayout: React.FC = () => {
     }
 
     const ChannelBoxProps = {
-        onInputTextarea: onInputTextarea,
-        onLoadTextarea: onLoadTextarea,
+        onInputTextarea: () => { },
+        onLoadTextarea: () => { },
         onKeyDownInput: onKeyDownInput,
         onMessageReply: () => { },
-        onMessageReact: onMessageReact,
+        onMessageReact: () => {},
         onMessageEdit: onMessageEdit,
         onMessageDelete: onMessageDelete,
         onEditInput: onEditInput,
@@ -1079,16 +988,8 @@ const MainLayout: React.FC = () => {
         onRightClickUserAvatar,
         addReactionToMessage: addReactionToMessage,
         sendMessageWithTextarea: sendMessageWithTextarea,
-        onClickMicrophone: onClickMicrophone,
-        onClickLeaveCall: onClickLeaveCall,
         setMessageInfos: setMessageInfos,
-        voicesocket: voicesocket,
-        userStreams: userStreams,
-        setUserStreams: setUserStreams,
-        calls: calls,
-        setcalls: setcalls,
-        peer: peer,
-        microphoneState: microphoneState,
+        onClickLeaveCall: onClickLeaveCall,
     }
 
     const MainBoxProps = {
@@ -1224,12 +1125,6 @@ const MainLayout: React.FC = () => {
     useEffect(() => {
         //fetch("/api/v1/socket"); // Initialize the WebSocket server
     }, []);
-
-    useEffect(() => {
-        if (currents.user) {
-            setDirectMessages(currents.user.directMsgs);
-        }
-    }, [currents.user]);
 
     useEffect(() => {
         window.addEventListener('mousedown', onMouseDown);
@@ -1411,7 +1306,11 @@ const MainLayout: React.FC = () => {
                             <div id="channel-info-box" className={styles.channel_info_box}>
                                 <ChannelBoxInfo {...ChannelBoxInfoProps} />
                             </div>
-                            {!currents.friendsdiv.visible && (<ChannelBox {...ChannelBoxProps} />)}
+                            {!currents.friendsdiv.visible && (
+                                <Suspense fallback={<div className={styles.channel_box_fallback}></div>}>
+                                    <ChannelBoxLazy {...ChannelBoxProps} />
+                                </Suspense>
+                            )}
                             {currents.friendsdiv.visible && (<div id="friends-box" className={styles.friends_box}>
                                 <FriendsDiv {...FriendsDivProps} />
                             </div>)}

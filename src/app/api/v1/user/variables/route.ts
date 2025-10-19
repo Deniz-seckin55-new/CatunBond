@@ -1,7 +1,6 @@
 import { currentUser } from "@clerk/nextjs/server";
 import { db } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
-import { UserVariables } from "@/store/variablesStore";
 import { UserVariablesValidSchema } from "@/shared/gschemas";
 
 export async function GET(request: NextRequest) {

@@ -2,12 +2,12 @@ import styles from '../page.module.css';
 
 import React, { useEffect, useState } from 'react';
 import { Socket } from 'socket.io-client';
-import { AllowedTypes, Friend, FriendRequestAnswer, PendingFriendRequest, SocketData, SocketInformationType, User } from '../utils/socket_utils';
-import { useGetUser, useGetUserByUsername } from './common/GetUser';
+import { Friend, FriendRequestAnswer, PendingFriendRequest, SocketInformationType, User } from '../utils/socket_utils';
+import { useGetUser } from './common/GetUser';
 import axios from 'axios';
 import { useCurrents } from '@/store/currents';
-import { ViewingFriendsDiv } from '../utils/utils';
 import { toast } from 'react-toastify';
+import { socketEmit, socketOff, socketOn } from '@/store/socket';
 
 interface Props {
     pendingSentRequests: PendingFriendRequest[];
@@ -54,9 +54,9 @@ const FriendsDiv: React.FC<Props> = ({ pendingSentRequests, setpendingSentReques
                 }));
             }
 
-            let tempStatuses: Friend[] = [];
+            const tempStatuses: Friend[] = [];
             currents.user.friends.forEach((friend) => {
-                socket?.emit("get_status", friend.id, function (data: "online" | "offline") {
+                socketEmit("get_status", friend.id, function (data: "online" | "offline") {
                     const friendStatus: Friend = {
                         user: friend,
                         status: data,
@@ -155,7 +155,7 @@ const FriendsDiv: React.FC<Props> = ({ pendingSentRequests, setpendingSentReques
     useEffect(() => {
         if (!socket)
             return;
-        socket.on("friend_request_send", (friendRequest: PendingFriendRequest) => {
+        socketOn("friend_request_send", (friendRequest: PendingFriendRequest) => {
             console.log("recieved fr", friendRequest);
             if (!currents.user)
                 return;
@@ -175,7 +175,7 @@ const FriendsDiv: React.FC<Props> = ({ pendingSentRequests, setpendingSentReques
                 ]);
             }
         });
-        socket.on("friend_request_answer", (data: FriendRequestAnswer) => {
+        socketOn("friend_request_answer", (data: FriendRequestAnswer) => {
             console.log("answering fr", data);
             const { friendRequest, answer } = data;
             console.log("friend_request_answer", friendRequest, answer);
@@ -193,7 +193,7 @@ const FriendsDiv: React.FC<Props> = ({ pendingSentRequests, setpendingSentReques
                                 sender,
                             ])
                             console.log("c5");
-                            socket?.emit("get_status", sender.id, function (data: any) {
+                            socketEmit("get_status", sender.id, function (data: any) {
                                 console.log("c6");
                                 const newFriend: Friend = {
                                     status: data,
@@ -242,7 +242,7 @@ const FriendsDiv: React.FC<Props> = ({ pendingSentRequests, setpendingSentReques
 
                             console.log("c15");
 
-                            socket?.emit("get_status", acceptor.id, function (data: any) {
+                            socketEmit("get_status", acceptor.id, function (data: any) {
                                 console.log("c16");
                                 const newFriend: Friend = {
                                     status: data,
@@ -273,8 +273,8 @@ const FriendsDiv: React.FC<Props> = ({ pendingSentRequests, setpendingSentReques
         });
 
         return () => {
-            socket.off("friend_request_send");
-            socket.off("friend_request_answer");
+            socketOff("friend_request_send");
+            socketOff("friend_request_answer");
         };
     }, [socket])
 

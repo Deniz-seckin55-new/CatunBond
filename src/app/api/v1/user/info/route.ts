@@ -3,7 +3,6 @@ import { db } from "@/lib/prisma";
 import { currentUser } from "@clerk/nextjs/server";
 import { NextRequest, NextResponse } from "next/server";
 import { GetUserInfo } from "../../utils/utils";
-import { UserInfoModel } from "@/shared/zod/userinfo";
 export async function GET(request: NextRequest) {
     try {
         const user = await currentUser();

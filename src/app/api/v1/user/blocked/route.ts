@@ -2,7 +2,7 @@ import { currentUser } from "@clerk/nextjs/server";
 import { NextRequest, NextResponse } from "next/server";
 import { UserIDListToSmallUserList } from "../../utils/utils";
 import { db } from "@/lib/prisma";
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
     try {
         const user = await currentUser();
         if (!user) return NextResponse.json({ message: "Unauthorized" }, { status: 401 });

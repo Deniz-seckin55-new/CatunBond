@@ -3,7 +3,6 @@ import styles from "@/app/app/page.module.css";
 import { useKBState } from '@/store/kbState';
 import SyntaxHighlighter from 'react-syntax-highlighter';
 
-import * as HookLib from 'usehooks-ts';
 
 const glitchChars = '!@#$%^&*()-_=+{}[]|;:,.<>?';
 
@@ -366,7 +365,6 @@ import { useServerInfoStore } from '@/store/serverInfos';
 import { toast } from 'react-toastify';
 import { useServerStore } from '@/store/servers';
 import { useInvisibleDiv } from '@/store/invisibleDiv';
-import { useChannelBoxRef } from '@/store/channelBoxRef';
 import { useHoveringElement } from '@/store/hoveringElement';
 import { getTopDistinctColorsFromUrl } from '../../utils/utils';
 import { useMessageDataStore } from '@/store/messageDataStore';
@@ -554,11 +552,18 @@ export const ServerInviteText: React.FC<ServerInviteTextProps> = ({ children, ma
     const isJoined = useMemo(() => { return currents.user ? currents.user.servers.some(x => x.id === serverID) : null }, [serverID, currents.user?.servers]);
     const [server, setServer] = useState<Server>();
     const [serverInfo, setServerInfo] = useState<ServerInfo>();
+    const [serverInviteDepr, setserverInviteDepr] = useState<boolean>(false)
     useEffect(() => {
         async function getServerInfo() {
             const found = useServerInfoStore.getState().getExistingServerInfo(serverID);
             if (!found) {
-                const response = await axios.get(`/api/v1/servers/${serverID}/info`); // Adjust API endpoint
+                const response = await axios.get(`/api/v1/servers/${serverID}/info`, {validateStatus: () => true});
+
+                if(response.status !== 200) {
+                    setserverInviteDepr(true)
+                    return
+                }
+
                 setServerInfo(response.data.data);
 
                 useServerInfoStore.getState().addServerInfo(response.data.data);
@@ -573,7 +578,7 @@ export const ServerInviteText: React.FC<ServerInviteTextProps> = ({ children, ma
         async function getServer() {
             if (server && server.id === serverID) return;
 
-            let found = serverStore.getExistingServer(serverID);
+            const found = serverStore.getExistingServer(serverID);
             if (found) {
                 console.log("Found server", found.id);
                 setServer(found);
@@ -584,11 +589,13 @@ export const ServerInviteText: React.FC<ServerInviteTextProps> = ({ children, ma
 
             serverStore.addFetchingServer(serverID);
 
-            const resp = await axios.get(`api/v1/servers/${serverID}`);
+            const resp = await axios.get(`api/v1/servers/${serverID}`, {validateStatus: () => true});
 
             if (resp.status === 200) {
                 setServer(resp.data.data as Server);
                 serverStore.addServer(resp.data.data as Server);
+            } else if(resp.status === 404) {
+                setserverInviteDepr(true)
             }
 
             serverStore.removeFetchingServer(serverID);
@@ -677,7 +684,7 @@ export const ServerInviteText: React.FC<ServerInviteTextProps> = ({ children, ma
     return (
         <>
             <div className={styles.server_invite_message_holder}>
-                <img className={styles.server_invite_message_image} src={server?.iconUrl} />
+                {!serverInviteDepr && (<><img className={styles.server_invite_message_image} src={server?.iconUrl} />
                 <div className={styles.lpad1} />
                 <div className={styles.flex_column} style={{ alignItems: "baseline" }}>
                     <p style={{ color: serverInfo ? serverInfo.color : "var(--cb-color-white)" }}>{server?.name ?? "Loading..."}</p>
@@ -686,7 +693,12 @@ export const ServerInviteText: React.FC<ServerInviteTextProps> = ({ children, ma
                 <div className={styles.lpad1} />
                 <div className={styles.server_invite_message_button_holder}>
                     <button className={styles.server_invite_message_button} onClick={() => JoinServer()}>{isJoined === null ? "Loading..." : (isJoined ? "Joined" : "Join")}</button>
-                </div>
+                </div></>)}
+                {serverInviteDepr && (
+                    <>
+                        Invalid Invite
+                    </>
+                )}
             </div>
         </>
     );
@@ -706,10 +718,10 @@ const KeepScroll = (div: HTMLElement, action: () => void) => {
     });
 }
 
-const DivGetElement = (div: Element, isElement: (element: Element) => Boolean) => {
+const DivGetElement = (div: Element, isElement: (element: Element) => boolean) => {
     for (let index = 0; index < div.children.length; index++) {
         const element = div.children[index];
-        let check = isElement(element);
+        const check = isElement(element);
 
         if (check) return element;
     }
@@ -717,10 +729,10 @@ const DivGetElement = (div: Element, isElement: (element: Element) => Boolean) =
     return false;
 }
 
-const DivGetElementCL = (div: Element, isElement: (element: ChildNode) => Boolean) => {
+const DivGetElementCL = (div: Element, isElement: (element: ChildNode) => boolean) => {
     for (let index = 0; index < div.childNodes.length; index++) {
         const element = div.childNodes[index];
-        let check = isElement(element);
+        const check = isElement(element);
 
         if (check) return true;
     }
@@ -729,11 +741,11 @@ const DivGetElementCL = (div: Element, isElement: (element: ChildNode) => Boolea
 }
 
 function ExtractYoutubeId(url: string) {
-    let urlSplit = url.split('//')[1];
-    let exec = /(www\.)?((youtube\.com\/watch\?v=(?<id>[A-z0-9]+))|(youtu\.be\/(?<id2>[A-z0-9]+)))/.exec(urlSplit);
+    const urlSplit = url.split('//')[1];
+    const exec = /(www\.)?((youtube\.com\/watch\?v=(?<id>[A-z0-9]+))|(youtu\.be\/(?<id2>[A-z0-9]+)))/.exec(urlSplit);
 
     if (exec?.groups) {
-        let youtubeId = exec.groups["id"] ?? exec.groups["id2"];
+        const youtubeId = exec.groups["id"] ?? exec.groups["id2"];
 
         return youtubeId;
     }
@@ -751,8 +763,8 @@ export const UrlTextStyle: React.FC<UrlTextStyleProps> = ({ children, markersEna
     const { element: InvDiv } = useInvisibleDiv();
 
     const isYoutubeLink = useMemo(() => {
-        let urlSplit = url.split('//')[1];
-        let urlSplitL = urlSplit.toLowerCase();
+        const urlSplit = url.split('//')[1];
+        const urlSplitL = urlSplit.toLowerCase();
 
         if (
             urlSplitL.startsWith("youtube") ||
@@ -783,7 +795,7 @@ export const UrlTextStyle: React.FC<UrlTextStyleProps> = ({ children, markersEna
     useEffect(() => {
         async function run() {
             if (isYoutubeLink && videoIdMemo && !markersEnabled) {
-                let dist = await getTopDistinctColorsFromUrl(`http://img.youtube.com/vi/${videoIdMemo}/${0}.jpg`, 2, 150);
+                const dist = await getTopDistinctColorsFromUrl(`http://img.youtube.com/vi/${videoIdMemo}/${0}.jpg`, 2, 150);
                 console.log(dist);
                 setfirstColor(dist[0]);
                 setsecondColor(dist[1]);

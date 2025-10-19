@@ -1,7 +1,7 @@
 import { useCurrents } from '@/store/currents';
 import { useDirectMessageStore } from '@/store/directmessages';
 import { useServerInfoStore } from '@/store/serverInfos';
-import { useSocketStore } from '@/store/socket';
+import { socketEmit, useSocketStore } from '@/store/socket';
 import { DragDropContext, Draggable, Droppable, DropResult } from '@hello-pangea/dnd';
 import axios from 'axios';
 import { useEffect, useRef, useState } from 'react';
@@ -10,7 +10,6 @@ import { Category, Channel, User } from '../utils/socket_utils';
 import { SyntaxHighlight } from '../utils/syntax';
 import { ExploreBoxMode, onMouseLeaveTooltipElement, onMouseOverTooltipElement, SettingsMode, SyntaxPattern } from '../utils/utils';
 import { DefaultUserVariables } from '@/store/variablesStore';
-import interact from 'interactjs';
 
 interface Props {
     onClickSearch: () => void;
@@ -28,7 +27,13 @@ interface Props {
 
 const SideBox: React.FC<Props> = ({ createBoxV, createBoxC, setcreateBoxV, onClickSearch, onClickFriendsButton, onClickChannel, onRightClickChannel, onClickDirectMessage, onClickSettings, openExploreBox, setcreateBoxC }) => {
     const currents = useCurrents();
-    const { directmessages } = useDirectMessageStore();
+    const { directmessages, setDirectMessages } = useDirectMessageStore();
+
+    useEffect(() => {
+        if (currents.user) {
+            setDirectMessages(currents.user.directMsgs);
+        }
+    }, [currents.user]);
 
     const ChannelNamePatterns: SyntaxPattern[] = [{
         pattern: new RegExp("^#", "gmi"),
@@ -61,7 +66,7 @@ const SideBox: React.FC<Props> = ({ createBoxV, createBoxC, setcreateBoxV, onCli
         );
 
         if (socket && socket.connected) {
-            socket.emit("category_channel_order_change", currentServer.id, idList);
+            socketEmit("category_channel_order_change", currentServer.id, idList);
             console.log("emited category_channel_order_change ", [currentServer.id, idList]);
         }
     }

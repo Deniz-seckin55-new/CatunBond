@@ -1,11 +1,8 @@
-import { CreateChannelInfo } from "@/app/api/apicallreferences/utils";
-import { Channel, JsonAttachments, MessageCreate, User } from "@/app/app/utils/socket_utils";
-import { getEmitter } from "@/lib/emitter";
+import { MessageCreate } from "@/app/app/utils/socket_utils";
 import { db } from "@/lib/prisma";
-import redis from "@/lib/redis";
 import { currentUser } from "@clerk/nextjs/server";
 import { NextRequest, NextResponse } from "next/server";
-import { CreateMessage, extractMentions } from "../../../utils/utils";
+import { CreateMessage } from "../../../utils/utils";
 
 export async function POST(request: NextRequest, { params }: { params: { channelID: string } }) {
     try {

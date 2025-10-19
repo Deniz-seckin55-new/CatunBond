@@ -3,9 +3,9 @@
 import styles from "./page.module.css";
 import { redirect } from "next/navigation";
 import useLandingPage from "@/store/landingPage";
-import { useEffect, useId, useLayoutEffect } from "react";
+import { useEffect, useId } from "react";
 
-export const LandingPage: React.FC<{}> = ({ }) => {
+export const LandingPage: React.FC = () => {
     const lpStore = useLandingPage();
 
     const openWebApp = (fnCallback: () => void) => {
@@ -83,7 +83,7 @@ export const LandingPage: React.FC<{}> = ({ }) => {
                 <div className={styles.overlap}>
                     <div className={styles.grid_op}>
                         <div className={styles.background_image_holder}>
-                            <img className={styles.background_image} src="/niko_pc.png" />
+                            <img alt="" className={styles.background_image} src="/niko_pc.png" />
                         </div>
                     </div>
                     <div className={styles.grid_op}>

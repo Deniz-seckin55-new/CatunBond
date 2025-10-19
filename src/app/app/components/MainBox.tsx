@@ -8,6 +8,7 @@ import axios from 'axios';
 import { DragDropContext, Draggable, Droppable } from '@hello-pangea/dnd';
 import { useGetUserInfo } from './common/GetUser';
 import { DropResult } from '@hello-pangea/dnd';
+import Image from 'next/image';
 
 function isSameOrder(a: { id: string }[], b: { id: string }[]): boolean {
     if (a.length !== b.length) return false;
@@ -96,7 +97,7 @@ const MainBox: React.FC<Props> = ({ onClickServer, onRightClickServer, onClickEx
         <>
             <div id="main-box" className={styles.main_box}>
                 <div id="app-icon" className={styles.app_icon} onClick={currents.onClickAppIcon}>
-
+                    <Image className={styles.app_icon_image} alt='Catunbond' width={64} height={64} src={"/app_icons/app_icon_blue.svg"} />
                 </div>
                 <div id="servers-container" className={styles.servers_container} key='servers-container-id'>
                     <DragDropContext onDragEnd={handleDragEnd}>

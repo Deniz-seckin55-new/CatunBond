@@ -337,7 +337,7 @@ export interface ClientResponsePacket {
     data: unknown
 }
 
-export const usegetUserSR = async (userID: string) => {
+export const getUserSR = async (userID: string) => {
     const userStore = useUserStore();
 
 

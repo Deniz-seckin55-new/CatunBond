@@ -1,9 +1,8 @@
 import { useCurrents } from "@/store/currents";
 import { useSettings } from "@/store/settings";
-import { DefaultUserVariables, UserVariables, useVariables, useVariablesStore } from "@/store/variablesStore";
+import { DefaultUserVariables, UserVariables, useVariablesStore } from "@/store/variablesStore";
 import equal from "fast-deep-equal";
 import React, { useEffect, useState } from "react";
-import { HexColorPicker } from "react-colorful";
 import styles from "../../page.module.css";
 import { SettingsProps } from "../../utils/utils";
 import ReactSwitch from "react-switch";

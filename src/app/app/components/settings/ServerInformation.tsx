@@ -188,7 +188,7 @@ const ServerInformation: React.FC<SettingsProps> = ({ updateSettings }) => {
         multiple: false,
         onDropAccepted: async (acceptFiles: File[]) => {
             const file = acceptFiles[0];
-            let url = await getFileDataUrl(file) as string;
+            const url = await getFileDataUrl(file) as string;
             setimageUrl(url);
 
             changeServerIcon(url);

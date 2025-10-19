@@ -1,6 +1,5 @@
-import { getEmitter } from "@/lib/emitter";
 import { db } from "@/lib/prisma";
-import { clerkClient, currentUser } from "@clerk/nextjs/server";
+import { currentUser } from "@clerk/nextjs/server";
 import { NextRequest, NextResponse } from "next/server";
 export async function GET(request: NextRequest) {
     try {

@@ -1,7 +1,6 @@
 import * as utils from "@/app/app/utils/utils"
 import { create } from "zustand"
 import { useMessagesStore } from "./messages"
-import { UserVariables } from './variablesStore';
 
 export const useCurrents = create<utils.Currents>((set) => ({
     channel: null,

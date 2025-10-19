@@ -1,6 +1,6 @@
 import styles from "@/app/app/page.module.css";
 import { useCurrents } from "@/store/currents";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useInterval } from "usehooks-ts";
 import { allFunctions, allStyles } from "../../utils/utils";
 
@@ -25,7 +25,7 @@ export const HelpMenu: React.FC<Props> = (props) => {
 
         const element = ref.current;
         const resizeObserver = new ResizeObserver(entries => {
-            for (let entry of entries) {
+            for (const entry of entries) {
                 const newWidth = entry.contentRect.width;
                 const newHeight = entry.contentRect.height;
                 if (newWidth !== __width) {

@@ -23,16 +23,16 @@ console.log("REDIS URL: ", process.env.REDIS_URL);
 
 const reconnectStrategy = (retries: number): number | Error => {
     const maxRetries = 10;
-    const baseDelay = 100; // ms
+    const baseDelay = 500; // increase from 100ms
     const maxDelay = 2000;
 
     if (retries > maxRetries) {
         return new Error("Too many Redis retry attempts");
     }
 
-    // exponential backoff with cap
     const delay = Math.min(baseDelay * 2 ** retries, maxDelay);
-    console.warn(`Redis reconnect attempt ${retries}, waiting ${delay}ms...`);
+    // optionally only log every few retries
+    if (retries % 2 === 0) console.warn(`Redis reconnect attempt ${retries}, waiting ${delay}ms...`);
     return delay;
 };
 
@@ -44,6 +44,8 @@ await redisClient.connect();
 
 const redisSubClient = redisClient.duplicate();
 await redisSubClient.connect();
+
+redisSubClient.on("error", (err) => console.log("*hiss* Redis sub error:", err));
 
 const httpServer = http.createServer()
 
@@ -109,11 +111,11 @@ try {
         //     io.to(friendRequest.senderId).emit("friend_request_send", friendRequest);
         // });
 
-        socket.on("get_status", (userId: string, fn: any) => {
+        socket.on("get_status", (userId: string, fn?: (status: "online" | "offline") => void) => {
             if (io.sockets.adapter.rooms.has("USER_"+userId)) {
-                fn("online");
+                fn?.("online");
             } else {
-                fn("offline");
+                fn?.("offline");
             }
         });
 
